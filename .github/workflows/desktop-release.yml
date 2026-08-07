@@ -3,6 +3,9 @@ name: Desktop release
 # Tag on the public repo (or after sync): desktop-v0.2.0
 # Creates a GitHub Release with installers + latest.yml for electron-updater.
 # Keep npm package publishes separate — do not attach @ledgeindex/* npm tags as GitHub Releases.
+#
+# electron-builder defaults to tag v${version}; our tags are desktop-v*.
+# So we package with --publish never, then attach artifacts to $GITHUB_REF_NAME via gh.
 
 on:
   push:
@@ -52,14 +55,45 @@ jobs:
       - name: Build desktop
         run: npm run build -w @ledgeindex/desktop
 
-      - name: Package & publish
+      - name: Package installer
+        working-directory: apps/desktop
+        shell: bash
+        run: npx electron-builder --config electron-builder.yml --publish never
+
+      - name: Publish GitHub Release
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
         working-directory: apps/desktop
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          PUBLISH_FLAG=always
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
-            PUBLISH_FLAG=never
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#desktop-v}"
+          echo "Publishing artifacts to existing tag: ${TAG} (version ${VERSION})"
+
+          shopt -s nullglob
+          files=(
+            dist/LedgeIndex-*-setup.exe
+            dist/LedgeIndex-*-setup.exe.blockmap
+            dist/latest.yml
+          )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No release artifacts found in dist/"
+            ls -la dist || true
+            exit 1
           fi
-          npx electron-builder --config electron-builder.yml --publish "$PUBLISH_FLAG"
+          printf 'Artifacts:\n'
+          printf '  %s\n' "${files[@]}"
+
+          if gh release view "$TAG" --repo ledgeindex/ledgeindex >/dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" \
+              --repo ledgeindex/ledgeindex \
+              --clobber
+          else
+            gh release create "$TAG" "${files[@]}" \
+              --repo ledgeindex/ledgeindex \
+              --title "LedgeIndex Desktop ${VERSION}" \
+              --notes "LedgeIndex desktop ${VERSION}" \
+              --verify-tag
+          fi
