@@ -1,0 +1,239 @@
+:root {
+  color-scheme: dark;
+  --bg: #0f1115;
+  --fg: #e8eaed;
+  --muted: #8b939e;
+  --border: rgba(255, 255, 255, 0.1);
+  --surface: #171a1f;
+  --surface-raised: #1c2128;
+  --accent: #d4b483;
+  --titlebar-height: 36px;
+  --danger: #e81123;
+  font-family: 'Segoe UI', ui-sans-serif, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  min-height: 100%;
+  height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92em;
+}
+
+.app-frame {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  padding-top: var(--titlebar-height);
+}
+
+.center-fill {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  padding: 1.5rem;
+}
+
+.titlebar {
+  position: fixed;
+  inset: 0 0 auto 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  height: var(--titlebar-height);
+  padding: 0 0.5rem;
+  border-bottom: 1px solid var(--border);
+  background: rgba(20, 20, 22, 0.96);
+  user-select: none;
+  -webkit-app-region: drag;
+}
+
+.titlebar-title {
+  margin: 0;
+  padding: 0 0.5rem;
+  font-size: 12px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.titlebar-trailing {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 28px;
+  min-width: 28px;
+  padding: 0 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 600;
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-btn:hover {
+  background: var(--surface-raised);
+  color: var(--fg);
+}
+
+.titlebar-btn.dev {
+  border-color: rgba(245, 158, 11, 0.4);
+  background: rgba(245, 158, 11, 0.15);
+  color: #fde68a;
+}
+
+.titlebar-btn.dev:hover {
+  background: rgba(245, 158, 11, 0.25);
+}
+
+.titlebar-win {
+  display: inline-flex;
+  height: 32px;
+  width: 36px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  -webkit-app-region: no-drag;
+}
+
+.titlebar-win:hover {
+  background: var(--surface-raised);
+  color: var(--fg);
+}
+
+.titlebar-win.danger:hover {
+  background: var(--danger);
+  color: #fff;
+}
+
+.card {
+  width: 100%;
+  max-width: 24rem;
+  border-radius: 1rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 2rem;
+}
+
+.card h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.muted {
+  color: var(--muted);
+  font-size: 0.875rem;
+}
+
+.primary-btn {
+  margin-top: 1.5rem;
+  display: inline-flex;
+  height: 2.75rem;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--fg);
+  font-weight: 500;
+}
+
+.primary-btn:hover:not(:disabled) {
+  filter: brightness(1.1);
+}
+
+.error-box {
+  margin-top: 1rem;
+  border-radius: 0.5rem;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  background: rgba(239, 68, 68, 0.1);
+  padding: 0.5rem 0.75rem;
+  color: #fecaca;
+  font-size: 0.875rem;
+}
+
+.warn-box {
+  margin-top: 1.5rem;
+  color: #fde68a;
+  font-size: 0.875rem;
+}
+
+.page {
+  width: 100%;
+  max-width: 48rem;
+  margin: 0 auto;
+  padding: 1.5rem;
+}
+
+.page h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  letter-spacing: -0.02em;
+}
+
+.source-list {
+  list-style: none;
+  margin: 2rem 0 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.source-item {
+  border-radius: 0.75rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  padding: 0.75rem 1rem;
+}
+
+.source-item strong {
+  font-weight: 600;
+}
+
+.main-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}

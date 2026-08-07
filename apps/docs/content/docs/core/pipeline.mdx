@@ -1,0 +1,38 @@
+# Pipeline stages
+
+Each stage is a core primitive. Compose only what you need. Full API examples live under [Reference](/reference).
+
+## Crawl
+
+Discover URLs and decide what to fetch.
+
+Import under `@ledgeindex/core/crawl/*`.
+
+## Extract
+
+Turn HTML into usable text — `parsePage` / `fetchPageHtml`.
+
+See [Extract](/reference/core/extract).
+
+## Enrich
+
+Extract grounded code/setup/usage examples per page (skip if none).
+
+See [Enrich](/reference/core/enrich).
+
+## Chunk
+
+Split content for embedding (`semantic-markdown` | `recursive`), then prepare/store for a source.
+
+See [Chunk](/reference/core/chunk).
+
+## Query
+
+See [Query](/reference/core/query):
+
+- `kapaRetrieve`
+- `queryExamples` (`chunkKind: "example"`)
+
+## Schemas
+
+Zod configs for sources and metadata under `@ledgeindex/core/schemas/*`.

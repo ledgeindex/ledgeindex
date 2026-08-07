@@ -1,0 +1,27 @@
+{
+  "name": "@ledgeindex/docs-site",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LedgeIndex documentation — core, profile, and server packages",
+  "scripts": {
+    "dev": "next dev --port 3005",
+    "build": "next build",
+    "start": "next start --port 3005",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "next": "15.5.3",
+    "nextra": "4.4.0",
+    "nextra-theme-docs": "4.4.0",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.3",
+    "typescript": "^5"
+  }
+}

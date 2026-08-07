@@ -1,0 +1,34 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "include": [
+    "src/renderer/src/env.d.ts",
+    "src/renderer/src/**/*",
+    "src/renderer/src/**/*.tsx",
+    "src/preload/*.d.ts"
+  ],
+  "compilerOptions": {
+    "composite": true,
+    "jsx": "react-jsx",
+    "baseUrl": ".",
+    "paths": {
+      "@renderer/*": [
+        "src/renderer/src/*"
+      ],
+      "@/*": [
+        "../web/src/*"
+      ],
+      "next/link": [
+        "src/renderer/src/shims/next-link.tsx"
+      ],
+      "next/navigation": [
+        "src/renderer/src/shims/next-navigation.ts"
+      ],
+      "next/image": [
+        "src/renderer/src/shims/next-image.tsx"
+      ],
+      "next/dynamic": [
+        "src/renderer/src/shims/next-dynamic.tsx"
+      ]
+    }
+  }
+}

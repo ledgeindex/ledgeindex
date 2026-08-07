@@ -1,0 +1,53 @@
+{
+  "name": "@ledgeindex/server",
+  "version": "0.1.3",
+  "description": "LedgeIndex HTTP server — createLedgeIndexServer, profiles docs + profile",
+  "type": "module",
+  "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
+  "author": "LedgeIndex",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ledgeindex/ledgeindex.git",
+    "directory": "ledgeindex/packages/server"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./start": "./dist/start.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "dev:sidecar": "tsx src/start.ts",
+    "build": "tsup",
+    "start": "node dist/start.js",
+    "prepublishOnly": "npm run clean && npm run build",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@fastify/cors": "^11.3.0",
+    "@ledgeindex/ag": "0.1.3",
+    "@ledgeindex/core": "0.1.3",
+    "@ledgeindex/docs": "0.1.3",
+    "@ledgeindex/profile": "0.1.3",
+    "@mastra/core": "^1.51.0",
+    "@mastra/fastify": "^1.4.7",
+    "fastify": "^5.10.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.20.5",
+    "typescript": "^7.0.2"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js"
+}

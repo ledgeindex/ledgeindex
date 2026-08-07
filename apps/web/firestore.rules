@@ -1,0 +1,22 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{userId} {
+      allow read: if request.auth != null && request.auth.uid == userId;
+
+      allow create: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.email is string
+        && request.resource.data.plan in ["free", "pro"]
+        && request.resource.data.role in ["user", "admin"];
+
+      allow update: if request.auth != null
+        && request.auth.uid == userId
+        && request.resource.data.uid == userId
+        && request.resource.data.plan == resource.data.plan
+        && request.resource.data.role == resource.data.role;
+    }
+  }
+}

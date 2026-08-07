@@ -1,0 +1,14 @@
+{
+  "name": "@ledgeindex/hosts-api",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Hosted LedgeIndex API entry (Firebase, registry) — thin wrapper",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch ../../../ledgeindex-api/src/server.ts",
+    "start": "node ../../../ledgeindex-api/dist/server.js"
+  },
+  "dependencies": {
+    "@ledgeindex/server": "file:../server"
+  }
+}

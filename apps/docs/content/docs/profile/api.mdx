@@ -1,0 +1,27 @@
+# Profile API & lenses
+
+## Package exports
+
+| Export | Purpose |
+|--------|---------|
+| `profile` / `profileSite` | High-level site research profile |
+| `runCompanyProfile` | Lower-level runner (name is historical) |
+| `defaultProfileLenses` / `parseResearchLensList` | Lens helpers |
+| `registerProfile` | Fastify routes for landscape runs |
+| `LEDGEINDEX_PROFILE_VERSION` | Package version constant |
+
+Legacy aliases still exported: `registerCompanyProfile`, `LEDGEINDEX_COMPANY_VERSION`.
+
+## Lenses
+
+Lenses are named research modes. Pass them as the second argument to `profileSite`. Defaults come from `defaultProfileLenses()` — typically identity, pricing, and capabilities style passes. Use `parseResearchLensList("identity,pricing")` when lenses come from CLI or env strings.
+
+## Manual harness
+
+From the package:
+
+```bash
+npm run test:crawl-catalog-pick -w @ledgeindex/profile -- --mode profile
+```
+
+Useful for local debugging of catalog pick / lens synth — not a CI unit test.

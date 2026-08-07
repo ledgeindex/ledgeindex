@@ -1,0 +1,54 @@
+# Getting started
+
+LedgeIndex is built around a pipeline: **discover → extract → chunk → embed → store → query**. Core owns those steps. Profile and the docs runtime profile compose them into higher-level products. Server is how you expose that over HTTP.
+
+## When to use which package
+
+| You want… | Use |
+|-----------|-----|
+| Library APIs for crawl / index / retrieve | `@ledgeindex/core` |
+| Typed research output for a website | `@ledgeindex/profile` |
+| A process that serves ingest, chat, and profile routes | `@ledgeindex/server` with `profiles: ["docs", "profile"]` |
+
+For predetermined multi-step flows you control entirely in your own code, call core primitives directly. For “figure out what’s on this site and fill these lenses,” use profile. For a deployable API, use server.
+
+## Install
+
+```bash
+npm i @ledgeindex/core @ledgeindex/profile @ledgeindex/server
+```
+
+In this monorepo, prefer workspace installs from the repo root.
+
+## Environment
+
+```bash
+LEDGEINDEX_PROFILES=docs,profile
+PORT=3010
+LEDGEINDEX_DATA_DIR=./.data
+```
+
+`LEDGEINDEX_PROFILES` is usually parsed by your host and passed into `createLedgeIndexServer({ profiles })`. Legacy value `company` maps to `profile`.
+
+## First server
+
+```ts
+import { startLedgeIndexServer } from "@ledgeindex/server";
+
+await startLedgeIndexServer({
+  profiles: ["docs", "profile"],
+  port: 3010,
+  host: "127.0.0.1",
+});
+```
+
+Then hit `GET /health/packages` to confirm versions and active profiles.
+
+## Next steps
+
+| Goal | Start here |
+|------|------------|
+| Core context and pipeline | [Core](/docs/core) |
+| Primitive API reference | [Reference](/reference) |
+| `profileSite` and lenses | [Profile](/docs/profile) |
+| Server options and hooks | [Server](/docs/server) |

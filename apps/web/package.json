@@ -1,0 +1,52 @@
+{
+  "name": "@ledgeindex/web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LedgeIndex web UI (Next.js)",
+  "scripts": {
+    "dev": "next dev --turbopack --port 3004",
+    "build": "next build",
+    "start": "next start --port 3004",
+    "dotenv:sync": "npx dotenv-vault@latest pull && npx dotenv-vault@latest pull production && npx dotenv-vault@latest build",
+    "prepare-image:logo": "node scripts/prepare-logo.mjs",
+    "prepare-image:favicon": "node scripts/prepare-favicon.mjs",
+    "prepare-image:sections": "node scripts/prepare-section-images.mjs",
+    "prepare-image:bg": "node ../../../frontend/scripts/convert-to-webp.mjs"
+  },
+  "dependencies": {
+    "@ai-sdk/react": "^2.0.218",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
+    "@fontsource/ibm-plex-sans": "^5.2.8",
+    "@ledgeindex/client": "0.1.4",
+    "@radix-ui/react-collapsible": "^1.1.16",
+    "@radix-ui/react-use-controllable-state": "^1.2.3",
+    "@react-three/fiber": "^9.6.1",
+    "@streamdown/code": "^1.1.1",
+    "@swc/helpers": "^0.5.15",
+    "@types/three": "^0.185.1",
+    "@xyflow/react": "^12.11.2",
+    "ai": "^5.0.216",
+    "clsx": "^2.1.1",
+    "dotenv": "^17.4.2",
+    "firebase": "^12.16.0",
+    "gpt-tokenizer": "^3.4.0",
+    "lucide-react": "^1.30.0",
+    "next": "^15.5.9",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1",
+    "streamdown": "^2.5.0",
+    "tailwind-merge": "^3.6.0",
+    "three": "^0.185.1",
+    "use-stick-to-bottom": "^1.1.6"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

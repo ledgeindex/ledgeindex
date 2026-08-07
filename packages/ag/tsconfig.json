@@ -1,0 +1,13 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "noEmit": true
+  },
+  "include": [
+    "src/index.ts",
+    "src/register-ag-profile.ts",
+    "src/brain-source.ts",
+    "src/runtime/**/*"
+  ]
+}

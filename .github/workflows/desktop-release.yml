@@ -1,0 +1,60 @@
+name: Desktop release
+
+# Tag on the public repo (or after sync): desktop-v0.2.0
+# Creates a GitHub Release with installers + latest.yml for electron-updater.
+# Keep npm package publishes separate — do not attach @ledgeindex/* npm tags as GitHub Releases.
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build only (no publish)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      - name: Build desktop
+        run: npm run build -w @ledgeindex/desktop
+
+      - name: Package & publish
+        working-directory: apps/desktop
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          PUBLISH_FLAG=always
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ inputs.dry_run }}" = "true" ]; then
+            PUBLISH_FLAG=never
+          fi
+          npx electron-builder --config electron-builder.yml --publish "$PUBLISH_FLAG"

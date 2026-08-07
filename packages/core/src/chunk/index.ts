@@ -1,0 +1,16 @@
+export {
+  chunk,
+  chunkMarkdown,
+  chunkMarkdownLocalFallback,
+  chunkLocalFallback,
+  mapToChunkLanguage,
+  SEMANTIC_MARKDOWN_MAX_SIZE,
+  SEMANTIC_MARKDOWN_OVERLAP,
+  SEMANTIC_MARKDOWN_JOIN_THRESHOLD,
+  RECURSIVE_CHUNK_MAX_SIZE,
+  RECURSIVE_CHUNK_OVERLAP,
+  type ChunkStrategy,
+  type ChunkOptions,
+  type ContentChunk,
+  type MarkdownChunk,
+} from "./chunk.js";

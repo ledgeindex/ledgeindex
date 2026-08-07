@@ -1,0 +1,32 @@
+{
+  "name": "ledgeindex",
+  "version": "0.1.0",
+  "private": true,
+  "description": "LedgeIndex monorepo — packages, hosts, apps",
+  "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "hosts/*"
+  ],
+  "scripts": {
+    "dev:web": "npm run dev -w @ledgeindex/web",
+    "build:web": "npm run build -w @ledgeindex/web",
+    "start:web": "npm run start -w @ledgeindex/web",
+    "dev:mobile": "npm run start -w @ledgeindex/mobile",
+    "android:mobile": "npm run android -w @ledgeindex/mobile",
+    "dev:desktop": "npm run dev -w @ledgeindex/desktop",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "publish:packages:dry-run": "node scripts/publish-packages.mjs --dry-run",
+    "publish:packages": "node scripts/publish-packages.mjs"
+  },
+  "devDependencies": {
+    "prettier": "^3.7.4"
+  },
+  "overrides": {
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "lucide-react": "1.30.0"
+  }
+}

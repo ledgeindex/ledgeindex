@@ -1,0 +1,14 @@
+{
+  "extends": "../../packages/tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./src",
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@ledgeindex/docs/runtime/middleware/firebase-auth.js": [
+        "./src/stubs/firebase-auth.d.ts"
+      ]
+    }
+  },
+  "include": ["src/register-ag-extensions.ts"]
+}

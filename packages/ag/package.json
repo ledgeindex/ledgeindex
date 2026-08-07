@@ -1,0 +1,49 @@
+{
+  "name": "@ledgeindex/ag",
+  "version": "0.1.3",
+  "description": "AutomationGhost profile — agents, workflows, brain routes on LedgeIndex server",
+  "type": "module",
+  "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./mastra/ag-contribution": "./dist/mastra/ag-contribution.js",
+    "./mastra/agents/*": "./dist/mastra/agents/*",
+    "./lib/*": "./dist/lib/*"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "typecheck:mastra": "tsc --noEmit -p tsconfig.mastra.json",
+    "build": "tsup",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
+    "prepublishOnly": "npm run clean && npm run build"
+  },
+  "dependencies": {
+    "@ai-sdk/google": "2.0.86",
+    "@google/genai": "^2.10.0",
+    "@ledgeindex/core": "0.1.3",
+    "@ledgeindex/docs": "0.1.3",
+    "@mastra/ai-sdk": "^1.6.1",
+    "@mastra/core": "^1.49.0",
+    "@mastra/memory": "^1.24.0",
+    "ai": "^5.0.210",
+    "fastify": "^5.10.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.0.0",
+    "tsx": "^4.20.5",
+    "typescript": "^7.0.2"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js"
+}
