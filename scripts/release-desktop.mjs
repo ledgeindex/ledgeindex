@@ -3,7 +3,10 @@
  * LedgeIndex desktop release — no GitHub UI needed.
  *
  * Usage (from ledgeindex/):
- *   npm run release:desktop -- 0.1.0 --release
+ *   npm run release:desktop -- --bump          # auto patch: 0.1.0 → 0.1.1
+ *   npm run release:desktop -- --bump minor    # 0.1.0 → 0.2.0
+ *   npm run release:desktop -- --release       # tag current version on public
+ *   npm run release:desktop -- 0.2.0 --release # set exact version + tag
  *
  * Loads PAT from env or monorepo-root .env key PAT_LEDDGEINDEX / PAT_LEDGEINDEX
  * (classic PAT scopes: repo + workflow).
@@ -36,10 +39,44 @@ const TOKEN_ENV_KEYS = [
 const args = process.argv.slice(2).filter((a) => a !== "--");
 const doRelease =
   args.includes("--release") || args.includes("--tag") || args.includes("-r");
-const versionArg = args.find((a) => !a.startsWith("-"));
+const bumpIdx = args.findIndex((a) => a === "--bump" || a === "-b");
+const wantsBump = bumpIdx !== -1;
+const bumpLevelRaw = wantsBump ? args[bumpIdx + 1] : null;
+const bumpLevel =
+  bumpLevelRaw && !bumpLevelRaw.startsWith("-") ? bumpLevelRaw : "patch";
+const versionArg = args.find(
+  (a, i) =>
+    !a.startsWith("-") &&
+    !(wantsBump && i === bumpIdx + 1 && bumpLevelRaw === a),
+);
 
 function readPkg() {
   return JSON.parse(readFileSync(pkgPath, "utf8"));
+}
+
+function bumpSemver(version, level) {
+  const m = version.match(/^(\d+)\.(\d+)\.(\d+)/);
+  if (!m) {
+    console.error(`Cannot bump version: ${version}`);
+    process.exit(1);
+  }
+  let major = Number(m[1]);
+  let minor = Number(m[2]);
+  let patch = Number(m[3]);
+  if (level === "major") {
+    major += 1;
+    minor = 0;
+    patch = 0;
+  } else if (level === "minor") {
+    minor += 1;
+    patch = 0;
+  } else if (level === "patch") {
+    patch += 1;
+  } else {
+    console.error(`Unknown bump level: ${level} (use patch|minor|major)`);
+    process.exit(1);
+  }
+  return `${major}.${minor}.${patch}`;
 }
 
 function writeVersion(version) {
@@ -93,19 +130,71 @@ function resolveToken() {
   return { token: "", source: null };
 }
 
+async function ghFetch(url, token, init = {}) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 20_000);
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/vnd.github+json",
+        "X-GitHub-Api-Version": "2022-11-28",
+        "User-Agent": "ledgeindex-release-desktop",
+        ...(init.headers || {}),
+      },
+    });
+  } catch (err) {
+    if (err?.name === "AbortError") {
+      console.error(`GitHub request timed out after 20s:\n  ${url}`);
+      process.exit(1);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function fetchPublicDesktopVersion(token) {
+  const url = `https://api.github.com/repos/${PUBLIC_REPO}/contents/apps/desktop/package.json?ref=main`;
+  console.log("Checking public desktop version on main…");
+  const res = await ghFetch(url, token);
+  if (!res.ok) {
+    const body = await res.text();
+    console.error(
+      `Could not read public desktop package.json:`,
+      res.status,
+      body,
+    );
+    process.exit(1);
+  }
+  const data = await res.json();
+  const raw = Buffer.from(data.content, "base64").toString("utf8");
+  return JSON.parse(raw).version;
+}
+
 async function createPublicTag(version, token) {
   const tag = `desktop-v${version}`;
   const api = "https://api.github.com";
-  const headers = {
-    Authorization: `Bearer ${token}`,
-    Accept: "application/vnd.github+json",
-    "X-GitHub-Api-Version": "2022-11-28",
-    "User-Agent": "ledgeindex-release-desktop",
-  };
 
-  const refRes = await fetch(`${api}/repos/${PUBLIC_REPO}/git/ref/heads/main`, {
-    headers,
-  });
+  const publicVersion = await fetchPublicDesktopVersion(token);
+  console.log(`Public main desktop version: ${publicVersion}`);
+  if (publicVersion !== version) {
+    console.error(`
+Public main still has desktop version ${publicVersion} (wanted ${version}).
+
+Do this first:
+  1. Bump locally (if not done):  npm run release:desktop -- ${version}
+  2. Commit + push to private main (triggers Sync ledgeindex → public)
+  3. Wait until that sync workflow is green
+  4. Re-run:  npm run release:desktop -- ${version} --release
+`);
+    process.exit(1);
+  }
+
+  console.log("Reading public main SHA…");
+  const refRes = await ghFetch(`${api}/repos/${PUBLIC_REPO}/git/ref/heads/main`, token);
   if (!refRes.ok) {
     const body = await refRes.text();
     console.error(`Could not read main on ${PUBLIC_REPO}:`, refRes.status, body);
@@ -118,9 +207,10 @@ async function createPublicTag(version, token) {
     process.exit(1);
   }
 
-  const tagRes = await fetch(`${api}/repos/${PUBLIC_REPO}/git/refs`, {
+  console.log(`Creating tag ${tag} @ ${sha.slice(0, 7)}…`);
+  const tagRes = await ghFetch(`${api}/repos/${PUBLIC_REPO}/git/refs`, token, {
     method: "POST",
-    headers: { ...headers, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       ref: `refs/tags/${tag}`,
       sha,
@@ -129,7 +219,7 @@ async function createPublicTag(version, token) {
 
   if (tagRes.status === 422) {
     console.error(
-      `Tag ${tag} already exists. Bump the version (e.g. 0.1.1) and retry.`,
+      `Tag ${tag} already exists. Bump the version (e.g. 0.1.2) and retry.`,
     );
     process.exit(1);
   }
@@ -145,23 +235,35 @@ async function createPublicTag(version, token) {
 }
 
 const pkg = readPkg();
-const version = versionArg || pkg.version;
+let version = pkg.version;
 
-if (!versionArg && !doRelease) {
+if (!versionArg && !wantsBump && !doRelease) {
   console.log(`Current desktop version: ${pkg.version}`);
   console.log(`
-Release with:
-  npm run release:desktop -- ${pkg.version} --release
+Flow:
+  1. npm run release:desktop -- 0.1.1          # set version
+  2. Commit + push private main → wait for Sync
+  3. npm run release:desktop -- 0.1.1 --release  # tag that version on public
+
+Or use VS Code tasks (prompts for version):
+  - LedgeIndex Desktop: bump version
+  - LedgeIndex Desktop: tag public release
 `);
   process.exit(0);
 }
 
 if (versionArg) {
-  writeVersion(versionArg);
+  version = versionArg;
+  writeVersion(version);
+} else if (wantsBump) {
+  version = bumpSemver(pkg.version, bumpLevel);
+  writeVersion(version);
 }
 
 if (!doRelease) {
-  console.log(`Version set to ${version}. Add --release to create the public tag.`);
+  console.log(
+    `Version set to ${version}. Commit + push, wait for Sync, then run with --release.`,
+  );
   process.exit(0);
 }
 
