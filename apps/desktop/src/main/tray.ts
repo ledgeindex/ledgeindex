@@ -1,21 +1,33 @@
 import { Tray, Menu, nativeImage, app, type BrowserWindow } from 'electron'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
 let tray: Tray | null = null
 
 function resolveTrayIcon(): Electron.NativeImage {
+  // Packaged: extraResources copies resources/icon.png → process.resourcesPath/icon.png
+  // Dev / asar-unpacked: fall back to app-relative and __dirname-relative paths.
   const candidates = [
-    join(__dirname, '../../resources/icon.png'),
     join(process.resourcesPath, 'icon.png'),
-    join(app.getAppPath(), 'resources/icon.png')
+    join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'icon.png'),
+    join(app.getAppPath(), 'resources', 'icon.png'),
+    join(__dirname, '../../resources/icon.png'),
+    join(__dirname, '../resources/icon.png')
   ]
+
   for (const path of candidates) {
+    if (!existsSync(path)) continue
     const img = nativeImage.createFromPath(path)
     if (!img.isEmpty()) {
       return img.resize({ width: 16, height: 16 })
     }
   }
-  return nativeImage.createEmpty()
+
+  // Last resort: non-empty icon so Windows still shows a tray entry.
+  const fallback = nativeImage.createFromDataURL(
+    'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+  )
+  return fallback.isEmpty() ? nativeImage.createEmpty() : fallback.resize({ width: 16, height: 16 })
 }
 
 export function createAppTray(getMainWindow: () => BrowserWindow | null): Tray {

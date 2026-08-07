@@ -15,12 +15,16 @@ import {
   cpSync,
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   realpathSync,
   renameSync,
   rmSync,
+  symlinkSync,
+  unlinkSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { builtinModules, createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -86,6 +90,20 @@ const NODE_BUILTINS = new Set([
   ...builtinModules,
   ...builtinModules.map((m) => `node:${m}`),
 ]);
+
+/**
+ * Deprecated Node builtins that still have npm packages. Under Electron/Node 22,
+ * `require('punycode/')` (used by tr46) needs the npm package — not the builtin.
+ * Do not skip packing these when they appear as real dependencies.
+ */
+const NPM_SHADOWED_BUILTINS = new Set(["punycode", "domain"]);
+
+function isSkippedBuiltin(depName) {
+  if (!depName) return false;
+  const bare = depName.startsWith("node:") ? depName.slice("node:".length) : depName;
+  if (NPM_SHADOWED_BUILTINS.has(bare)) return false;
+  return NODE_BUILTINS.has(depName) || depName.startsWith("node:");
+}
 
 const SMOKE_PORT = 3098;
 const SMOKE_TIMEOUT_MS = 90_000;
@@ -201,6 +219,12 @@ function findPackageDirFallback(name, extraBases = []) {
 /**
  * Resolve `name` the same way Node would from `fromDir`.
  * Uses createRequire(…/package.json); falls back when exports block package.json.
+ *
+ * Always climb to the package root whose package.json.name matches. Some
+ * packages (notably @modelcontextprotocol/sdk) export a nested stub
+ * `dist/cjs/package.json` with only `{ "type": "commonjs" }` — resolving
+ * `${name}/package.json` lands there, which has no dependencies and would
+ * leave packages like `eventsource` out of the staged tree.
  */
 function resolvePackageDir(name, fromDir) {
   const workspaceDir = WORKSPACE_PACKAGE_DIRS[name];
@@ -210,7 +234,8 @@ function resolvePackageDir(name, fromDir) {
 
   const req = createRequire(join(fromDir, "package.json"));
   try {
-    return dirname(req.resolve(`${name}/package.json`));
+    const resolved = dirname(req.resolve(`${name}/package.json`));
+    return findPackageRootFromPath(resolved, name) || resolved;
   } catch {
     // Many packages omit "./package.json" from "exports".
     try {
@@ -224,7 +249,6 @@ function resolvePackageDir(name, fromDir) {
 
   return findPackageDirFallback(name, [fromDir]);
 }
-
 /**
  * Prefer installs hoisted under ledgeindex/node_modules over nested copies
  * under packages/* or hosts/* (those often pin alternate majors).
@@ -304,7 +328,7 @@ function collectProductionPackages() {
 
     for (const depName of Object.keys(deps || {})) {
       if (!depName || SKIP_PACKAGES.has(depName)) continue;
-      if (NODE_BUILTINS.has(depName) || depName.startsWith("node:")) continue;
+      if (isSkippedBuiltin(depName)) continue;
 
       const pkgDir = resolvePackageDir(depName, current.dir);
       if (!pkgDir) {
@@ -417,7 +441,47 @@ function collectProductionPackages() {
     }
   }
 
+  // Safety net: tr46 does `require('punycode/')` which needs the npm package.
+  ensureNpmPunycodeForTr46(flat, nested);
+
   return { flat, nested };
+}
+
+/**
+ * If tr46 was collected, ensure punycode is available flat (or nested under tr46)
+ * so Electron/Node 22 can resolve the npm package instead of the deprecated builtin.
+ */
+function ensureNpmPunycodeForTr46(flat, nested) {
+  if (!flat.has("tr46")) return;
+  if (flat.has("punycode")) return;
+
+  const nestedUnderTr46 = nested.some(
+    (n) => n.parentName === "tr46" && n.name === "punycode",
+  );
+  if (nestedUnderTr46) return;
+
+  const tr46Dir = flat.get("tr46");
+  const fromDirs = [tr46Dir, hostDir, ...LEDGEINDEX_FALLBACK_ROOTS].filter(
+    Boolean,
+  );
+  let punyDir = null;
+  for (const fromDir of fromDirs) {
+    punyDir = resolvePackageDir("punycode", fromDir);
+    if (punyDir) break;
+  }
+  if (!punyDir) {
+    punyDir = findPackageDirFallback("punycode", fromDirs);
+  }
+  if (!punyDir) {
+    log(
+      "warning: tr46 is staged but npm punycode could not be resolved — " +
+        "sidecar may fail under Electron with Cannot find module 'punycode/'",
+    );
+    return;
+  }
+
+  flat.set("punycode", realPathOrSelf(punyDir));
+  log(`ensured npm punycode for tr46 ← ${relative(root, punyDir)}`);
 }
 
 function destPathForPackage(name) {
@@ -569,9 +633,86 @@ function readOpenaiResolvedProviderUtilsVersion() {
   }
 }
 
+/** Fail fast if critical packages were dropped or copied from export stubs. */
+function assertStagedIntegrity() {
+  const required = [
+    "punycode",
+    "eventsource",
+    "@modelcontextprotocol/sdk",
+    "@ledgeindex/server",
+    "@ai-sdk/openai",
+    "@ai-sdk/provider-utils",
+  ];
+  for (const name of required) {
+    const pkgJson = join(destPathForPackage(name), "package.json");
+    if (!existsSync(pkgJson)) {
+      throw new Error(`pack integrity: missing staged package ${name}`);
+    }
+  }
+
+  const mcpPkg = JSON.parse(
+    readFileSync(
+      join(destPathForPackage("@modelcontextprotocol/sdk"), "package.json"),
+      "utf8",
+    ),
+  );
+  if (mcpPkg.name !== "@modelcontextprotocol/sdk") {
+    throw new Error(
+      "pack integrity: staged @modelcontextprotocol/sdk is an export stub, not the package root",
+    );
+  }
+  if (!mcpPkg.dependencies?.eventsource) {
+    throw new Error(
+      "pack integrity: staged @modelcontextprotocol/sdk missing eventsource dependency metadata",
+    );
+  }
+}
+
+/**
+ * Link (or copy) the staged tree outside the monorepo so Node cannot walk up
+ * into ledgeindex/node_modules during smoke — that hoist was masking missing
+ * packages like eventsource.
+ */
+function prepareIsolatedSmokeDir() {
+  const smokeRoot = mkdtempSync(join(tmpdir(), "ledgeindex-desktop-smoke-"));
+  const smokeDir = join(smokeRoot, "desktop-server");
+  try {
+    symlinkSync(
+      dest,
+      smokeDir,
+      process.platform === "win32" ? "junction" : "dir",
+    );
+  } catch (err) {
+    log(
+      `smoke: symlink failed (${err instanceof Error ? err.message : err}); copying staged tree…`,
+    );
+    cpSync(dest, smokeDir, { recursive: true, dereference: true });
+  }
+  return { smokeRoot, smokeDir };
+}
+
+function cleanupIsolatedSmokeDir(smokeRoot, smokeDir) {
+  try {
+    // Remove junction/symlink without deleting the real staged tree.
+    unlinkSync(smokeDir);
+  } catch {
+    try {
+      rmSync(smokeDir, { recursive: true, force: true });
+    } catch {
+      // best-effort
+    }
+  }
+  try {
+    rmSync(smokeRoot, { recursive: true, force: true });
+  } catch {
+    // best-effort
+  }
+}
+
 /**
  * Smoke: boot staged dist/start.js and hit /health.
  * Catches the ai-sdk ESM peer mismatch (and similar import crashes) immediately.
+ * Runs from an isolated temp dir so parent monorepo hoists cannot mask gaps.
  */
 async function smokeStagedServer() {
   if (process.env.PACK_DESKTOP_SERVER_SKIP_SMOKE === "1") {
@@ -580,18 +721,23 @@ async function smokeStagedServer() {
   }
 
   const { request } = await import("node:http");
+  const { smokeRoot, smokeDir } = prepareIsolatedSmokeDir();
 
-  log(`smoke: spawning node dist/start.js (PORT=${SMOKE_PORT})…`);
+  log(
+    `smoke: spawning node dist/start.js (PORT=${SMOKE_PORT}, isolated=${smokeDir})…`,
+  );
 
   const child = spawn(process.execPath, ["dist/start.js"], {
-    cwd: dest,
+    cwd: smokeDir,
     env: {
       ...process.env,
       NODE_ENV: "production",
+      // Clear NODE_PATH so nothing outside the staged tree is injected.
+      NODE_PATH: "",
       PORT: String(SMOKE_PORT),
       HOST: "127.0.0.1",
       // Avoid clobbering a developer's real data dir during pack smoke.
-      LEDGEINDEX_DATA_DIR: join(dest, `.smoke-data-${process.pid}`),
+      LEDGEINDEX_DATA_DIR: join(smokeDir, `.smoke-data-${process.pid}`),
       LEDGEINDEX_AUTH_REQUIRED: "0",
       LEDGEINDEX_LOCAL_USER_ID: "ledgeindex-pack-smoke",
       LEDGEINDEX_PROFILES: process.env.LEDGEINDEX_PROFILES?.trim() || "docs,profile",
@@ -692,6 +838,7 @@ async function smokeStagedServer() {
     killChild();
     // Brief wait so Windows releases file handles before next pack.
     await new Promise((r) => setTimeout(r, 500));
+    cleanupIsolatedSmokeDir(smokeRoot, smokeDir);
   }
 }
 
@@ -751,6 +898,8 @@ async function main() {
       "pack integrity: staged @ai-sdk/openai cannot resolve @ai-sdk/provider-utils",
     );
   }
+
+  assertStagedIntegrity();
 
   log("staged", relative(root, dest));
   await smokeStagedServer();

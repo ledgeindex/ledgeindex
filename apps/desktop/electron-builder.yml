@@ -25,6 +25,12 @@ extraResources:
       - '!**/node_modules/**'
   - from: build/desktop-server/node_modules
     to: desktop-server/node_modules
+  # Tray + runtime icons at resources/ root (process.resourcesPath/icon.png).
+  # buildResources alone only feeds electron-builder installers — it does not copy these.
+  - from: resources/icon.png
+    to: icon.png
+  - from: resources/icon.ico
+    to: icon.ico
 asarUnpack:
   - 'resources/**'
 win:
