@@ -11,10 +11,10 @@ export function useRouter() {
   const navigate = useNavigate()
   return useMemo(
     () => ({
-      push: (href: string) => {
+      push: (href: string, _options?: { scroll?: boolean }) => {
         void navigate(href)
       },
-      replace: (href: string) => {
+      replace: (href: string, _options?: { scroll?: boolean }) => {
         void navigate(href, { replace: true })
       },
       back: () => {

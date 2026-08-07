@@ -16,7 +16,7 @@ type NextLinkProps = AnchorHTMLAttributes<HTMLAnchorElement> & {
 }
 
 const Link = forwardRef(function Link(
-  { href, children, replace, onClick, ...rest }: NextLinkProps,
+  { href, children, replace, onClick, prefetch: _prefetch, scroll: _scroll, ...rest }: NextLinkProps,
   ref: ForwardedRef<HTMLAnchorElement>
 ) {
   return (

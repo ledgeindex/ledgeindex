@@ -46,6 +46,9 @@ jobs:
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
 
+      - name: Build client
+        run: npm run build -w @ledgeindex/client
+
       - name: Build desktop
         run: npm run build -w @ledgeindex/desktop
 

@@ -1,3 +1,3 @@
-export default function Head({ children }: { children?: React.ReactNode }): null {
+export default function Head(_props: { children?: React.ReactNode }): null {
   return null
 }

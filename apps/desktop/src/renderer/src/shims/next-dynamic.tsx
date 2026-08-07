@@ -15,7 +15,7 @@ export default function dynamic<T extends ComponentType<any>>(
       return mod as { default: T }
     }
     return { default: mod as T }
-  })
+  }) as unknown as ComponentType<Record<string, unknown>>
 
   function DynamicComponent(props: Record<string, unknown>): ReactNode {
     return (
