@@ -16,6 +16,7 @@
     "dev:mobile": "npm run start -w @ledgeindex/mobile",
     "android:mobile": "npm run android -w @ledgeindex/mobile",
     "dev:desktop": "npm run dev -w @ledgeindex/desktop",
+    "release:desktop": "node scripts/release-desktop.mjs",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "publish:packages:dry-run": "node scripts/publish-packages.mjs --dry-run",

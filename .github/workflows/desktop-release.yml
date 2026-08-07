@@ -27,7 +27,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, macos-latest]
+        os: [windows-latest]
+    # Add macos-latest later when Apple signing/notarization is ready.
     runs-on: ${{ matrix.os }}
     defaults:
       run:
