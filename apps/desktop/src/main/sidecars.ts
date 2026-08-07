@@ -157,7 +157,8 @@ function freeDesktopServerPortIfNeeded(): void {
   try {
     execSync(`npx --yes kill-port ${DESKTOP_SERVER_PORT}`, {
       stdio: 'ignore',
-      shell: true,
+      // execSync types require a shell path (boolean is only valid for spawn).
+      shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/sh',
       timeout: 15_000
     })
   } catch {

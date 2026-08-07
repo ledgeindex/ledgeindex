@@ -39,6 +39,12 @@ const ledgeindexDesktop = {
     ipcRenderer.invoke('settings:getProviderKeyStatus'),
   saveProviderKeys: (keys: ProviderKeyInput): Promise<ProviderKeyStatus> =>
     ipcRenderer.invoke('settings:saveProviderKeys', keys),
+  getAppPreferences: (): Promise<{ startInTray: boolean; closeToTray: boolean }> =>
+    ipcRenderer.invoke('settings:getAppPreferences'),
+  setAppPreferences: (
+    patch: Partial<{ startInTray: boolean; closeToTray: boolean }>
+  ): Promise<{ startInTray: boolean; closeToTray: boolean }> =>
+    ipcRenderer.invoke('settings:setAppPreferences', patch),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('update:getVersion'),
   checkForUpdates: (config?: {
     provider?: 'github'

@@ -21,11 +21,19 @@ import {
 import { getProviderKeyStatus, saveProviderKeys } from './provider-settings'
 import type { ProviderKeyInput } from '../shared/providers'
 import { registerAutoUpdate, scheduleStartupUpdateCheck } from './auto-update'
+import {
+  getAppPreferences,
+  setAppPreferences,
+  type AppPreferences
+} from './app-preferences'
+import { createAppTray, destroyAppTray } from './tray'
 
 let mainWindow: BrowserWindow | null = null
+let isQuitting = false
 
 function createWindow(): void {
   const preloadPath = join(__dirname, '../preload/index.js')
+  const prefs = getAppPreferences()
 
   const win = new BrowserWindow({
     width: 1280,
@@ -56,7 +64,6 @@ function createWindow(): void {
     console.error('[desktop] renderer process gone', details)
   })
 
-  // Firebase Google popup needs a real child window.
   win.webContents.setWindowOpenHandler((details) => {
     const { url } = details
     if (isAuthNavigationUrl(url)) {
@@ -93,18 +100,30 @@ function createWindow(): void {
     win.webContents.send('window:maximized', false)
   })
 
+  win.on('close', (event) => {
+    if (!isQuitting && getAppPreferences().closeToTray) {
+      event.preventDefault()
+      win.hide()
+    }
+  })
+
   win.on('closed', () => {
     if (mainWindow === win) mainWindow = null
   })
 
   win.once('ready-to-show', () => {
-    if (!win.isDestroyed()) {
-      win.show()
-      if (is.dev) openInAppDevTools(win)
+    if (win.isDestroyed()) return
+    if (prefs.startInTray) {
+      // Stay hidden — tray click opens the window.
+      if (is.dev) {
+        // Still attach DevTools in background for debugging if needed.
+      }
+      return
     }
+    win.show()
+    if (is.dev) openInAppDevTools(win)
   })
 
-  // Standalone: load the Electron Vite renderer — NOT localhost:3004.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -119,6 +138,8 @@ app.whenReady().then(async () => {
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
+
+  createAppTray(() => mainWindow)
 
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize()
@@ -149,7 +170,6 @@ app.whenReady().then(async () => {
   ipcMain.handle('settings:getProviderKeyStatus', () => getProviderKeyStatus())
   ipcMain.handle('settings:saveProviderKeys', async (_event, keys: ProviderKeyInput) => {
     const status = saveProviderKeys(keys ?? {})
-    // Sidecar reads keys from env at boot — restart so new keys apply.
     try {
       await restartDesktopSidecar()
     } catch (error) {
@@ -158,9 +178,14 @@ app.whenReady().then(async () => {
     return status
   })
 
+  ipcMain.handle('settings:getAppPreferences', () => getAppPreferences())
+  ipcMain.handle(
+    'settings:setAppPreferences',
+    (_event, patch: Partial<AppPreferences>) => setAppPreferences(patch ?? {})
+  )
+
   registerAutoUpdate(() => mainWindow)
 
-  // Show UI immediately; boot dedicated :3015 sidecar in the background.
   createWindow()
   scheduleStartupUpdateCheck(() => mainWindow)
   void ensureApiRunning()
@@ -172,15 +197,28 @@ app.whenReady().then(async () => {
     })
 
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    if (BrowserWindow.getAllWindows().length === 0) {
+      createWindow()
+      return
+    }
+    const win = mainWindow
+    if (win && !win.isDestroyed()) {
+      win.show()
+      win.focus()
+    }
   })
 })
 
 app.on('before-quit', () => {
+  isQuitting = true
+  destroyAppTray()
   stopDesktopSidecars()
 })
 
 app.on('window-all-closed', () => {
+  // Keep running in tray when close-to-tray / start-in-tray is enabled.
+  const prefs = getAppPreferences()
+  if (prefs.closeToTray || prefs.startInTray) return
   stopDesktopSidecars()
   if (process.platform !== 'darwin') {
     app.quit()

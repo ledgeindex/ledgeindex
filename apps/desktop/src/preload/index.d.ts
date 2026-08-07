@@ -33,6 +33,10 @@ export type LedgeIndexDesktopApi = {
   getApiOrigin: () => Promise<string>
   getProviderKeyStatus: () => Promise<ProviderKeyStatus>
   saveProviderKeys: (keys: ProviderKeyInput) => Promise<ProviderKeyStatus>
+  getAppPreferences: () => Promise<{ startInTray: boolean; closeToTray: boolean }>
+  setAppPreferences: (
+    patch: Partial<{ startInTray: boolean; closeToTray: boolean }>
+  ) => Promise<{ startInTray: boolean; closeToTray: boolean }>
   getAppVersion: () => Promise<string>
   checkForUpdates: (config?: {
     provider?: 'github'

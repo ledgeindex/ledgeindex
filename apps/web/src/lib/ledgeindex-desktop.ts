@@ -57,6 +57,13 @@ export type LedgeIndexDesktopApi = {
   saveProviderKeys?: (
     keys: DesktopProviderKeyInput,
   ) => Promise<DesktopProviderKeyStatus>;
+  getAppPreferences?: () => Promise<{
+    startInTray: boolean;
+    closeToTray: boolean;
+  }>;
+  setAppPreferences?: (
+    patch: Partial<{ startInTray: boolean; closeToTray: boolean }>,
+  ) => Promise<{ startInTray: boolean; closeToTray: boolean }>;
   getAppVersion?: () => Promise<string>;
   checkForUpdates?: (
     config?: DesktopUpdateFeedConfig,

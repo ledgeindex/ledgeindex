@@ -45,3 +45,9 @@ local_cache/
 .smoke-out/
 packages/repo/.smoke-out/
 packages/repo/scripts/
+
+# Local GitHub PATs — never commit
+PAT_LEDGEINDEX
+PAT_LEDDGEINDEX
+LEDGEINDEX_PUBLIC_PUSH_TOKEN
+.pat-ledgeindex

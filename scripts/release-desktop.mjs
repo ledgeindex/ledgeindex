@@ -1,28 +1,42 @@
 #!/usr/bin/env node
 /**
- * Prepare + optionally publish a LedgeIndex desktop release.
+ * LedgeIndex desktop release — no GitHub UI needed.
  *
- * Usage:
- *   node scripts/release-desktop.mjs                 # show status / next steps
- *   node scripts/release-desktop.mjs 0.1.0           # set version in package.json
- *   node scripts/release-desktop.mjs 0.1.0 --tag     # set version + create public tag
- *                                                    # (triggers Desktop release CI)
+ * Usage (from ledgeindex/):
+ *   npm run release:desktop -- 0.1.0 --release
  *
- * --tag needs LEDGEINDEX_PUBLIC_PUSH_TOKEN or GH_TOKEN with repo+workflow
- * on ledgeindex/ledgeindex (same PAT as the sync Action).
+ * Loads PAT from env or monorepo-root .env key PAT_LEDDGEINDEX / PAT_LEDGEINDEX
+ * (classic PAT scopes: repo + workflow).
  */
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const root = resolve(__dirname, "..");
-const pkgPath = resolve(root, "apps/desktop/package.json");
+const ledgeRoot = resolve(__dirname, "..");
+const monoRoot = resolve(ledgeRoot, "..");
+const pkgPath = resolve(ledgeRoot, "apps/desktop/package.json");
 const PUBLIC_REPO = "ledgeindex/ledgeindex";
 
+const TOKEN_FILES = [
+  "PAT_LEDGEINDEX",
+  "PAT_LEDDGEINDEX",
+  "LEDGEINDEX_PUBLIC_PUSH_TOKEN",
+  ".pat-ledgeindex",
+  ".env",
+];
+
+const TOKEN_ENV_KEYS = [
+  "LEDGEINDEX_PUBLIC_PUSH_TOKEN",
+  "GH_TOKEN",
+  "PAT_LEDGEINDEX",
+  "PAT_LEDDGEINDEX",
+];
+
 const args = process.argv.slice(2).filter((a) => a !== "--");
-const doTag = args.includes("--tag");
-const versionArg = args.find((a) => !a.startsWith("--"));
+const doRelease =
+  args.includes("--release") || args.includes("--tag") || args.includes("-r");
+const versionArg = args.find((a) => !a.startsWith("-"));
 
 function readPkg() {
   return JSON.parse(readFileSync(pkgPath, "utf8"));
@@ -37,19 +51,49 @@ function writeVersion(version) {
   const prev = pkg.version;
   pkg.version = version;
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
-  console.log(`Version: ${prev} → ${version} (${pkgPath})`);
+  console.log(`Version: ${prev} → ${version}`);
 }
 
-async function createPublicTag(version) {
-  const token =
-    process.env.LEDGEINDEX_PUBLIC_PUSH_TOKEN || process.env.GH_TOKEN || "";
-  if (!token) {
-    console.error(
-      "Missing LEDGEINDEX_PUBLIC_PUSH_TOKEN or GH_TOKEN for --tag.",
-    );
-    process.exit(1);
+function loadTokenFromFile(filePath) {
+  if (!existsSync(filePath)) return null;
+  const raw = readFileSync(filePath, "utf8");
+  if (!raw.trim()) return null;
+
+  for (const key of TOKEN_ENV_KEYS) {
+    const re = new RegExp(`^\\s*${key}\\s*=\\s*(.+)\\s*$`, "im");
+    const m = raw.match(re);
+    if (m) {
+      const value = m[1].trim().replace(/^["']|["']$/g, "");
+      if (value) return value;
+    }
   }
 
+  const base = filePath.split(/[/\\]/).pop() || "";
+  if (base === ".env") return null;
+  const line = raw
+    .split(/\r?\n/)
+    .find((l) => l.trim() && !l.trim().startsWith("#"));
+  if (!line) return null;
+  return line.trim().replace(/^["']|["']$/g, "") || null;
+}
+
+function resolveToken() {
+  for (const key of TOKEN_ENV_KEYS) {
+    const v = process.env[key];
+    if (v?.trim()) return { token: v.trim(), source: `env:${key}` };
+  }
+
+  for (const root of [monoRoot, ledgeRoot]) {
+    for (const name of TOKEN_FILES) {
+      const filePath = resolve(root, name);
+      const token = loadTokenFromFile(filePath);
+      if (token) return { token, source: filePath };
+    }
+  }
+  return { token: "", source: null };
+}
+
+async function createPublicTag(version, token) {
   const tag = `desktop-v${version}`;
   const api = "https://api.github.com";
   const headers = {
@@ -85,7 +129,7 @@ async function createPublicTag(version) {
 
   if (tagRes.status === 422) {
     console.error(
-      `Tag ${tag} already exists. Bump the version or delete the tag first.`,
+      `Tag ${tag} already exists. Bump the version (e.g. 0.1.1) and retry.`,
     );
     process.exit(1);
   }
@@ -95,39 +139,39 @@ async function createPublicTag(version) {
     process.exit(1);
   }
 
-  console.log(`Created tag ${tag} on ${PUBLIC_REPO} @ ${sha.slice(0, 7)}`);
-  console.log(
-    `CI: https://github.com/${PUBLIC_REPO}/actions/workflows/desktop-release.yml`,
-  );
-  console.log(`Releases: https://github.com/${PUBLIC_REPO}/releases`);
+  console.log(`Tagged ${tag} on ${PUBLIC_REPO} @ ${sha.slice(0, 7)}`);
+  console.log(`CI:      https://github.com/${PUBLIC_REPO}/actions`);
+  console.log(`Release: https://github.com/${PUBLIC_REPO}/releases`);
 }
 
 const pkg = readPkg();
 const version = versionArg || pkg.version;
 
+if (!versionArg && !doRelease) {
+  console.log(`Current desktop version: ${pkg.version}`);
+  console.log(`
+Release with:
+  npm run release:desktop -- ${pkg.version} --release
+`);
+  process.exit(0);
+}
+
 if (versionArg) {
   writeVersion(versionArg);
 }
 
-console.log(`
-Desktop release
----------------
-Version:  ${version}
-Tag:      desktop-v${version}
-Public:   https://github.com/${PUBLIC_REPO}
-
-Steps:
-  1. Commit apps/desktop/package.json (if you bumped the version)
-  2. Push to private main → sync Action updates public repo
-  3. Wait until sync is green
-  4. Create the tag:
-       node scripts/release-desktop.mjs ${version} --tag
-     or manually on public:
-       git tag desktop-v${version} && git push origin desktop-v${version}
-
-  Tag push starts the Windows (+ Mac) build and GitHub Release.
-`);
-
-if (doTag) {
-  await createPublicTag(version);
+if (!doRelease) {
+  console.log(`Version set to ${version}. Add --release to create the public tag.`);
+  process.exit(0);
 }
+
+const { token, source } = resolveToken();
+if (!token) {
+  console.error(`No PAT found in env or .env (PAT_LEDDGEINDEX / PAT_LEDGEINDEX).`);
+  process.exit(1);
+}
+
+console.log(`Using token from: ${source}`);
+console.log(`Releasing desktop ${version} → tag desktop-v${version}`);
+await createPublicTag(version, token);
+console.log("\nDone. Watch Desktop release CI for the Windows installer.");

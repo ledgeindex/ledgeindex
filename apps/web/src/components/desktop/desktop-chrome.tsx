@@ -1,9 +1,39 @@
 "use client";
 
+import { Settings } from "lucide-react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { DesktopUpdateControl } from "@/components/desktop/desktop-update-control";
 import { useLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
 import { cn } from "@/lib/utils";
+
+const SETTINGS_HREF = "/settings/providers";
+
+/** Compact title-bar settings control (AutomationGhost-style). */
+export function DesktopSettingsButton() {
+  const pathname = usePathname();
+  const active = pathname === SETTINGS_HREF || pathname.startsWith(`${SETTINGS_HREF}/`);
+
+  return (
+    <Link
+      href={SETTINGS_HREF}
+      className={cn(
+        "inline-flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-md",
+        "border border-border bg-card-solid/90 text-muted shadow-sm backdrop-blur-sm",
+        "transition-colors [-webkit-app-region:no-drag]",
+        "hover:border-foreground/15 hover:text-foreground",
+        active && "border-foreground/15 bg-surface-raised text-foreground",
+      )}
+      title="Settings"
+      aria-label="Settings"
+      aria-current={active ? "page" : undefined}
+      onDoubleClick={(event) => event.stopPropagation()}
+    >
+      <Settings className="size-[0.85rem]" aria-hidden />
+    </Link>
+  );
+}
 
 function MinimizeIcon() {
   return (
@@ -186,7 +216,7 @@ export function DesktopWindowControls() {
   );
 }
 
-/** Trailing chrome for the app header (dev + window controls). */
+/** Trailing chrome for the app header (settings + update + window controls). */
 export function DesktopHeaderTrailing() {
   const desktop = useLedgeIndexDesktop();
   if (!desktop) return null;
@@ -196,6 +226,7 @@ export function DesktopHeaderTrailing() {
       className="z-10 inline-flex shrink-0 items-center gap-1 [-webkit-app-region:no-drag]"
       onDoubleClick={(event) => event.stopPropagation()}
     >
+      <DesktopSettingsButton />
       <DesktopUpdateControl />
       <DesktopDevButtons />
       <DesktopWindowControls />
