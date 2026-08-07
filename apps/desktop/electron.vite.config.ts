@@ -14,7 +14,16 @@ function resolvePkg(id: string): string {
 }
 
 export default defineConfig(({ mode }) => {
+  // File env from apps/web, then process.env wins (CI secrets / local shell).
   const webEnv = loadEnv(mode, resolve(__dirname, '../web'), '')
+  for (const [key, value] of Object.entries(process.env)) {
+    if (
+      value !== undefined &&
+      (key.startsWith('NEXT_PUBLIC_') || key.startsWith('VITE_'))
+    ) {
+      webEnv[key] = value
+    }
+  }
   const defineEnv: Record<string, string> = {
     'process.env.NODE_ENV': JSON.stringify(mode === 'production' ? 'production' : 'development')
   }

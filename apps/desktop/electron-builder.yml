@@ -2,26 +2,45 @@ appId: com.ledgeindex.desktop
 productName: LedgeIndex
 # Scoped npm name (@ledgeindex/desktop) breaks NSIS paths on Windows (${name} → @ledgeindex\desktop-...).
 # Keep artifact names slash-free for makensis + electron-updater.
+# Icons live in resources/ (tracked); build/ is gitignored (sidecar stage + local icons).
+extraMetadata:
+  name: ledgeindex-desktop
 directories:
-  buildResources: build
+  buildResources: resources
 files:
   - '!**/.vscode/*'
   - '!src/*'
+  - '!build/desktop-server/**'
   - '!electron.vite.config.{js,ts,mjs,cjs}'
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+# Packaged sidecar: Electron main spawns resources/desktop-server/dist/start.js
+# (see src/main/sidecars.ts). Two-step copy so electron-builder does not drop node_modules.
+extraResources:
+  - from: build/desktop-server
+    to: desktop-server
+    filter:
+      - '**/*'
+      - '!**/node_modules/**'
+  - from: build/desktop-server/node_modules
+    to: desktop-server/node_modules
 asarUnpack:
   - 'resources/**'
 win:
   executableName: LedgeIndex
+  icon: resources/icon.ico
 nsis:
   artifactName: LedgeIndex-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
 mac:
-  entitlementsInherit: build/entitlements.mac.plist
+  icon: resources/icon.icns
+  entitlementsInherit: resources/entitlements.mac.plist
   extendInfo:
     - NSCameraUsageDescription: Application requests access to the device's camera.
     - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
@@ -31,6 +50,7 @@ mac:
 dmg:
   artifactName: LedgeIndex-${version}.${ext}
 linux:
+  icon: resources/icon.png
   target:
     - AppImage
     - snap

@@ -53,6 +53,23 @@ function resolveProdDesktopServerDir(): string {
   return join(process.resourcesPath, 'desktop-server')
 }
 
+/** Fail fast with a clear message instead of Node's opaque ENOENT on missing cwd. */
+function assertProdDesktopServerReady(serverDir: string): void {
+  const startJs = join(serverDir, 'dist', 'start.js')
+  if (!existsSync(serverDir)) {
+    throw new Error(
+      `Packaged desktop-server missing at ${serverDir}. ` +
+        `Expected electron-builder extraResources (run: node scripts/pack-desktop-server.mjs before packaging).`
+    )
+  }
+  if (!existsSync(startJs)) {
+    throw new Error(
+      `Packaged desktop-server entry missing: ${startJs}. ` +
+        `Rebuild the sidecar (node scripts/pack-desktop-server.mjs) and re-package the app.`
+    )
+  }
+}
+
 function ledgeindexDataDir(): string {
   return join(app.getPath('userData'), 'ledgeindex')
 }
@@ -272,6 +289,7 @@ async function spawnServerSidecar(): Promise<void> {
 
   if (app.isPackaged) {
     const serverDir = resolveProdDesktopServerDir()
+    assertProdDesktopServerReady(serverDir)
     console.log('[desktop] spawning packaged @ledgeindex/desktop-server', {
       dir: serverDir,
       port: DESKTOP_SERVER_PORT
