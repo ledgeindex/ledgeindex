@@ -234,9 +234,17 @@ function killSidecarProcessTree(child: ChildProcess): void {
   child.kill('SIGTERM')
 }
 
+/** Recent stderr lines kept so early crash errors surface in waitForReady. */
+let recentSidecarStderr = ''
+
 function attachSidecarLogs(child: ChildProcess): void {
+  recentSidecarStderr = ''
   child.stdout?.on('data', (chunk: Buffer) => logService(chunk, 'out'))
-  child.stderr?.on('data', (chunk: Buffer) => logService(chunk, 'err'))
+  child.stderr?.on('data', (chunk: Buffer) => {
+    const text = chunk.toString('utf8')
+    recentSidecarStderr = `${recentSidecarStderr}${text}`.slice(-4000)
+    logService(chunk, 'err')
+  })
   child.on('exit', (code, signal) => {
     console.log(`[desktop] @ledgeindex/desktop-server exited`, { code, signal })
     if (sidecarProcess === child) {
@@ -262,8 +270,12 @@ async function waitForReady(timeoutMs = 180_000): Promise<void> {
   while (Date.now() < deadline) {
     const child = sidecarProcess
     if (child && child.exitCode !== null) {
+      const stderrTail = recentSidecarStderr.trim().slice(-1500)
       throw new Error(
-        `@ledgeindex/desktop-server exited before ready (code ${child.exitCode}). Check [${LOG_PREFIX}] logs.`
+        `@ledgeindex/desktop-server exited before ready (code ${child.exitCode}).` +
+          (stderrTail
+            ? `\n--- sidecar stderr ---\n${stderrTail}\n---`
+            : ` Check [${LOG_PREFIX}] logs.`)
       )
     }
     if (Date.now() >= ignoreHealthUntil && (await probeServerReady())) {

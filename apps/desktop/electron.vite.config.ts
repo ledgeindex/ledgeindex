@@ -81,6 +81,8 @@ export default defineConfig(({ mode }) => {
       plugins: [externalizeDepsPlugin()]
     },
     renderer: {
+      // Relative asset URLs so /images/* works under Electron loadFile (file://).
+      base: './',
       define: defineEnv,
       // Same static assets as Next (`/images/logo.webp`, etc.)
       publicDir: resolve(__dirname, '../web/public'),

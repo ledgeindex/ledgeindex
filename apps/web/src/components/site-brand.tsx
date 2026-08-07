@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { publicAssetUrl } from "@/lib/public-asset-url";
 import { cn } from "@/lib/utils";
 
 export function SiteBrand({
@@ -19,7 +20,7 @@ export function SiteBrand({
     >
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src="/images/logo.webp?v=2"
+        src={publicAssetUrl("/images/logo.webp?v=2")}
         alt="LedgeIndex"
         width={563}
         height={808}

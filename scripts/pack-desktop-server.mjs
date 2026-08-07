@@ -6,20 +6,22 @@
  * Spawned in prod as: ELECTRON_RUN_AS_NODE=1 <electron> dist/start.js
  * with cwd = resources/desktop-server
  *
- * Copies a production dependency tree from the monorepo install (walk of
- * package.json dependencies), including workspace packages and native addons.
+ * Copies a production dependency tree by resolving each package's dependencies
+ * from that package's directory (Node's real module algorithm via createRequire),
+ * so peer/ESM pairings like @ai-sdk/openai ↔ @ai-sdk/provider-utils stay intact.
  */
-import { execSync } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import {
   cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
   realpathSync,
+  renameSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
-import { builtinModules } from "node:module";
+import { builtinModules, createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -27,10 +29,15 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const hostDir = join(root, "hosts", "desktop-server");
 const dest = join(root, "apps", "desktop", "build", "desktop-server");
-/** Public CI uses ledgeindex/node_modules; local pindownai hoists to ../node_modules. */
-const moduleRoots = [
-  root,
-  join(root, "node_modules"),
+
+/**
+ * LedgeIndex-only module roots for rare fallbacks when createRequire fails.
+ * Parent monorepo node_modules is intentionally last-resort only — hoisted
+ * pindownai versions often break ESM peer pairings for packages resolved
+ * inside ledgeindex/.
+ */
+const LEDGEINDEX_FALLBACK_ROOTS = [root, join(root, "node_modules")];
+const PARENT_FALLBACK_ROOTS = [
   join(root, ".."),
   join(root, "..", "node_modules"),
 ];
@@ -80,8 +87,19 @@ const NODE_BUILTINS = new Set([
   ...builtinModules.map((m) => `node:${m}`),
 ]);
 
+const SMOKE_PORT = 3098;
+const SMOKE_TIMEOUT_MS = 90_000;
+
 function log(...args) {
   console.log("[pack-desktop-server]", ...args);
+}
+
+function realPathOrSelf(dir) {
+  try {
+    return realpathSync(dir);
+  } catch {
+    return dir;
+  }
 }
 
 function buildWorkspaces() {
@@ -102,93 +120,312 @@ function buildWorkspaces() {
   }
 }
 
+/** Clear stage dir; on Windows EBUSY, rename aside so packing can proceed. */
+function clearDest() {
+  if (!existsSync(dest)) return;
+  try {
+    rmSync(dest, { recursive: true, force: true });
+    return;
+  } catch (err) {
+    const stale = `${dest}.stale-${Date.now()}`;
+    log(
+      `rmSync busy (${err instanceof Error ? err.message : err}); renaming → ${relative(root, stale)}`,
+    );
+    try {
+      renameSync(dest, stale);
+    } catch (renameErr) {
+      throw new Error(
+        `Cannot clear staged desktop-server at ${dest} (busy). ` +
+          `Stop any running sidecar/Electron using it, then retry. ` +
+          `(${renameErr instanceof Error ? renameErr.message : renameErr})`,
+      );
+    }
+    setTimeout(() => {
+      try {
+        rmSync(stale, { recursive: true, force: true });
+      } catch {
+        // leave stale dir for a later pack / manual cleanup
+      }
+    }, 0);
+  }
+}
+
 /**
- * Locate an installed package dir without require.resolve(package.json) —
- * many packages omit "./package.json" from "exports" and that path fails.
+ * Walk up from a resolved file/dir until we find package.json with matching name.
  */
-function findPackageDir(name, searchRoots) {
+function findPackageRootFromPath(startPath, expectedName) {
+  let dir = startPath;
+  while (dir && dir !== dirname(dir)) {
+    const pkgJson = join(dir, "package.json");
+    if (existsSync(pkgJson)) {
+      try {
+        const pkg = JSON.parse(readFileSync(pkgJson, "utf8"));
+        if (pkg.name === expectedName) return dir;
+      } catch {
+        // keep walking
+      }
+    }
+    dir = dirname(dir);
+  }
+  return null;
+}
+
+/**
+ * Manual path search used only when createRequire cannot resolve a package.
+ * Prefers ledgeindex roots; parent monorepo is last resort.
+ */
+function findPackageDirFallback(name, extraBases = []) {
   const workspaceDir = WORKSPACE_PACKAGE_DIRS[name];
   if (workspaceDir && existsSync(join(workspaceDir, "package.json"))) {
     return workspaceDir;
   }
 
   const rel = join("node_modules", ...name.split("/"));
-  for (const base of searchRoots) {
+  const bases = [
+    ...extraBases,
+    ...LEDGEINDEX_FALLBACK_ROOTS,
+    ...PARENT_FALLBACK_ROOTS,
+  ];
+  for (const base of bases) {
     const candidates = [
       join(base, rel),
-      // When base is already a package dir, also check its nested node_modules
       join(base, "node_modules", ...name.split("/")),
     ];
     for (const dir of candidates) {
-      const pkgJson = join(dir, "package.json");
-      if (existsSync(pkgJson)) return dir;
+      if (existsSync(join(dir, "package.json"))) return dir;
     }
   }
   return null;
 }
 
 /**
- * Walk production deps starting at @ledgeindex/desktop-server.
- * Maps package name → real filesystem directory.
+ * Resolve `name` the same way Node would from `fromDir`.
+ * Uses createRequire(…/package.json); falls back when exports block package.json.
  */
-function collectProductionPackages() {
-  /** @type {Map<string, string>} */
-  const seen = new Map();
-  // Seed host from its source dir (may not be linked under ledgeindex/node_modules).
-  seen.set("@ledgeindex/desktop-server", realpathSync(hostDir));
-  const hostPkg = JSON.parse(
-    readFileSync(join(hostDir, "package.json"), "utf8"),
-  );
-  const queue = Object.keys({
-    ...hostPkg.dependencies,
-    ...hostPkg.optionalDependencies,
-  });
+function resolvePackageDir(name, fromDir) {
+  const workspaceDir = WORKSPACE_PACKAGE_DIRS[name];
+  if (workspaceDir && existsSync(join(workspaceDir, "package.json"))) {
+    return workspaceDir;
+  }
 
-  while (queue.length > 0) {
-    const name = queue.pop();
-    if (!name || seen.has(name) || SKIP_PACKAGES.has(name)) continue;
-    if (NODE_BUILTINS.has(name) || name.startsWith("node:")) continue;
-
-    const searchRoots = [
-      hostDir,
-      ...moduleRoots,
-      ...seen.values(),
-    ];
-    const pkgDir = findPackageDir(name, searchRoots);
-    if (!pkgDir) {
-      // Optional native bindings / platform packages may be absent.
-      continue;
-    }
-
-    let realDir;
+  const req = createRequire(join(fromDir, "package.json"));
+  try {
+    return dirname(req.resolve(`${name}/package.json`));
+  } catch {
+    // Many packages omit "./package.json" from "exports".
     try {
-      realDir = realpathSync(pkgDir);
+      const entry = req.resolve(name);
+      const rootDir = findPackageRootFromPath(entry, name);
+      if (rootDir) return rootDir;
     } catch {
-      realDir = pkgDir;
-    }
-    seen.set(name, realDir);
-
-    let pkg;
-    try {
-      pkg = JSON.parse(readFileSync(join(realDir, "package.json"), "utf8"));
-    } catch {
-      continue;
-    }
-
-    const next = {
-      ...pkg.dependencies,
-      ...pkg.optionalDependencies,
-    };
-    for (const dep of Object.keys(next || {})) {
-      if (!seen.has(dep) && !SKIP_PACKAGES.has(dep)) queue.push(dep);
+      // fall through
     }
   }
 
-  return seen;
+  return findPackageDirFallback(name, [fromDir]);
+}
+
+/**
+ * Prefer installs hoisted under ledgeindex/node_modules over nested copies
+ * under packages/* or hosts/* (those often pin alternate majors).
+ */
+function flatWinnerScore(realDir) {
+  const normalized = realDir.replace(/\\/g, "/").toLowerCase();
+  const hoistedRoot = realPathOrSelf(join(root, "node_modules"))
+    .replace(/\\/g, "/")
+    .toLowerCase();
+  if (normalized === hoistedRoot || normalized.startsWith(`${hoistedRoot}/`)) {
+    const rest = normalized.slice(hoistedRoot.length);
+    // True hoist: ledgeindex/node_modules/<pkg> — no further node_modules
+    if (!rest.includes("/node_modules/")) return 300;
+    return 100;
+  }
+  if (
+    normalized.includes("/packages/") ||
+    normalized.includes("/hosts/") ||
+    normalized.includes("/apps/")
+  ) {
+    return 10;
+  }
+  // Parent monorepo or elsewhere — last resort
+  return 1;
+}
+
+/**
+ * Walk production deps starting at @ledgeindex/desktop-server.
+ * Each dependency is resolved from its consumer's directory (createRequire).
+ *
+ * After the walk, pick one flat install per package name (prefer ledgeindex
+ * hoists), and nest alternate realpaths under consumers that need them —
+ * but only when that consumer is the canonical flat install of its name
+ * (avoids polluting top-level cheerio with deps from a nested cheerio copy).
+ *
+ * @returns {{ flat: Map<string, string>, nested: Array<{ parentName: string, name: string, srcDir: string }> }}
+ */
+function collectProductionPackages() {
+  /**
+   * @typedef {{ consumerName: string, consumerDir: string, realDir: string }} Resolution
+   * @type {Map<string, Resolution[]>}
+   */
+  const resolutions = new Map();
+  /** Walk each physical install dir once (name may appear at multiple paths). */
+  const walkedDirs = new Set();
+
+  const hostReal = realPathOrSelf(hostDir);
+  walkedDirs.add(hostReal);
+
+  /** @type {Array<{ name: string, dir: string }>} */
+  const queue = [{ name: "@ledgeindex/desktop-server", dir: hostDir }];
+
+  const record = (depName, consumerName, consumerDir, realDir) => {
+    const list = resolutions.get(depName) || [];
+    list.push({ consumerName, consumerDir, realDir });
+    resolutions.set(depName, list);
+  };
+
+  // Host is the stage root, not a node_modules entry.
+  record("@ledgeindex/desktop-server", "(root)", hostDir, hostReal);
+
+  while (queue.length > 0) {
+    const current = queue.shift();
+    if (!current) continue;
+
+    let pkg;
+    try {
+      pkg = JSON.parse(readFileSync(join(current.dir, "package.json"), "utf8"));
+    } catch {
+      continue;
+    }
+
+    const deps = {
+      ...pkg.dependencies,
+      ...pkg.optionalDependencies,
+    };
+
+    for (const depName of Object.keys(deps || {})) {
+      if (!depName || SKIP_PACKAGES.has(depName)) continue;
+      if (NODE_BUILTINS.has(depName) || depName.startsWith("node:")) continue;
+
+      const pkgDir = resolvePackageDir(depName, current.dir);
+      if (!pkgDir) {
+        // Optional native bindings / platform packages may be absent.
+        continue;
+      }
+
+      const realDir = realPathOrSelf(pkgDir);
+      record(depName, current.name, current.dir, realDir);
+
+      if (!walkedDirs.has(realDir)) {
+        walkedDirs.add(realDir);
+        queue.push({ name: depName, dir: realDir });
+      }
+    }
+  }
+
+  /** @type {Map<string, string>} */
+  const flat = new Map();
+  /** @type {Array<{ parentName: string, name: string, srcDir: string }>} */
+  const nested = [];
+  const nestedKeys = new Set();
+
+  for (const [name, entries] of resolutions) {
+    let best = entries[0].realDir;
+    let bestScore = flatWinnerScore(best);
+    for (const entry of entries) {
+      const score = flatWinnerScore(entry.realDir);
+      if (score > bestScore) {
+        best = entry.realDir;
+        bestScore = score;
+      }
+    }
+    flat.set(name, best);
+  }
+
+  /**
+   * If a consumer isn't the flat canonical install of its name (e.g. nested
+   * cheerio or @ai-sdk/google under a workspace), nest alternate deps under
+   * the innermost flat package that contains that consumer dir — matching
+   * sibling layouts like packages/core/node_modules/@ai-sdk/{google,provider-utils}.
+   */
+  function innermostFlatAncestor(consumerDir) {
+    const child = realPathOrSelf(consumerDir).replace(/\\/g, "/").toLowerCase();
+    let bestName = null;
+    let bestLen = -1;
+    for (const [pkgName, pkgDir] of flat) {
+      if (pkgName === "@ledgeindex/desktop-server") continue;
+      const parent = realPathOrSelf(pkgDir).replace(/\\/g, "/").toLowerCase();
+      if (child === parent) continue;
+      if (!child.startsWith(`${parent}/`)) continue;
+      if (parent.length > bestLen) {
+        bestLen = parent.length;
+        bestName = pkgName;
+      }
+    }
+    return bestName;
+  }
+
+  // Nest alternate versions under the right parent so Node keeps pairings.
+  for (const [name, entries] of resolutions) {
+    const winner = flat.get(name);
+    if (!winner) continue;
+    for (const entry of entries) {
+      if (realPathOrSelf(entry.realDir) === realPathOrSelf(winner)) continue;
+      if (entry.consumerName === "@ledgeindex/desktop-server") continue;
+      if (entry.consumerName === "(root)") continue;
+
+      const parentFlat = flat.get(entry.consumerName);
+      const parentIsFlatCanonical =
+        Boolean(parentFlat) &&
+        realPathOrSelf(parentFlat) === realPathOrSelf(entry.consumerDir);
+
+      let nestParent = null;
+      if (parentIsFlatCanonical) {
+        nestParent = entry.consumerName;
+      } else {
+        const ancestor = innermostFlatAncestor(entry.consumerDir);
+        // Only nest under workspace ancestors. Non-workspace packages keep the
+        // nested node_modules from cpSync; adding siblings there shadows other
+        // deps (e.g. entities@6 under @crawlee/utils breaks htmlparser2).
+        if (ancestor && WORKSPACE_PACKAGE_DIRS[ancestor]) {
+          nestParent = ancestor;
+        }
+      }
+      if (!nestParent) continue;
+
+      // Non-workspace nest parent: only add when the nested dep is missing in
+      // the source install (never overwrite cpSync nested trees).
+      if (!WORKSPACE_PACKAGE_DIRS[nestParent]) {
+        const parentSrc = flat.get(nestParent);
+        if (!parentSrc) continue;
+        const alreadyNested = join(
+          parentSrc,
+          "node_modules",
+          ...name.split("/"),
+          "package.json",
+        );
+        if (existsSync(alreadyNested)) continue;
+      }
+
+      const nestKey = `${nestParent}\0${name}\0${entry.realDir}`;
+      if (nestedKeys.has(nestKey)) continue;
+      nestedKeys.add(nestKey);
+      nested.push({
+        parentName: nestParent,
+        name,
+        srcDir: entry.realDir,
+      });
+    }
+  }
+
+  return { flat, nested };
 }
 
 function destPathForPackage(name) {
   return join(dest, "node_modules", ...name.split("/"));
+}
+
+function destPathForNestedPackage(parentName, name) {
+  return join(destPathForPackage(parentName), "node_modules", ...name.split("/"));
 }
 
 function isWorkspacePackage(name, srcDir) {
@@ -199,6 +436,19 @@ function isWorkspacePackage(name, srcDir) {
   } catch {
     return false;
   }
+}
+
+function packageCopyFilter(src) {
+  const base = src.replace(/\\/g, "/");
+  // Transformers.js downloads models into package-local .cache at runtime —
+  // never ship a developer's HF cache (can be >1GB of .onnx weights).
+  if (base.includes("/.cache/") || base.endsWith("/.cache")) return false;
+  // onnxruntime-node ships all OS natives; keep only this build host.
+  const nativeOs = base.match(
+    /\/onnxruntime-node\/bin\/(darwin|linux|win32)(\/|$)/,
+  );
+  if (nativeOs && nativeOs[1] !== process.platform) return false;
+  return true;
 }
 
 /** Workspace packages: ship package.json + dist only (not src / local node_modules). */
@@ -214,44 +464,49 @@ function copyWorkspacePackage(srcDir, target) {
   cpSync(dist, join(target, "dist"), { recursive: true });
 }
 
-function copyCollectedPackages(packages) {
+function copyPackageTree(name, srcDir, target) {
+  mkdirSync(dirname(target), { recursive: true });
+  if (existsSync(target)) {
+    rmSync(target, { recursive: true, force: true });
+  }
+  if (isWorkspacePackage(name, srcDir)) {
+    copyWorkspacePackage(srcDir, target);
+  } else {
+    cpSync(srcDir, target, {
+      recursive: true,
+      dereference: true,
+      filter: packageCopyFilter,
+    });
+  }
+}
+
+function copyCollectedPackages(flat, nested) {
   const nm = join(dest, "node_modules");
   mkdirSync(nm, { recursive: true });
 
   let copied = 0;
-  for (const [name, srcDir] of packages) {
+  for (const [name, srcDir] of flat) {
     if (name === "@ledgeindex/desktop-server") {
       // Host entry is staged as dist/ + package.json at dest root, not under node_modules.
       continue;
     }
-    const target = destPathForPackage(name);
-    mkdirSync(dirname(target), { recursive: true });
-    if (existsSync(target)) {
-      rmSync(target, { recursive: true, force: true });
-    }
-    if (isWorkspacePackage(name, srcDir)) {
-      copyWorkspacePackage(srcDir, target);
-    } else {
-      cpSync(srcDir, target, {
-        recursive: true,
-        dereference: true,
-        filter: (src) => {
-          const base = src.replace(/\\/g, "/");
-          // Transformers.js downloads models into package-local .cache at runtime —
-          // never ship a developer's HF cache (can be >1GB of .onnx weights).
-          if (base.includes("/.cache/") || base.endsWith("/.cache")) return false;
-          // onnxruntime-node ships all OS natives; keep only this build host.
-          const nativeOs = base.match(
-            /\/onnxruntime-node\/bin\/(darwin|linux|win32)(\/|$)/,
-          );
-          if (nativeOs && nativeOs[1] !== process.platform) return false;
-          return true;
-        },
-      });
-    }
+    copyPackageTree(name, srcDir, destPathForPackage(name));
     copied += 1;
   }
-  log(`copied ${copied} packages → node_modules`);
+
+  let nestedCopied = 0;
+  for (const { parentName, name, srcDir } of nested) {
+    // Ensure parent exists (workspace packages are copied without node_modules).
+    const parentTarget = destPathForPackage(parentName);
+    if (!existsSync(parentTarget)) {
+      log(`skip nested ${name} under missing parent ${parentName}`);
+      continue;
+    }
+    copyPackageTree(name, srcDir, destPathForNestedPackage(parentName, name));
+    nestedCopied += 1;
+  }
+
+  log(`copied ${copied} packages → node_modules (${nestedCopied} nested conflicts)`);
 }
 
 function writeRuntimePackageJson() {
@@ -272,7 +527,175 @@ function writeRuntimePackageJson() {
   );
 }
 
-function main() {
+function readStagedProviderUtilsVersion() {
+  const pkgPath = join(
+    dest,
+    "node_modules",
+    "@ai-sdk",
+    "provider-utils",
+    "package.json",
+  );
+  if (!existsSync(pkgPath)) return null;
+  try {
+    return JSON.parse(readFileSync(pkgPath, "utf8")).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Version of provider-utils that staged @ai-sdk/openai actually resolves (flat or nested). */
+function readOpenaiResolvedProviderUtilsVersion() {
+  const openaiPkg = join(
+    dest,
+    "node_modules",
+    "@ai-sdk",
+    "openai",
+    "package.json",
+  );
+  if (!existsSync(openaiPkg)) return null;
+  try {
+    const req = createRequire(openaiPkg);
+    let dir;
+    try {
+      dir = dirname(req.resolve("@ai-sdk/provider-utils/package.json"));
+    } catch {
+      const entry = req.resolve("@ai-sdk/provider-utils");
+      dir = findPackageRootFromPath(entry, "@ai-sdk/provider-utils");
+    }
+    if (!dir) return null;
+    return JSON.parse(readFileSync(join(dir, "package.json"), "utf8")).version ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Smoke: boot staged dist/start.js and hit /health.
+ * Catches the ai-sdk ESM peer mismatch (and similar import crashes) immediately.
+ */
+async function smokeStagedServer() {
+  if (process.env.PACK_DESKTOP_SERVER_SKIP_SMOKE === "1") {
+    log("skipping smoke test (PACK_DESKTOP_SERVER_SKIP_SMOKE=1)");
+    return;
+  }
+
+  const { request } = await import("node:http");
+
+  log(`smoke: spawning node dist/start.js (PORT=${SMOKE_PORT})…`);
+
+  const child = spawn(process.execPath, ["dist/start.js"], {
+    cwd: dest,
+    env: {
+      ...process.env,
+      NODE_ENV: "production",
+      PORT: String(SMOKE_PORT),
+      HOST: "127.0.0.1",
+      // Avoid clobbering a developer's real data dir during pack smoke.
+      LEDGEINDEX_DATA_DIR: join(dest, `.smoke-data-${process.pid}`),
+      LEDGEINDEX_AUTH_REQUIRED: "0",
+      LEDGEINDEX_LOCAL_USER_ID: "ledgeindex-pack-smoke",
+      LEDGEINDEX_PROFILES: process.env.LEDGEINDEX_PROFILES?.trim() || "docs,profile",
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+    windowsHide: true,
+  });
+
+  let stdout = "";
+  let stderr = "";
+  child.stdout?.on("data", (chunk) => {
+    const text = chunk.toString("utf8");
+    stdout += text;
+    for (const line of text.trimEnd().split(/\r?\n/)) {
+      if (line.trim()) log("smoke:out", line);
+    }
+  });
+  child.stderr?.on("data", (chunk) => {
+    const text = chunk.toString("utf8");
+    stderr += text;
+    for (const line of text.trimEnd().split(/\r?\n/)) {
+      if (line.trim()) log("smoke:err", line);
+    }
+  });
+
+  const killChild = () => {
+    if (child.exitCode !== null || child.killed) return;
+    if (process.platform === "win32" && child.pid) {
+      try {
+        execSync(`taskkill /pid ${child.pid} /T /F`, {
+          stdio: "ignore",
+          windowsHide: true,
+        });
+        return;
+      } catch {
+        // fall through
+      }
+    }
+    try {
+      child.kill("SIGTERM");
+    } catch {
+      // already gone
+    }
+  };
+
+  const probeHealth = (path) =>
+    new Promise((resolve) => {
+      const req = request(
+        {
+          hostname: "127.0.0.1",
+          port: SMOKE_PORT,
+          path,
+          method: "GET",
+          timeout: 1500,
+        },
+        (res) => {
+          res.resume();
+          resolve(res.statusCode !== undefined && res.statusCode >= 200 && res.statusCode < 300);
+        },
+      );
+      req.on("error", () => resolve(false));
+      req.on("timeout", () => {
+        req.destroy();
+        resolve(false);
+      });
+      req.end();
+    });
+
+  const deadline = Date.now() + SMOKE_TIMEOUT_MS;
+  let healthy = false;
+
+  try {
+    while (Date.now() < deadline) {
+      if (child.exitCode !== null) {
+        const tail = (stderr || stdout).trim().slice(-2000);
+        throw new Error(
+          `smoke failed: staged server exited early (code ${child.exitCode})\n${tail}`,
+        );
+      }
+
+      if ((await probeHealth("/health")) || (await probeHealth("/health/packages"))) {
+        healthy = true;
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+
+    if (!healthy) {
+      const tail = (stderr || stdout).trim().slice(-2000);
+      throw new Error(
+        `smoke failed: /health not ready within ${SMOKE_TIMEOUT_MS}ms` +
+          (tail ? `\n${tail}` : " (no server output)"),
+      );
+    }
+
+    log(`smoke ok — http://127.0.0.1:${SMOKE_PORT}/health`);
+  } finally {
+    killChild();
+    // Brief wait so Windows releases file handles before next pack.
+    await new Promise((r) => setTimeout(r, 500));
+  }
+}
+
+async function main() {
   buildWorkspaces();
 
   const entry = join(hostDir, "dist", "start.js");
@@ -283,15 +706,17 @@ function main() {
     process.exit(1);
   }
 
-  rmSync(dest, { recursive: true, force: true });
+  clearDest();
   mkdirSync(dest, { recursive: true });
   cpSync(join(hostDir, "dist"), join(dest, "dist"), { recursive: true });
   writeRuntimePackageJson();
 
-  log("collecting production dependency tree…");
-  const packages = collectProductionPackages();
-  log(`resolved ${packages.size} packages (incl. host)`);
-  copyCollectedPackages(packages);
+  log("collecting production dependency tree (per-consumer resolve)…");
+  const { flat, nested } = collectProductionPackages();
+  log(
+    `resolved ${flat.size} flat packages (incl. host), ${nested.length} nested conflicts`,
+  );
+  copyCollectedPackages(flat, nested);
 
   if (!existsSync(join(dest, "dist", "start.js"))) {
     console.error("[pack-desktop-server] staging failed: dist/start.js missing");
@@ -304,7 +729,34 @@ function main() {
     process.exit(1);
   }
 
+  const providerUtilsVersion = readStagedProviderUtilsVersion();
+  const openaiProviderUtils = readOpenaiResolvedProviderUtilsVersion();
+  if (providerUtilsVersion) {
+    log(`staged flat @ai-sdk/provider-utils@${providerUtilsVersion}`);
+  } else {
+    log("warning: staged flat @ai-sdk/provider-utils not found");
+  }
+  if (openaiProviderUtils) {
+    log(
+      `@ai-sdk/openai resolves @ai-sdk/provider-utils@${openaiProviderUtils}`,
+    );
+    const major = Number.parseInt(openaiProviderUtils.split(".")[0] ?? "", 10);
+    if (Number.isFinite(major) && major !== 3) {
+      throw new Error(
+        `pack integrity: @ai-sdk/openai must resolve provider-utils 3.x, got ${openaiProviderUtils}`,
+      );
+    }
+  } else if (existsSync(join(dest, "node_modules", "@ai-sdk", "openai"))) {
+    throw new Error(
+      "pack integrity: staged @ai-sdk/openai cannot resolve @ai-sdk/provider-utils",
+    );
+  }
+
   log("staged", relative(root, dest));
+  await smokeStagedServer();
 }
 
-main();
+main().catch((err) => {
+  console.error("[pack-desktop-server]", err instanceof Error ? err.message : err);
+  process.exit(1);
+});

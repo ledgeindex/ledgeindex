@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { DefaultChatTransport, type ToolUIPart } from "ai";
 import { useChat } from "@ai-sdk/react";
+import { publicAssetUrl } from "@/lib/public-asset-url";
 import {
   Conversation,
   ConversationContent,
@@ -411,7 +412,7 @@ export function StreamingChatPanel({
                   <div className="flex min-h-[min(28rem,55vh)] w-full flex-col items-center justify-center gap-4 px-4 py-10 text-center">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
-                      src="/images/logo.webp?v=2"
+                      src={publicAssetUrl("/images/logo.webp?v=2")}
                       alt=""
                       width={563}
                       height={808}
@@ -681,7 +682,7 @@ export function StreamingChatPanel({
                 <div className="flex h-full min-h-[10rem] items-center justify-center">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
-                    src="/images/logo.webp?v=2"
+                    src={publicAssetUrl("/images/logo.webp?v=2")}
                     alt=""
                     width={563}
                     height={808}
