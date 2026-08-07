@@ -1,5 +1,7 @@
 appId: com.ledgeindex.desktop
 productName: LedgeIndex
+# Scoped npm name (@ledgeindex/desktop) breaks NSIS paths on Windows (${name} → @ledgeindex\desktop-...).
+# Keep artifact names slash-free for makensis + electron-updater.
 directories:
   buildResources: build
 files:
@@ -14,7 +16,7 @@ asarUnpack:
 win:
   executableName: LedgeIndex
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  artifactName: LedgeIndex-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -27,7 +29,7 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: LedgeIndex-${version}.${ext}
 linux:
   target:
     - AppImage
@@ -36,7 +38,7 @@ linux:
   maintainer: ledgeindex.com
   category: Utility
 appImage:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: LedgeIndex-${version}.${ext}
 npmRebuild: false
 publish:
   provider: github
