@@ -69,6 +69,8 @@ export function toSourceSummary(source: Source): SourceSummary {
     versionLabel,
     categories: source.categories ?? [],
     versions: [],
+    excludePatterns: [...(source.config.excludePatterns ?? [])],
+    includePatterns: [...(source.config.includePatterns ?? [])],
   };
 }
 

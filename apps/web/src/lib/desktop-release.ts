@@ -1,12 +1,15 @@
 /** Public GitHub repo that publishes desktop installers (`desktop-v*` tags). */
 export const DESKTOP_GITHUB_REPO = "ledgeindex/ledgeindex";
 
-export type DesktopWindowsRelease = {
+export type DesktopReleaseAsset = {
   version: string;
   tag: string;
   downloadUrl: string;
   releasesPageUrl: string;
 };
+
+/** @deprecated Prefer DesktopReleaseAsset — kept for existing call sites. */
+export type DesktopWindowsRelease = DesktopReleaseAsset;
 
 type GitHubReleaseAsset = {
   name?: string;
@@ -24,21 +27,23 @@ function isWindowsSetupAsset(name: string): boolean {
   return name.endsWith("-setup.exe") && !name.endsWith(".blockmap");
 }
 
-function releaseFromGitHub(release: GitHubRelease): DesktopWindowsRelease | null {
-  const tag = String(release.tag_name ?? "");
-  if (!tag.startsWith("desktop-v")) return null;
-
-  const asset = (release.assets ?? []).find(
-    (item) => typeof item.name === "string" && isWindowsSetupAsset(item.name),
+function isMacDmgAsset(name: string): boolean {
+  return (
+    name.endsWith(".dmg") &&
+    !name.endsWith(".blockmap") &&
+    name.includes("-mac-")
   );
-  if (!asset?.browser_download_url) return null;
+}
 
-  return {
-    version: tag.replace(/^desktop-v/, ""),
-    tag,
-    downloadUrl: asset.browser_download_url,
-    releasesPageUrl: `https://github.com/${DESKTOP_GITHUB_REPO}/releases/tag/${encodeURIComponent(tag)}`,
-  };
+function macAssetRank(name: string): number {
+  // Prefer Apple Silicon for the marketing primary link.
+  if (name.includes("-arm64.")) return 2;
+  if (name.includes("-x64.")) return 1;
+  return 0;
+}
+
+function releasePageUrl(tag: string): string {
+  return `https://github.com/${DESKTOP_GITHUB_REPO}/releases/tag/${encodeURIComponent(tag)}`;
 }
 
 function versionParts(version: string): number[] {
@@ -60,37 +65,88 @@ export function compareDesktopVersions(a: string, b: string): number {
   return 0;
 }
 
-/**
- * Resolves the newest published desktop Windows installer from GitHub Releases.
- * Picks the highest `desktop-v*` semver that has a `*-setup.exe` asset.
- */
-export async function getLatestDesktopWindowsRelease(): Promise<DesktopWindowsRelease | null> {
-  try {
-    const response = await fetch(
-      `https://api.github.com/repos/${DESKTOP_GITHUB_REPO}/releases?per_page=30`,
-      {
-        headers: {
-          Accept: "application/vnd.github+json",
-          "User-Agent": "ledgeindex-web",
-        },
-        next: { revalidate: 3600 },
+async function listDesktopReleases(): Promise<GitHubRelease[]> {
+  const response = await fetch(
+    `https://api.github.com/repos/${DESKTOP_GITHUB_REPO}/releases?per_page=30`,
+    {
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "ledgeindex-web",
       },
+      next: { revalidate: 3600 },
+    },
+  );
+  if (!response.ok) return [];
+  const releases = (await response.json()) as GitHubRelease[];
+  return Array.isArray(releases) ? releases : [];
+}
+
+function pickBestAsset(
+  releases: GitHubRelease[],
+  match: (name: string) => boolean,
+  rank?: (name: string) => number,
+): DesktopReleaseAsset | null {
+  let best: DesktopReleaseAsset | null = null;
+  let bestRank = -1;
+
+  for (const release of releases) {
+    if (release.draft || release.prerelease) continue;
+    const tag = String(release.tag_name ?? "");
+    if (!tag.startsWith("desktop-v")) continue;
+
+    const candidates = (release.assets ?? []).filter(
+      (item) =>
+        typeof item.name === "string" &&
+        match(item.name) &&
+        Boolean(item.browser_download_url),
     );
-    if (!response.ok) return null;
+    if (candidates.length === 0) continue;
 
-    const releases = (await response.json()) as GitHubRelease[];
-    if (!Array.isArray(releases)) return null;
+    candidates.sort((a, b) => (rank?.(b.name!) ?? 0) - (rank?.(a.name!) ?? 0));
+    const asset = candidates[0]!;
+    const assetRank = rank?.(asset.name!) ?? 0;
+    const resolved: DesktopReleaseAsset = {
+      version: tag.replace(/^desktop-v/, ""),
+      tag,
+      downloadUrl: asset.browser_download_url!,
+      releasesPageUrl: releasePageUrl(tag),
+    };
 
-    let best: DesktopWindowsRelease | null = null;
-    for (const release of releases) {
-      if (release.draft || release.prerelease) continue;
-      const resolved = releaseFromGitHub(release);
-      if (!resolved) continue;
-      if (!best || compareDesktopVersions(resolved.version, best.version) > 0) {
-        best = resolved;
-      }
+    if (
+      !best ||
+      compareDesktopVersions(resolved.version, best.version) > 0 ||
+      (compareDesktopVersions(resolved.version, best.version) === 0 &&
+        assetRank > bestRank)
+    ) {
+      best = resolved;
+      bestRank = assetRank;
     }
-    return best;
+  }
+
+  return best;
+}
+
+/**
+ * Newest published Windows installer (`*-setup.exe`) from GitHub Releases.
+ */
+export async function getLatestDesktopWindowsRelease(): Promise<DesktopReleaseAsset | null> {
+  try {
+    return pickBestAsset(await listDesktopReleases(), isWindowsSetupAsset);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Newest published macOS DMG from GitHub Releases (prefers Apple Silicon).
+ */
+export async function getLatestDesktopMacRelease(): Promise<DesktopReleaseAsset | null> {
+  try {
+    return pickBestAsset(
+      await listDesktopReleases(),
+      isMacDmgAsset,
+      macAssetRank,
+    );
   } catch {
     return null;
   }

@@ -15,10 +15,13 @@ import { ProfilerSection } from "@/components/home/profiler-section";
 import { PinpointKnowledgeSection } from "@/components/home/pinpoint-knowledge-section";
 import { RegistrySection } from "@/components/home/registry-section";
 import { SourceBuilderSection } from "@/components/home/source-builder-section";
-import { getLatestDesktopWindowsRelease } from "@/lib/desktop-release";
+import { getLatestDesktopMacRelease, getLatestDesktopWindowsRelease } from "@/lib/desktop-release";
 
 export default async function Home() {
-  const windowsRelease = await getLatestDesktopWindowsRelease();
+  const [windowsRelease, macRelease] = await Promise.all([
+    getLatestDesktopWindowsRelease(),
+    getLatestDesktopMacRelease(),
+  ]);
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col">
@@ -35,8 +38,14 @@ export default async function Home() {
         <AcceleratorSection />
         <ProfilerSection />
         <PinpointKnowledgeSection />
-        <OpenSourceSection windowsRelease={windowsRelease} />
-        <AppsComingSection windowsRelease={windowsRelease} />
+        <OpenSourceSection
+          windowsRelease={windowsRelease}
+          macRelease={macRelease}
+        />
+        <AppsComingSection
+          windowsRelease={windowsRelease}
+          macRelease={macRelease}
+        />
         <FaqSection />
         <CtaSection />
       </main>

@@ -26,6 +26,7 @@ import ApiKeysPage from '@/app/(app)/api-keys/page'
 import DesktopProviderKeysPage from '@/app/(app)/settings/providers/page'
 import ExploreChatPage from '@/app/(app)/chat/page'
 import AdminUsersPage from '@/app/(app)/admin/users/page'
+import AdminSourceUpdaterPage from '@/app/(app)/admin/source-updater/page'
 
 const FALLBACK_DESKTOP_API = 'http://127.0.0.1:3015'
 
@@ -56,6 +57,10 @@ function AuthenticatedApp(): React.JSX.Element {
                         element={<DesktopProviderKeysPage />}
                       />
                       <Route path="/admin/users" element={<AdminUsersPage />} />
+                      <Route
+                        path="/admin/source-updater"
+                        element={<AdminSourceUpdaterPage />}
+                      />
                       <Route path="/chat" element={<ExploreChatPage />} />
                       <Route path="/" element={<Navigate to="/chat" replace />} />
                       <Route path="*" element={<Navigate to="/chat" replace />} />

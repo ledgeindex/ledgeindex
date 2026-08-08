@@ -291,7 +291,7 @@ export default function SourceSetsPage() {
                           type="checkbox"
                           checked={selectedSourceIds.includes(source.id)}
                           onChange={() => toggleSource(source.id)}
-                          className="mt-1"
+                          className="mt-1 size-4"
                         />
                         <span>
                           <span className="font-medium">{source.name}</span>

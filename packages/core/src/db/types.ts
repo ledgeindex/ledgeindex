@@ -92,6 +92,10 @@ export type SourceSummary = {
   versionLabel: string;
   categories: string[];
   versions: SourceVersionSummary[];
+  /** Crawl URL exclude patterns saved on the source (applied on refresh). */
+  excludePatterns: string[];
+  /** Crawl URL include patterns saved on the source. */
+  includePatterns: string[];
 };
 
 export type SourceSet = {

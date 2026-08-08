@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Plus, Trash2 } from "lucide-react";
+import { Copy, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { IngestPipelineFlow } from "@/components/sources/ingest-pipeline-flow";
@@ -14,6 +14,7 @@ import {
   type KnowledgeSetScope,
 } from "@/components/sources/knowledge-set-scope-toggle";
 import { SourceHostingToggle } from "@/components/sources/source-hosting-toggle";
+import { IndexLocationInfo } from "@/components/sources/index-location-info";
 import { useAuth } from "@/lib/auth-context";
 import {
   syncApiBaseForHosting,
@@ -315,6 +316,56 @@ function linesToList(value: string) {
     .filter(Boolean);
 }
 
+function urlMatchesPattern(
+  url: string,
+  pattern: string,
+  patternsAreRegex: boolean,
+): boolean {
+  if (patternsAreRegex) {
+    try {
+      return new RegExp(pattern).test(url);
+    } catch {
+      return false;
+    }
+  }
+  return url.includes(pattern);
+}
+
+function urlMatchesAnyPattern(
+  url: string,
+  patterns: string[],
+  patternsAreRegex: boolean,
+): boolean {
+  return patterns.some((pattern) =>
+    urlMatchesPattern(url, pattern, patternsAreRegex),
+  );
+}
+
+function excludePatternForPathSegment(segment: string): string {
+  return `/${segment}/`;
+}
+
+function parseUrlPathParts(url: string): {
+  origin: string;
+  segments: string[];
+} | null {
+  try {
+    const parsed = new URL(url);
+    return {
+      origin: parsed.origin,
+      segments: parsed.pathname.split("/").filter(Boolean),
+    };
+  } catch {
+    return null;
+  }
+}
+
+function excludePatternFromPathPrefix(segments: string[], endIndex: number): string {
+  const prefix = segments.slice(0, endIndex + 1);
+  if (prefix.length === 0) return "/";
+  return `/${prefix.join("/")}/`;
+}
+
 function selectorsToList(value: string) {
   return value
     .split(/[\n,]/)
@@ -431,13 +482,41 @@ export function WebCrawlSetup() {
   const isRefreshSelect =
     searchParams.get("mode") === "refresh-select" &&
     Boolean(refreshSelectSourceIdParam);
+  const addPathSourceIdParam = searchParams.get("sourceId");
+  const pathScopedMode = searchParams.get("mode");
+  const isAddPathMode =
+    pathScopedMode === "add-path" && Boolean(addPathSourceIdParam);
+  const isUpdatePathMode =
+    pathScopedMode === "update-path" && Boolean(addPathSourceIdParam);
+  const isPathScopedMode = isAddPathMode || isUpdatePathMode;
+  const pathScopedStartUrls = useMemo(() => {
+    const raw = searchParams.get("urls");
+    if (!raw) {
+      return initialUrl ? [initialUrl] : [];
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (!Array.isArray(parsed)) {
+        return initialUrl ? [initialUrl] : [];
+      }
+      const urls = parsed
+        .filter((item): item is string => typeof item === "string")
+        .map((url) => normalizeStartUrl(url))
+        .filter(Boolean);
+      return urls.length > 0 ? [...new Set(urls)] : initialUrl ? [initialUrl] : [];
+    } catch {
+      return initialUrl ? [initialUrl] : [];
+    }
+  }, [searchParams, initialUrl]);
   const shouldRestoreSession = useRef(
-    searchParams.get("fresh") !== "1" && !isRefreshSelect,
+    searchParams.get("fresh") !== "1" && !isRefreshSelect && !isPathScopedMode,
   );
 
   function handleScopeChange(next: KnowledgeSetScope) {
     if (toolbarLocked) return;
     if (next === sourceScope) return;
+    // Public catalog publish is admin-only.
+    if (next === "global" && !isAdmin) return;
 
     syncDesktopApiBaseForScope(next);
 
@@ -451,6 +530,14 @@ export function WebCrawlSetup() {
     const query = params.toString();
     router.replace(query ? `/sources/web-crawl?${query}` : "/sources/web-crawl");
   }
+
+  useEffect(() => {
+    if (isAdmin || sourceScope !== "global") return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete("scope");
+    const query = params.toString();
+    router.replace(query ? `/sources/web-crawl?${query}` : "/sources/web-crawl");
+  }, [isAdmin, sourceScope, router, searchParams]);
 
   const [step, setStep] = useState<1 | 2>(1);
   const [primaryStartUrl, setPrimaryStartUrl] = useState(initialUrl);
@@ -503,6 +590,8 @@ export function WebCrawlSetup() {
           }
         : null,
     );
+  const versionResolutionRef = useRef(versionResolution);
+  versionResolutionRef.current = versionResolution;
   const [pendingDuplicate, setPendingDuplicate] =
     useState<SourceDuplicateMatch | null>(null);
   const [duplicateModalOpen, setDuplicateModalOpen] = useState(false);
@@ -516,6 +605,23 @@ export function WebCrawlSetup() {
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
   const [copiedSelection, setCopiedSelection] = useState(false);
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [excludePickerUrl, setExcludePickerUrl] = useState<string | null>(null);
+  const [excludeHoverIndex, setExcludeHoverIndex] = useState<number | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (!excludePickerUrl) return;
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setExcludePickerUrl(null);
+        setExcludeHoverIndex(null);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [excludePickerUrl]);
   const [ingestRunId, setIngestRunId] = useState<string | null>(null);
   const [ingestSnapshot, setIngestSnapshot] =
     useState<IngestPipelineSnapshot | null>(null);
@@ -539,6 +645,8 @@ export function WebCrawlSetup() {
   const catalogSelectionRef = useRef<string[]>([]);
   const refreshSelectStartedRef = useRef(false);
   const [refreshSelectReady, setRefreshSelectReady] = useState(false);
+  const addPathStartedRef = useRef(false);
+  const [addPathReady, setAddPathReady] = useState(false);
   const previewPersistRef = useRef({
     sourceId: null as string | null,
     ingestRunId: null as string | null,
@@ -772,17 +880,24 @@ export function WebCrawlSetup() {
   }, [primaryStartUrl, sitemapUrlsText]);
 
   useEffect(() => {
-    if (isReplaceRecrawl) return;
+    if (isReplaceRecrawl || isPathScopedMode) return;
+    versionResolutionRef.current = null;
     setVersionResolution(null);
     setPendingDuplicate(null);
     setDuplicateModalOpen(false);
-  }, [primaryStartUrl, isReplaceRecrawl]);
+  }, [primaryStartUrl, isReplaceRecrawl, isPathScopedMode]);
 
   useEffect(() => {
-    if (!initialUrl || didInitialPreflight.current || isRefreshSelect) return;
+    if (
+      !initialUrl ||
+      didInitialPreflight.current ||
+      isRefreshSelect ||
+      isPathScopedMode
+    )
+      return;
     didInitialPreflight.current = true;
     void runPreflight(initialUrl);
-  }, [initialUrl, isRefreshSelect, runPreflight]);
+  }, [initialUrl, isRefreshSelect, isPathScopedMode, runPreflight]);
 
   useEffect(() => {
     if (!isRefreshSelect || !refreshSelectSourceIdParam) return;
@@ -814,7 +929,7 @@ export function WebCrawlSetup() {
         setEnableSitemap(cfg.enableSitemap);
         setSitemapOnly(cfg.sitemapOnly ?? false);
         setSitemapUrlsText((cfg.sitemapUrls ?? []).join("\n"));
-        setMaxPages(cfg.maxPages);
+        setMaxPages(Math.max(cfg.maxPages ?? 0, DEFAULT_MAX_CRAWL_PAGES));
         setRenderJs(cfg.renderJs);
         setContentSelectorsText(cfg.contentSelectors.join(", "));
         setExcludeSelectorsText(cfg.excludeSelectors.join(", "));
@@ -835,6 +950,80 @@ export function WebCrawlSetup() {
       cancelled = true;
     };
   }, [isRefreshSelect, refreshSelectSourceIdParam]);
+
+  useEffect(() => {
+    if (!isPathScopedMode || !addPathSourceIdParam) return;
+    const scopedUrls =
+      pathScopedStartUrls.length > 0
+        ? pathScopedStartUrls
+        : initialUrl
+          ? [normalizeStartUrl(initialUrl)]
+          : [];
+    if (scopedUrls.length === 0) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const { source } = await getSource(addPathSourceIdParam);
+        if (cancelled) return;
+
+        const cfg = source.config;
+        const scopedSet = new Set(
+          scopedUrls.map((url) => url.replace(/\/$/, "")),
+        );
+        const remaining = (cfg.startUrls ?? [])
+          .map((url) => normalizeStartUrl(url))
+          .filter((url) => !scopedSet.has(url.replace(/\/$/, "")));
+
+        // Keep full start URL list on the source; crawl only scoped roots.
+        const primary = scopedUrls[0]!;
+        const additional = [
+          ...scopedUrls.slice(1),
+          ...remaining,
+        ];
+
+        setSourceId(source.id);
+        setSourceName(source.name);
+        setPrimaryStartUrl(primary);
+        setAdditionalStartUrls(additional);
+        setIncludePatternsText(cfg.includePatterns.join("\n"));
+        setExcludePatternsText(cfg.excludePatterns.join("\n"));
+        setPatternsAreRegex(cfg.patternsAreRegex);
+        setEnableSitemap(cfg.enableSitemap);
+        setSitemapOnly(cfg.sitemapOnly ?? false);
+        setSitemapUrlsText((cfg.sitemapUrls ?? []).join("\n"));
+        setMaxPages(Math.max(cfg.maxPages ?? 0, DEFAULT_MAX_CRAWL_PAGES));
+        setRenderJs(cfg.renderJs);
+        setContentSelectorsText(cfg.contentSelectors.join(", "));
+        setExcludeSelectorsText(cfg.excludeSelectors.join(", "));
+        setPreflightOgImage(source.ogImageUrl ?? null);
+        setPreflightFaviconUrl(source.faviconUrl ?? null);
+        setSourceMetadata(source.sourceMetadata ?? null);
+        if (source.hosting === "local" || source.hosting === "cloud") {
+          setSourceHosting(source.hosting);
+        }
+        setPreflightState("ok");
+        setPreflightCheckedUrl(primary);
+        setAddPathReady(true);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Failed to load source for path crawl",
+        );
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    isPathScopedMode,
+    addPathSourceIdParam,
+    initialUrl,
+    pathScopedStartUrls,
+  ]);
 
   useEffect(() => {
     const url = normalizeStartUrl(primaryStartUrl.trim());
@@ -1151,18 +1340,20 @@ export function WebCrawlSetup() {
   }
 
   function versionCreatePayload() {
-    if (!versionResolution) return {};
+    const resolution = versionResolutionRef.current;
+    if (!resolution) return {};
     return {
-      versionMode: versionResolution.mode,
-      replaceSourceId: versionResolution.replaceSourceId,
-      versionLabel: versionResolution.versionLabel || undefined,
+      versionMode: resolution.mode,
+      replaceSourceId: resolution.replaceSourceId,
+      versionLabel: resolution.versionLabel || undefined,
     };
   }
 
   function metadataWithVersionLabel(): SourceMetadata | undefined {
+    const resolution = versionResolutionRef.current;
     if (!sourceMetadata) return undefined;
-    if (!versionResolution?.versionLabel) return sourceMetadata;
-    return { ...sourceMetadata, version: versionResolution.versionLabel };
+    if (!resolution?.versionLabel) return sourceMetadata;
+    return { ...sourceMetadata, version: resolution.versionLabel };
   }
 
   async function createDraftSource() {
@@ -1224,7 +1415,12 @@ export function WebCrawlSetup() {
   }
 
   async function ensureSource() {
-    if (versionResolution?.mode === "replace" && versionResolution.replaceSourceId) {
+    if (isPathScopedMode && sourceId) {
+      return sourceId;
+    }
+
+    const resolution = versionResolutionRef.current;
+    if (resolution?.mode === "replace" && resolution.replaceSourceId) {
       return createDraftSource();
     }
 
@@ -1244,7 +1440,7 @@ export function WebCrawlSetup() {
   }
 
   async function resolveDuplicateIfNeeded(): Promise<boolean> {
-    if (versionResolution || sourceId) return true;
+    if (isPathScopedMode || versionResolutionRef.current || sourceId) return true;
 
     const url = normalizeStartUrl(primaryStartUrl.trim());
     if (!url) return true;
@@ -1263,6 +1459,9 @@ export function WebCrawlSetup() {
   }
 
   function handleVersionResolutionConfirm(choice: VersionResolutionChoice) {
+    // Write the ref first — confirm immediately restarts crawl, and React
+    // state would still be null in that same turn (modal would reopen).
+    versionResolutionRef.current = choice;
     setVersionResolution(choice);
     setDuplicateModalOpen(false);
     setPendingDuplicate(null);
@@ -1367,6 +1566,11 @@ export function WebCrawlSetup() {
   }
 
   function selectUrlsForPathSegment(segment: string, event: ReactMouseEvent<HTMLButtonElement>) {
+    if (event.altKey) {
+      excludePathSegment(segment);
+      return;
+    }
+
     const segmentUrls = filterUrlsByPathSegment(discoveredUrls, segment);
     const segments = urlPathBreakdown.map((group) => group.segment);
 
@@ -1404,6 +1608,53 @@ export function WebCrawlSetup() {
     });
     lastPathSegmentRef.current = segment;
     setIndexEstimate(null);
+  }
+
+  function applyExcludePatterns(patterns: string[]) {
+    const normalized = [
+      ...new Set(patterns.map((pattern) => pattern.trim()).filter(Boolean)),
+    ];
+    setExcludePatternsText(normalized.join("\n"));
+    if (normalized.length === 0) {
+      setIndexEstimate(null);
+      return;
+    }
+    setSelectedPreviewUrls((current) =>
+      current.filter(
+        (url) => !urlMatchesAnyPattern(url, normalized, patternsAreRegex),
+      ),
+    );
+    setIndexEstimate(null);
+  }
+
+  function excludePathSegment(segment: string) {
+    const pattern = excludePatternForPathSegment(segment);
+    const next = [...linesToList(excludePatternsText)];
+    if (!next.includes(pattern)) next.push(pattern);
+    applyExcludePatterns(next);
+    setExcludePickerUrl(null);
+    setExcludeHoverIndex(null);
+  }
+
+  function confirmExcludePathPrefix(url: string, endIndex: number) {
+    const parts = parseUrlPathParts(url);
+    if (!parts || endIndex < 0) return;
+    const pattern = excludePatternFromPathPrefix(parts.segments, endIndex);
+    const next = [...linesToList(excludePatternsText)];
+    if (!next.includes(pattern)) next.push(pattern);
+    applyExcludePatterns(next);
+    setExcludePickerUrl(null);
+    setExcludeHoverIndex(null);
+  }
+
+  function startExcludePicker(url: string) {
+    setExcludePickerUrl(url);
+    setExcludeHoverIndex(null);
+  }
+
+  function cancelExcludePicker() {
+    setExcludePickerUrl(null);
+    setExcludeHoverIndex(null);
   }
 
   async function handleEstimateIndexSize() {
@@ -1495,7 +1746,9 @@ export function WebCrawlSetup() {
       const id = await ensureSource();
       const sourceMetadataPayload = metadataWithVersionLabel();
       await updateSource(id, {
-        name: resolveSourceName(sourceName, primaryStartUrl),
+        name: isPathScopedMode
+          ? sourceName
+          : resolveSourceName(sourceName, primaryStartUrl),
         config,
         ogImageUrl: preflightOgImage,
         faviconUrl: preflightFaviconUrl,
@@ -1503,9 +1756,18 @@ export function WebCrawlSetup() {
           ? { sourceMetadata: sourceMetadataPayload }
           : {}),
       });
+      const crawlConfig = isPathScopedMode
+        ? {
+            ...config,
+            startUrls:
+              pathScopedStartUrls.length > 0
+                ? pathScopedStartUrls
+                : [normalizeStartUrl(primaryStartUrl.trim())].filter(Boolean),
+          }
+        : config;
       const { snapshot } = await startIngestWorkflow(
         id,
-        { config },
+        { config: crawlConfig },
         controller.signal,
       );
       await applyIngestSnapshot(snapshot, id);
@@ -1545,6 +1807,16 @@ export function WebCrawlSetup() {
     refreshSelectStartedRef.current = true;
     void handleCrawlPreview();
   }, [isRefreshSelect, refreshSelectReady, config.startUrls]);
+
+  useEffect(() => {
+    if (!isPathScopedMode || !addPathReady || addPathStartedRef.current) {
+      return;
+    }
+    if (!primaryStartUrl.trim()) return;
+
+    addPathStartedRef.current = true;
+    void handleCrawlPreview();
+  }, [isPathScopedMode, addPathReady, primaryStartUrl]);
 
   async function handleContinueToExtraction() {
     if (selectedPreviewUrls.length === 0) return;
@@ -1586,7 +1858,9 @@ export function WebCrawlSetup() {
     try {
       const id = await ensureSource();
       await updateSource(id, {
-        name: resolveSourceName(sourceName, primaryStartUrl),
+        name: isPathScopedMode
+          ? sourceName
+          : resolveSourceName(sourceName, primaryStartUrl),
         config,
         ogImageUrl: preflightOgImage,
         faviconUrl: preflightFaviconUrl,
@@ -1753,8 +2027,49 @@ export function WebCrawlSetup() {
     }
   }
 
+  async function copySingleUrl(url: string) {
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopiedUrl(url);
+      window.setTimeout(() => {
+        setCopiedUrl((current) => (current === url ? null : current));
+      }, 1500);
+    } catch {
+      setError("Could not copy URL to clipboard");
+    }
+  }
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
+      {isPathScopedMode ? (
+        <div className="shrink-0 border-b border-accent/25 bg-accent/8 px-4 py-2 sm:px-6">
+          <p className="mx-auto max-w-[90rem] text-sm text-accent">
+            {isUpdatePathMode ? "Updating" : "Adding"}{" "}
+            {pathScopedStartUrls.length > 1
+              ? `${pathScopedStartUrls.length} start URLs`
+              : "start URL"}{" "}
+            {pathScopedStartUrls.length <= 1 ? (
+              <span className="font-mono font-medium">
+                {formatUrlLabel(primaryStartUrl)}
+              </span>
+            ) : (
+              <span className="font-mono font-medium">
+                {pathScopedStartUrls
+                  .map((url) => formatUrlLabel(url))
+                  .join(" · ")}
+              </span>
+            )}
+            {sourceName ? (
+              <>
+                {" "}
+                on <span className="font-medium">{sourceName}</span>
+              </>
+            ) : null}
+            . Other paths stay indexed — this crawl only covers the selected
+            root{pathScopedStartUrls.length > 1 ? "s" : ""}.
+          </p>
+        </div>
+      ) : null}
       {error ? (
         <div className="shrink-0 border-b border-red-500/25 bg-red-500/8 px-4 py-2 sm:px-6">
           <p className="mx-auto max-w-[90rem] text-sm text-red-700 dark:text-red-300">
@@ -2057,9 +2372,14 @@ export function WebCrawlSetup() {
                       onChange={setSourceHosting}
                       disabled={toolbarLocked}
                       size="compact"
-                      className="shrink-0 border-border/80 bg-card-solid/80"
+                      className="shrink-0"
                     />
                   ) : null}
+                  <IndexLocationInfo
+                    hosting={
+                      sourceScope === "global" ? "cloud" : sourceHosting
+                    }
+                  />
                   <button
                     type="button"
                     onClick={handleContinueToExtraction}
@@ -2189,42 +2509,111 @@ export function WebCrawlSetup() {
               {reviewTab === "urls" ? (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {urlPathBreakdown.length > 1 ? (
-                <div className="mb-3 flex flex-wrap gap-1.5">
+                <div className="mb-2 flex flex-wrap gap-1.5">
                   {urlPathBreakdown.map((group) => {
                     const segmentState = getPathSegmentSelectionState(
                       discoveredUrls,
                       group.segment,
                       selectedPreviewUrls,
                     );
+                    const excludePattern = excludePatternForPathSegment(
+                      group.segment,
+                    );
+                    const isExcluded = linesToList(excludePatternsText).includes(
+                      excludePattern,
+                    );
                     return (
-                    <button
+                    <div
                       key={group.segment}
+                      className="inline-flex items-center gap-0.5"
+                    >
+                    <button
                       type="button"
                       aria-pressed={segmentState !== "none"}
                       onClick={(event) => selectUrlsForPathSegment(group.segment, event)}
                       className={cn(
                         "inline-flex items-center gap-1 rounded-full border px-2 py-0.5 font-mono text-[0.5625rem] font-semibold tracking-[0.06em] uppercase transition-colors",
-                        segmentState === "all"
-                          ? "border-foreground/20 bg-foreground text-background"
-                          : segmentState === "partial"
-                            ? "border-accent/40 bg-accent/10 text-accent"
-                            : "border-border bg-surface-raised text-muted hover:border-foreground/15 hover:text-foreground",
+                        isExcluded
+                          ? "border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-300"
+                          : segmentState === "all"
+                            ? "border-foreground/20 bg-foreground text-background"
+                            : segmentState === "partial"
+                              ? "border-accent/40 bg-accent/10 text-accent"
+                              : "border-border bg-surface-raised text-muted hover:border-foreground/15 hover:text-foreground",
                       )}
-                      title={group.sampleUrls.join("\n")}
+                      title={`${group.sampleUrls.join("\n")}\n\nClick to toggle · Alt+click to exclude ${excludePattern}`}
                     >
                       /{group.segment}
                       <span
                         className={
-                          segmentState === "all" ? "opacity-80" : "text-foreground"
+                          segmentState === "all" && !isExcluded
+                            ? "opacity-80"
+                            : "text-foreground"
                         }
                       >
                         {group.count}
                       </span>
                     </button>
+                    <button
+                      type="button"
+                      onClick={() => excludePathSegment(group.segment)}
+                      className={cn(
+                        "rounded-full border px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.06em] uppercase transition-colors",
+                        isExcluded
+                          ? "border-red-500/35 bg-red-500/10 text-red-700 dark:text-red-300"
+                          : "border-border bg-surface-raised text-muted hover:border-red-500/35 hover:text-red-700 dark:hover:text-red-300",
+                      )}
+                      title={`Add exclude pattern ${excludePattern} (kept on future refreshes)`}
+                    >
+                      Excl
+                    </button>
+                    </div>
                     );
                   })}
                 </div>
               ) : null}
+
+              <div className="mb-2 shrink-0 rounded-lg border border-border bg-surface-raised/50 px-2.5 py-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label
+                    htmlFor="crawl-review-exclude-urls"
+                    className="font-mono text-[0.5rem] font-semibold tracking-[0.1em] text-muted uppercase"
+                  >
+                    Exclude URLs
+                  </label>
+                  <span className="font-mono text-[0.5rem] text-muted">
+                    Saved with the set · used on refresh
+                  </span>
+                </div>
+                <textarea
+                  id="crawl-review-exclude-urls"
+                  value={excludePatternsText}
+                  onChange={(event) => {
+                    const value = event.target.value;
+                    setExcludePatternsText(value);
+                    const patterns = linesToList(value);
+                    if (patterns.length === 0) {
+                      setIndexEstimate(null);
+                      return;
+                    }
+                    setSelectedPreviewUrls((current) =>
+                      current.filter(
+                        (url) =>
+                          !urlMatchesAnyPattern(
+                            url,
+                            patterns,
+                            patternsAreRegex,
+                          ),
+                      ),
+                    );
+                    setIndexEstimate(null);
+                  }}
+                  rows={2}
+                  spellCheck={false}
+                  placeholder="One pattern per line — e.g. /next/ or /changelog/"
+                  className="field-input mt-1.5 w-full font-mono text-[0.6875rem] leading-5"
+                />
+              </div>
 
               <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto rounded-xl border border-border bg-background">
                 {discoveredUrls.length === 0 ? (
@@ -2244,6 +2633,15 @@ export function WebCrawlSetup() {
                 ) : (
                   discoveredUrls.map((item, index) => {
                     const selected = selectedPreviewUrls.includes(item.url);
+                    const excluded = urlMatchesAnyPattern(
+                      item.url,
+                      linesToList(excludePatternsText),
+                      patternsAreRegex,
+                    );
+                    const pickingExclude = excludePickerUrl === item.url;
+                    const pathParts = pickingExclude
+                      ? parseUrlPathParts(item.url)
+                      : null;
                     const pathTag = showUrlPathTags
                       ? config.startUrls.length > 1
                         ? sourcePathLabelForUrl(item.url, config.startUrls) ??
@@ -2252,45 +2650,54 @@ export function WebCrawlSetup() {
                       : null;
                     return (
                       <li key={item.url}>
-                        <button
-                          type="button"
-                          role="checkbox"
-                          aria-checked={selected}
-                          aria-label={`${selected ? "Deselect" : "Select"} ${item.url}`}
-                          onClick={(event) =>
-                            handlePreviewUrlClick(index, item.url, event)
-                          }
+                        <div
                           className={cn(
-                            "flex w-full items-center gap-3 px-3 py-2 text-left transition-colors sm:px-4",
-                            selected
-                              ? "bg-accent-soft"
-                              : "hover:bg-surface-raised",
+                            "group flex w-full items-center gap-2 px-3 py-2 sm:gap-3 sm:px-4",
+                            pickingExclude
+                              ? "bg-red-500/8 ring-1 ring-inset ring-red-500/25"
+                              : excluded
+                                ? "bg-red-500/5"
+                                : selected
+                                  ? "bg-accent-soft"
+                                  : "hover:bg-surface-raised",
                           )}
                         >
-                          <span
-                            aria-hidden
-                            className="w-6 shrink-0 text-right font-mono text-[0.5625rem] tabular-nums text-muted"
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={selected}
+                            aria-label={`${selected ? "Deselect" : "Select"} ${item.url}`}
+                            disabled={excluded || pickingExclude}
+                            onClick={(event) =>
+                              handlePreviewUrlClick(index, item.url, event)
+                            }
+                            className="flex shrink-0 items-center gap-2 disabled:cursor-not-allowed disabled:opacity-40"
                           >
-                            {index + 1}
-                          </span>
-                          <span
-                            aria-hidden
-                            className={cn(
-                              "flex size-4 shrink-0 items-center justify-center rounded-[4px] border-2 transition-colors",
-                              selected
-                                ? "border-accent bg-accent text-background"
-                                : "border-muted-strong bg-card-solid text-transparent",
-                            )}
-                          >
-                            {selected ? (
-                              <svg
-                                viewBox="0 0 10 8"
-                                className="size-2.5 fill-none stroke-current stroke-[2.5]"
-                              >
-                                <path d="M1 4l2.5 2.5L9 1" />
-                              </svg>
-                            ) : null}
-                          </span>
+                            <span
+                              aria-hidden
+                              className="w-6 text-right font-mono text-[0.5625rem] tabular-nums text-muted"
+                            >
+                              {index + 1}
+                            </span>
+                            <span
+                              aria-hidden
+                              className={cn(
+                                "flex size-4 shrink-0 items-center justify-center rounded-[4px] border-2 transition-colors",
+                                selected && !excluded
+                                  ? "border-accent bg-accent text-background"
+                                  : "border-muted-strong bg-card-solid text-transparent",
+                              )}
+                            >
+                              {selected && !excluded ? (
+                                <svg
+                                  viewBox="0 0 10 8"
+                                  className="size-2.5 fill-none stroke-current stroke-[2.5]"
+                                >
+                                  <path d="M1 4l2.5 2.5L9 1" />
+                                </svg>
+                              ) : null}
+                            </span>
+                          </button>
                           {pathTag ? (
                             <span
                               className="w-[4.75rem] shrink-0 truncate rounded border border-border bg-surface-raised px-1.5 py-0.5 text-center font-mono text-[0.5rem] font-semibold tracking-[0.06em] text-muted uppercase"
@@ -2299,17 +2706,124 @@ export function WebCrawlSetup() {
                               {pathTag}
                             </span>
                           ) : null}
-                          <span className="min-w-0 flex-1 truncate font-mono text-[0.6875rem] text-muted-strong">
-                            {item.title ? (
-                              <>
-                                <span className="text-foreground">{item.title}</span>
-                                <span className="text-muted"> · {item.url}</span>
-                              </>
+                          <div className="min-w-0 flex-1">
+                            {item.title && !pickingExclude ? (
+                              <p className="truncate text-[0.6875rem] font-medium text-foreground">
+                                {item.title}
+                              </p>
+                            ) : null}
+                            {pickingExclude && pathParts ? (
+                              <div
+                                className="flex flex-wrap items-center gap-y-0.5 font-mono text-[0.6875rem]"
+                                onMouseLeave={() => setExcludeHoverIndex(null)}
+                              >
+                                <span className="text-muted">{pathParts.origin}</span>
+                                {pathParts.segments.map((segment, segmentIndex) => {
+                                  const highlighted =
+                                    excludeHoverIndex != null &&
+                                    segmentIndex <= excludeHoverIndex;
+                                  return (
+                                    <button
+                                      key={`${item.url}-${segmentIndex}-${segment}`}
+                                      type="button"
+                                      onMouseEnter={() =>
+                                        setExcludeHoverIndex(segmentIndex)
+                                      }
+                                      onFocus={() =>
+                                        setExcludeHoverIndex(segmentIndex)
+                                      }
+                                      onClick={() =>
+                                        confirmExcludePathPrefix(
+                                          item.url,
+                                          segmentIndex,
+                                        )
+                                      }
+                                      className={cn(
+                                        "rounded-sm px-0.5 transition-colors",
+                                        highlighted
+                                          ? "bg-red-500/20 text-red-700 dark:text-red-300"
+                                          : "text-muted-strong hover:bg-red-500/10 hover:text-red-700 dark:hover:text-red-300",
+                                      )}
+                                      title={`Exclude ${excludePatternFromPathPrefix(pathParts.segments, segmentIndex)}`}
+                                    >
+                                      /{segment}
+                                    </button>
+                                  );
+                                })}
+                                <span className="ml-2 font-mono text-[0.5625rem] text-red-700 dark:text-red-300">
+                                  {excludeHoverIndex == null
+                                    ? "Hover a path · click to exclude"
+                                    : `Exclude ${excludePatternFromPathPrefix(pathParts.segments, excludeHoverIndex)}`}
+                                </span>
+                              </div>
                             ) : (
-                              item.url
+                              <a
+                                href={item.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className={cn(
+                                  "block truncate font-mono text-[0.6875rem] hover:underline",
+                                  excluded
+                                    ? "text-muted line-through"
+                                    : item.title
+                                      ? "text-muted"
+                                      : "text-muted-strong",
+                                )}
+                                title={item.url}
+                                onClick={(event) => event.stopPropagation()}
+                              >
+                                {item.url}
+                              </a>
                             )}
-                          </span>
-                        </button>
+                          </div>
+                          {excluded ? (
+                            <span className="shrink-0 rounded border border-red-500/30 bg-red-500/10 px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.06em] text-red-700 uppercase dark:text-red-300">
+                              Excluded
+                            </span>
+                          ) : (
+                            <div
+                              className={cn(
+                                "flex shrink-0 items-center gap-1 transition-opacity",
+                                pickingExclude
+                                  ? "opacity-100"
+                                  : "opacity-0 group-focus-within:opacity-100 group-hover:opacity-100",
+                              )}
+                            >
+                              {pickingExclude ? (
+                                <button
+                                  type="button"
+                                  onClick={cancelExcludePicker}
+                                  className="rounded-md border border-border bg-surface-raised px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.06em] text-muted uppercase transition-colors hover:text-foreground"
+                                >
+                                  Cancel
+                                </button>
+                              ) : (
+                                <button
+                                  type="button"
+                                  onClick={() => startExcludePicker(item.url)}
+                                  className="rounded-md border border-red-500/35 bg-red-500/10 px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.06em] text-red-700 uppercase transition-colors hover:bg-red-500/15 dark:text-red-300"
+                                  title="Pick which path to exclude"
+                                >
+                                  Exclude
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => void copySingleUrl(item.url)}
+                                className={cn(
+                                  "inline-flex size-7 items-center justify-center rounded-md border transition-colors",
+                                  copiedUrl === item.url
+                                    ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                    : "border-border bg-surface-raised text-muted hover:text-foreground",
+                                )}
+                                title="Copy URL"
+                                aria-label={`Copy ${item.url}`}
+                              >
+                                <Copy className="size-3" aria-hidden />
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </li>
                     );
                   })
@@ -2550,8 +3064,8 @@ function WidgetCardHeader({
   aside?: ReactNode;
 }) {
   return (
-    <div className="relative flex min-w-0 shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-3 py-2 sm:gap-3 sm:px-4">
-      <div className="z-10 flex min-w-0 shrink items-center gap-2">
+    <div className="flex min-w-0 shrink-0 items-center gap-2 border-b border-border bg-surface-raised px-3 py-2 sm:gap-3 sm:px-4">
+      <div className="flex min-w-0 shrink-0 items-center gap-2">
         <span
           className={cn(
             "size-2 shrink-0 rounded-full",
@@ -2565,17 +3079,17 @@ function WidgetCardHeader({
         </span>
       </div>
       {leadingAside ? (
-        <div className="z-10 flex shrink-0 items-center">{leadingAside}</div>
+        <div className="flex shrink-0 items-center">{leadingAside}</div>
       ) : null}
       {centerAside ? (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-28 sm:px-40">
-          <div className="pointer-events-auto flex min-w-0 max-w-full items-center justify-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            {centerAside}
-          </div>
+        <div className="flex min-w-0 flex-1 items-center justify-center overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {centerAside}
         </div>
-      ) : null}
+      ) : (
+        <div className="min-w-0 flex-1" />
+      )}
       {aside ? (
-        <div className="z-10 ml-auto flex min-w-0 shrink-0 items-center justify-end gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-0 max-w-[55%] shrink-0 items-center justify-end gap-1.5 overflow-x-auto [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden sm:max-w-[50%]">
           {aside}
         </div>
       ) : null}
@@ -2954,7 +3468,6 @@ function StartUrlCard({
   const showFooter =
     isCrawling ||
     isCrawlComplete ||
-    !showSitePreview ||
     showDiscoveryFooter ||
     showMetadataFooter;
 
@@ -2989,9 +3502,12 @@ function StartUrlCard({
                 onChange={onHostingChange}
                 disabled={toolbarLocked}
                 size="compact"
-                className="shrink-0 border-border/80 bg-card-solid/80"
+                className="shrink-0"
               />
             ) : null}
+            <IndexLocationInfo
+              hosting={sourceScope === "global" ? "cloud" : sourceHosting}
+            />
             {busy === "crawl" ? (
               <button
                 type="button"
@@ -3174,19 +3690,10 @@ function StartUrlCard({
           <span className="inline-flex items-center gap-1.5 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-emerald-600 uppercase dark:text-emerald-400">
             Opening results…
           </span>
-        ) : !showSitePreview && !isCrawling ? (
-          <>
-            <span className="rounded-md border border-border bg-surface-raised px-2 py-0.5 font-mono text-[0.5rem] text-muted uppercase">
-              Paste to check
-            </span>
-            <span className="rounded-md border border-border bg-surface-raised px-2 py-0.5 font-mono text-[0.5rem] text-muted uppercase">
-              Enter runs crawl
-            </span>
-          </>
         ) : null}
         {showDiscoveryFooter ? (
           <>
-            {!showSitePreview && !isCrawling && !isCrawlComplete ? (
+            {isCrawlComplete ? (
               <span className="mx-0.5 hidden h-3 w-px bg-border sm:inline" aria-hidden />
             ) : null}
             <DiscoverySignalPill
@@ -3827,7 +4334,14 @@ function PreviewPane({ page }: { page: ParsePreviewPage }) {
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border">
       <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-surface-raised px-4 py-2">
         <span className="min-w-0 truncate font-mono text-[0.6875rem] text-muted">
-          {page.url}
+          <a
+            href={page.url}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:text-foreground hover:underline"
+          >
+            {page.url}
+          </a>
         </span>
         {!page.error ? (
           <div className="flex shrink-0 items-center gap-2">

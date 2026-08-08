@@ -7,6 +7,8 @@ import { createPortal } from "react-dom";
 import { SourceCatalogDialog } from "@/components/sources/source-catalog-dialog";
 import { SourceCategoriesDialog } from "@/components/sources/source-categories-dialog";
 import { SourceRefreshDialog } from "@/components/sources/source-refresh-dialog";
+import { SourceAddStartUrlDialog } from "@/components/sources/source-add-start-url-dialog";
+import { SourceUpdateStartUrlDialog } from "@/components/sources/source-update-start-url-dialog";
 import {
   SourceRenameDialog,
   type SourceRenameField,
@@ -37,6 +39,7 @@ export function SourceActionsMenu({
   onNameUpdated,
   onSlugUpdated,
   onRefreshApplied,
+  onStartUrlsUpdated,
   className,
   align = "right",
   /** Hide the ⋮ button — open via `contextPoint` (right-click). */
@@ -52,6 +55,7 @@ export function SourceActionsMenu({
   onNameUpdated?: (name: string) => void;
   onSlugUpdated?: (slug: string) => void;
   onRefreshApplied?: () => void;
+  onStartUrlsUpdated?: (startUrls: string[]) => void;
   className?: string;
   align?: "left" | "right";
   hideTrigger?: boolean;
@@ -61,6 +65,8 @@ export function SourceActionsMenu({
   const [buttonOpen, setButtonOpen] = useState(false);
   const [catalogOpen, setCatalogOpen] = useState(false);
   const [refreshOpen, setRefreshOpen] = useState(false);
+  const [addStartUrlOpen, setAddStartUrlOpen] = useState(false);
+  const [updateStartUrlOpen, setUpdateStartUrlOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [renameField, setRenameField] = useState<SourceRenameField | null>(
     null,
@@ -96,7 +102,7 @@ export function SourceActionsMenu({
     return (
       88 +
       (source.chunkCount > 0 && canEditCategories ? 64 : 0) +
-      (canEditCategories ? 32 + 64 : 0) +
+      (canEditCategories ? 32 + 64 + 32 + 32 : 0) +
       (onDelete ? 32 : 0)
     );
   }, [onDelete, canEditCategories, source.chunkCount]);
@@ -254,6 +260,32 @@ export function SourceActionsMenu({
               >
                 Review selection
               </Link>
+            ) : null}
+            {canEditCategories ? (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeMenu();
+                  setAddStartUrlOpen(true);
+                }}
+                className="flex w-full items-center px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-surface-raised"
+              >
+                Add start URL
+              </button>
+            ) : null}
+            {canEditCategories ? (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeMenu();
+                  setUpdateStartUrlOpen(true);
+                }}
+                className="flex w-full items-center px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-surface-raised"
+              >
+                Update start URLs
+              </button>
             ) : null}
             {canEditCategories ? (
               <>
@@ -437,6 +469,23 @@ export function SourceActionsMenu({
           open={refreshOpen}
           onOpenChange={setRefreshOpen}
           onApplied={onRefreshApplied}
+        />
+      ) : null}
+
+      {canEditCategories ? (
+        <SourceAddStartUrlDialog
+          source={source}
+          open={addStartUrlOpen}
+          onOpenChange={setAddStartUrlOpen}
+          onSaved={onStartUrlsUpdated}
+        />
+      ) : null}
+
+      {canEditCategories ? (
+        <SourceUpdateStartUrlDialog
+          source={source}
+          open={updateStartUrlOpen}
+          onOpenChange={setUpdateStartUrlOpen}
         />
       ) : null}
 

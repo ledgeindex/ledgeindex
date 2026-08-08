@@ -12,6 +12,10 @@ import {
   SourceVersionSelect,
 } from "@/components/sources/source-version-select";
 import { formatUrlLabel } from "@/components/sources/source-display";
+import {
+  isPersonalCloudSource,
+  SourceCloudBadge,
+} from "@/components/sources/source-cloud-badge";
 import { cn } from "@/lib/utils";
 import type { SourceSummary } from "@/lib/ledgeindex-api";
 
@@ -121,6 +125,9 @@ export function SourceCard({
             </span>
           </div>
         )}
+        {isPersonalCloudSource(activeSource) ? (
+          <SourceCloudBadge className="absolute right-2 bottom-2" />
+        ) : null}
       </div>
 
       <div className="flex flex-1 flex-col gap-4 px-4 pb-4 pt-3.5">

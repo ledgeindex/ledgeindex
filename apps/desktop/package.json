@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/desktop",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "private": true,
   "description": "LedgeIndex desktop (Electron) — standalone Vite UI; sidecar = @ledgeindex/desktop-server",
   "main": "./out/main/index.js",
@@ -19,7 +19,7 @@
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run pack:desktop-server && npm run build && electron-builder --dir",
     "build:win": "npm run pack:desktop-server && npm run build && electron-builder --win",
-    "build:mac": "npm run pack:desktop-server && electron-vite build && electron-builder --mac",
+    "build:mac": "npm run pack:desktop-server && npm run build && electron-builder --mac",
     "build:linux": "npm run pack:desktop-server && electron-vite build && electron-builder --linux"
   },
   "dependencies": {

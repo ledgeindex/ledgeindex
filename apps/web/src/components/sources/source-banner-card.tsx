@@ -11,6 +11,10 @@ import {
 } from "@/components/sources/source-actions-menu";
 import { resolveSourceVersion } from "@/components/sources/source-version-select";
 import { formatUrlLabel } from "@/components/sources/source-display";
+import {
+  isPersonalCloudSource,
+  SourceCloudBadge,
+} from "@/components/sources/source-cloud-badge";
 import { cn } from "@/lib/utils";
 import type { SourceSummary } from "@/lib/ledgeindex-api";
 
@@ -317,6 +321,12 @@ export function SourceBannerCard({
               </span>
             </div>
           )}
+          {isPersonalCloudSource(activeSource) ? (
+            <SourceCloudBadge
+              size="sm"
+              className="absolute right-1 bottom-1"
+            />
+          ) : null}
         </div>
 
         <div className="flex min-w-0 flex-1 items-center gap-2.5 px-3 py-2">

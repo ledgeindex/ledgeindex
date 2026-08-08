@@ -12,6 +12,10 @@ import {
   SourceVersionSelect,
 } from "@/components/sources/source-version-select";
 import { formatUrlLabel } from "@/components/sources/source-display";
+import {
+  isPersonalCloudSource,
+  SourceCloudBadge,
+} from "@/components/sources/source-cloud-badge";
 import { cn } from "@/lib/utils";
 import type { SourceSummary } from "@/lib/ledgeindex-api";
 
@@ -119,6 +123,9 @@ export function SourceListRow({
             onUpdated={(nextName) => onNameUpdated?.(activeSource.id, nextName)}
             className="min-w-0"
           />
+          {isPersonalCloudSource(activeSource) ? (
+            <SourceCloudBadge size="sm" className="shrink-0" />
+          ) : null}
           <SourceVersionSelect
             versions={
               source.versions.length > 0

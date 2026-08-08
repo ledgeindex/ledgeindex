@@ -119,7 +119,7 @@ function DesktopTrayPreferences({
             </span>
             <input
               type="checkbox"
-              className="mt-1 size-4 accent-foreground"
+              className="mt-1 size-4"
               checked={prefs?.startInTray ?? false}
               disabled={saving || prefs == null}
               onChange={(event) =>
@@ -138,7 +138,7 @@ function DesktopTrayPreferences({
             </span>
             <input
               type="checkbox"
-              className="mt-1 size-4 accent-foreground"
+              className="mt-1 size-4"
               checked={prefs?.closeToTray ?? true}
               disabled={saving || prefs == null}
               onChange={(event) =>

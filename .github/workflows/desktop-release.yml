@@ -1,11 +1,14 @@
 name: Desktop release
 
 # Tag on the public repo (or after sync): desktop-v0.2.0
-# Creates a GitHub Release with installers + latest.yml for electron-updater.
+# Creates a GitHub Release with installers + latest.yml / latest-mac.yml for electron-updater.
 # Keep npm package publishes separate — do not attach @ledgeindex/* npm tags as GitHub Releases.
 #
 # electron-builder defaults to tag v${version}; our tags are desktop-v*.
 # So we package with --publish never, then attach artifacts to $GITHUB_REF_NAME via gh.
+#
+# Matrix: Windows + macOS. Sidecar native deps are packed per runner OS (correct).
+# Mac builds are unsigned until Apple signing secrets are added (Gatekeeper: right-click Open).
 #
 # Required GitHub Actions secrets (client Firebase config — same names as apps/web/.env.example):
 #   NEXT_PUBLIC_FIREBASE_API_KEY
@@ -43,8 +46,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest]
-    # Add macos-latest later when Apple signing/notarization is ready.
+        include:
+          - os: windows-latest
+            electron_builder_args: --win
+          - os: macos-latest
+            electron_builder_args: --mac
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -88,7 +94,7 @@ jobs:
       - name: Package installer
         working-directory: apps/desktop
         shell: bash
-        run: npx electron-builder --config electron-builder.yml --publish never
+        run: npx electron-builder --config electron-builder.yml ${{ matrix.electron_builder_args }} --publish never
 
       - name: Publish GitHub Release
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
@@ -100,14 +106,25 @@ jobs:
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           VERSION="${TAG#desktop-v}"
-          echo "Publishing artifacts to existing tag: ${TAG} (version ${VERSION})"
+          echo "Publishing artifacts to existing tag: ${TAG} (version ${VERSION}) on ${{ matrix.os }}"
 
           shopt -s nullglob
-          files=(
-            dist/LedgeIndex-*-setup.exe
-            dist/LedgeIndex-*-setup.exe.blockmap
-            dist/latest.yml
-          )
+          files=()
+          for pattern in \
+            dist/LedgeIndex-*-setup.exe \
+            dist/LedgeIndex-*-setup.exe.blockmap \
+            dist/LedgeIndex-*-mac-*.dmg \
+            dist/LedgeIndex-*-mac-*.dmg.blockmap \
+            dist/LedgeIndex-*-mac-*.zip \
+            dist/LedgeIndex-*-mac-*.zip.blockmap \
+            dist/latest.yml \
+            dist/latest-mac.yml
+          do
+            for f in $pattern; do
+              files+=("$f")
+            done
+          done
+
           if [ ${#files[@]} -eq 0 ]; then
             echo "No release artifacts found in dist/"
             ls -la dist || true
@@ -116,14 +133,29 @@ jobs:
           printf 'Artifacts:\n'
           printf '  %s\n' "${files[@]}"
 
-          if gh release view "$TAG" --repo ledgeindex/ledgeindex >/dev/null 2>&1; then
-            gh release upload "$TAG" "${files[@]}" \
-              --repo ledgeindex/ledgeindex \
-              --clobber
-          else
-            gh release create "$TAG" "${files[@]}" \
+          # Matrix jobs race on first create — retry upload after a peer creates the release.
+          if ! gh release view "$TAG" --repo ledgeindex/ledgeindex >/dev/null 2>&1; then
+            gh release create "$TAG" \
               --repo ledgeindex/ledgeindex \
               --title "LedgeIndex Desktop ${VERSION}" \
-              --notes "LedgeIndex desktop ${VERSION}" \
-              --verify-tag
+              --notes "LedgeIndex desktop ${VERSION}
+
+Windows: \`LedgeIndex-*-setup.exe\`
+macOS: \`LedgeIndex-*-mac-*.dmg\` (Apple Silicon + Intel). Unsigned until notarization — right-click the app → Open the first time." \
+              --verify-tag \
+              || true
           fi
+
+          for attempt in 1 2 3 4 5; do
+            if gh release view "$TAG" --repo ledgeindex/ledgeindex >/dev/null 2>&1; then
+              gh release upload "$TAG" "${files[@]}" \
+                --repo ledgeindex/ledgeindex \
+                --clobber
+              exit 0
+            fi
+            echo "Release not ready yet (attempt ${attempt}); waiting…"
+            sleep 5
+          done
+
+          echo "Timed out waiting for GitHub Release ${TAG}"
+          exit 1

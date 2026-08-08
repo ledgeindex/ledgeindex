@@ -68,7 +68,7 @@ function AppSidebarLayer({
       {isOpen ? (
         <button
           type="button"
-          className="fixed inset-0 z-[200] bg-black/40 [-webkit-app-region:no-drag]"
+          className="fixed inset-0 z-[405] bg-black/40 [-webkit-app-region:no-drag]"
           aria-label="Close menu"
           onClick={onClose}
         />
@@ -76,7 +76,8 @@ function AppSidebarLayer({
 
       <AppSidebar
         className={cn(
-          "fixed inset-y-0 left-0 z-[210] h-dvh w-[15.5rem] max-w-[85vw] transition-[transform,visibility,opacity] duration-300 [-webkit-app-region:no-drag]",
+          // Above DesktopTitleBar (z-400) so the brand row isn't clipped under it.
+          "fixed inset-y-0 left-0 z-[410] h-dvh w-[15.5rem] max-w-[85vw] transition-[transform,visibility,opacity] duration-300 [-webkit-app-region:no-drag]",
           isOpen
             ? "visible translate-x-0 opacity-100"
             : "invisible pointer-events-none -translate-x-full opacity-0",

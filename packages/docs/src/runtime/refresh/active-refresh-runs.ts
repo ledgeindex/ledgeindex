@@ -51,6 +51,12 @@ export type RefreshRunSnapshot = {
   phase: RefreshRunPhase;
   current: number;
   total: number;
+  /** Current start-path label while discovering multi-path sources (e.g. `/docs`). */
+  activePath?: string;
+  /** 1-based index of the start path currently being crawled. */
+  pathIndex?: number;
+  /** Total start paths in this refresh discover pass. */
+  pathTotal?: number;
   changelog?: RefreshChangelog;
   /** Full discovered snapshot set from check — persisted only on apply. */
   pendingSnapshots?: Array<{ url: string; title: string; contentHash: string }>;

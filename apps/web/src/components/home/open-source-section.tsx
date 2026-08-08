@@ -4,15 +4,25 @@ import { Container } from "@/components/ui/container";
 import { Eyebrow, SectionBadge } from "@/components/ui/section-badge";
 import {
   DESKTOP_RELEASES_FALLBACK_URL,
-  type DesktopWindowsRelease,
+  type DesktopReleaseAsset,
 } from "@/lib/desktop-release";
 import { cn } from "@/lib/utils";
 
 type OpenSourceSectionProps = {
-  windowsRelease?: DesktopWindowsRelease | null;
+  windowsRelease?: DesktopReleaseAsset | null;
+  macRelease?: DesktopReleaseAsset | null;
 };
 
-function buildPillars(windowsRelease: DesktopWindowsRelease | null) {
+function buildPillars(
+  windowsRelease: DesktopReleaseAsset | null,
+  macRelease: DesktopReleaseAsset | null,
+) {
+  const desktopTags = [
+    windowsRelease ? `Windows v${windowsRelease.version}` : null,
+    macRelease ? `Mac v${macRelease.version}` : null,
+    "Offline",
+  ].filter(Boolean) as string[];
+
   return [
     {
       icon: Package,
@@ -36,11 +46,10 @@ function buildPillars(windowsRelease: DesktopWindowsRelease | null) {
       title: "The same setup on your desk",
       description:
         "A desktop app with the same dashboard and a local engine underneath. Index private docs without anything leaving your machine.",
-      tags: windowsRelease
-        ? [`Windows v${windowsRelease.version}`, "Offline"]
-        : ["Windows", "Offline"],
+      tags:
+        desktopTags.length > 0 ? desktopTags : ["Windows", "Mac", "Offline"],
     },
-  ] as const;
+  ];
 }
 
 const TERMINAL_LINES = [
@@ -85,9 +94,11 @@ export function SelfHostTerminal({ className }: { className?: string }) {
 
 export function OpenSourceSection({
   windowsRelease = null,
+  macRelease = null,
 }: OpenSourceSectionProps) {
-  const pillars = buildPillars(windowsRelease);
+  const pillars = buildPillars(windowsRelease, macRelease);
   const windowsHref = windowsRelease?.downloadUrl ?? DESKTOP_RELEASES_FALLBACK_URL;
+  const macHref = macRelease?.downloadUrl ?? DESKTOP_RELEASES_FALLBACK_URL;
 
   return (
     <section
@@ -159,6 +170,16 @@ export function OpenSourceSection({
             {windowsRelease
               ? `Download Windows v${windowsRelease.version}`
               : "Download for Windows"}
+          </Button>
+          <Button
+            href={macHref}
+            variant="secondary"
+            className="w-full sm:w-auto"
+            rel="noopener noreferrer"
+          >
+            {macRelease
+              ? `Download Mac v${macRelease.version}`
+              : "Download for Mac"}
           </Button>
           <Button href="https://github.com/ledgeindex" variant="secondary" className="w-full sm:w-auto">
             Star on GitHub

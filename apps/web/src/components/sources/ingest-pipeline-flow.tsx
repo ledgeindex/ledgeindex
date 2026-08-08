@@ -56,7 +56,7 @@ function PipelineProgressBar({
       )}
     >
       <span
-        className="block h-full rounded-full bg-sky-500 transition-[width] duration-300 ease-out"
+        className="block h-full rounded-full bg-accent transition-[width] duration-300 ease-out"
         style={{ width: `${pct}%` }}
       />
     </span>
@@ -66,7 +66,7 @@ function PipelineProgressBar({
 function statusColor(status: PipelineNodeStatus) {
   switch (status) {
     case "running":
-      return "border-sky-500/50 bg-sky-500/10 text-sky-700 dark:text-sky-300";
+      return "border-accent/50 bg-accent/10 text-accent";
     case "done":
       return "border-emerald-500/40 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
     case "suspended":
@@ -207,10 +207,10 @@ function pipelineNodeMotionClass(
   if (!animate || status !== "running") return "";
 
   if (strip) {
-    return "ring-2 ring-sky-500/40 pipeline-node-running pipeline-strip-shimmer";
+    return "ring-2 ring-accent/40 pipeline-node-running pipeline-strip-shimmer";
   }
 
-  return "ring-2 ring-sky-500/40 shadow-md pipeline-node-running";
+  return "ring-2 ring-accent/40 shadow-md pipeline-node-running";
 }
 
 function PipelineStripConnector({ active }: { active: boolean }) {
@@ -219,7 +219,7 @@ function PipelineStripConnector({ active }: { active: boolean }) {
       aria-hidden
       className={cn(
         "relative h-px w-3 shrink-0 self-center sm:w-5",
-        active ? "pipeline-connector-flow bg-sky-500/25" : "bg-border",
+        active ? "pipeline-connector-flow bg-accent/25" : "bg-border",
       )}
     />
   );
@@ -238,8 +238,8 @@ function PipelineStripLabel({
     <span className="relative z-[1] inline-flex items-center gap-1.5">
       {animate && status === "running" ? (
         <span className="relative flex size-1.5 shrink-0">
-          <span className="absolute inline-flex size-full animate-ping rounded-full bg-sky-400/70" />
-          <span className="relative inline-flex size-1.5 rounded-full bg-sky-400" />
+          <span className="absolute inline-flex size-full animate-ping rounded-full bg-accent/70" />
+          <span className="relative inline-flex size-1.5 rounded-full bg-accent" />
         </span>
       ) : null}
       {status === "done" ? (
@@ -298,7 +298,9 @@ function PipelineStrip({
             "cursor-pointer hover:ring-2 hover:ring-foreground/15",
           navDisabled && "opacity-50",
           statusColor(node.status),
-          isRunning && node.progress && "max-w-[11rem] truncate-none",
+          isRunning &&
+            (node.progress || node.detail) &&
+            "max-w-[12.5rem] truncate-none sm:max-w-[14rem]",
         );
 
         const stepTitle =
@@ -307,6 +309,8 @@ function PipelineStrip({
             ? `${node.label} ${node.progress.current} / ${node.progress.total}`
             : node.label);
 
+        const pathPhase = node.progress?.phase?.trim() || null;
+
         const stepContent = (
           <>
             <PipelineStripLabel
@@ -314,6 +318,11 @@ function PipelineStrip({
               status={node.status}
               animate={animate}
             />
+            {isRunning && pathPhase ? (
+              <span className="mt-0.5 truncate text-[0.4375rem] font-normal normal-case tracking-normal opacity-80">
+                {pathPhase}
+              </span>
+            ) : null}
             {isRunning && node.progress ? (
               <>
                 <span className="mt-0.5 truncate text-[0.4375rem] font-normal normal-case tracking-normal opacity-80">

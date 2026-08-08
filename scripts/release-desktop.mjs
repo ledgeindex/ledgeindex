@@ -276,4 +276,4 @@ if (!token) {
 console.log(`Using token from: ${source}`);
 console.log(`Releasing desktop ${version} → tag desktop-v${version}`);
 await createPublicTag(version, token);
-console.log("\nDone. Watch Desktop release CI for the Windows installer.");
+console.log("\nDone. Watch Desktop release CI for Windows + macOS installers.");

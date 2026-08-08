@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Plug,
   Plus,
+  RefreshCw,
   Sparkles,
   UserCheck,
 } from "lucide-react";
@@ -76,6 +77,13 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
     label: "Users",
     href: "/admin/users",
     icon: UserCheck,
+    adminOnly: true,
+  },
+  {
+    id: "admin-source-updater",
+    label: "Source updater",
+    href: "/admin/source-updater",
+    icon: RefreshCw,
     adminOnly: true,
   },
 ];

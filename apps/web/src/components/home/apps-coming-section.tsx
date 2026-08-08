@@ -11,21 +11,29 @@ import {
 } from "@/components/home/iso-plate";
 import {
   DESKTOP_RELEASES_FALLBACK_URL,
-  type DesktopWindowsRelease,
+  type DesktopReleaseAsset,
 } from "@/lib/desktop-release";
 import { cn } from "@/lib/utils";
 
-const CHIPS = ["Windows desktop", "iOS & Android soon", "Works offline"] as const;
+const CHIPS = ["Windows & Mac", "iOS & Android soon", "Works offline"] as const;
 
 type AppsComingSectionProps = {
-  windowsRelease?: DesktopWindowsRelease | null;
+  windowsRelease?: DesktopReleaseAsset | null;
+  macRelease?: DesktopReleaseAsset | null;
 };
 
-export function AppsComingSection({ windowsRelease = null }: AppsComingSectionProps) {
+export function AppsComingSection({
+  windowsRelease = null,
+  macRelease = null,
+}: AppsComingSectionProps) {
   const windowsHref = windowsRelease?.downloadUrl ?? DESKTOP_RELEASES_FALLBACK_URL;
   const windowsLabel = windowsRelease
     ? `Download for Windows (v${windowsRelease.version})`
     : "Download for Windows";
+  const macHref = macRelease?.downloadUrl ?? DESKTOP_RELEASES_FALLBACK_URL;
+  const macLabel = macRelease
+    ? `Download for Mac (v${macRelease.version})`
+    : "Download for Mac";
 
   return (
     <section
@@ -44,8 +52,8 @@ export function AppsComingSection({ windowsRelease = null }: AppsComingSectionPr
               Your docs on your phone and your desk
             </h2>
             <p className="mt-3 max-w-lg text-sm leading-6 text-muted sm:text-base sm:leading-7">
-              The desktop app is ready for Windows: same dashboard, local engine,
-              private files stay on your machine. Mobile is next.
+              The desktop app is ready for Windows and Mac: same dashboard, local
+              engine, private files stay on your machine. Mobile is next.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-1.5">
@@ -59,7 +67,7 @@ export function AppsComingSection({ windowsRelease = null }: AppsComingSectionPr
               ))}
             </div>
 
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
               <Button
                 href={windowsHref}
                 className="w-full sm:w-auto"
@@ -67,13 +75,22 @@ export function AppsComingSection({ windowsRelease = null }: AppsComingSectionPr
               >
                 {windowsLabel}
               </Button>
+              <Button
+                href={macHref}
+                variant="secondary"
+                className="w-full sm:w-auto"
+                rel="noopener noreferrer"
+              >
+                {macLabel}
+              </Button>
               <Button href="#open-source" variant="secondary" className="w-full sm:w-auto">
                 Run it yourself today
               </Button>
             </div>
-            {windowsRelease ? (
+            {windowsRelease || macRelease ? (
               <p className="mt-3 font-mono text-[0.6875rem] text-muted">
-                Latest installer · {windowsRelease.tag}
+                Latest installer ·{" "}
+                {windowsRelease?.tag ?? macRelease?.tag}
               </p>
             ) : null}
           </div>

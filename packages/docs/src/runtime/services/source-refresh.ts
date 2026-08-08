@@ -1,5 +1,5 @@
 import type { Source } from "@ledgeindex/core/db/types.js";
-import { discoverUrls } from "../crawler/discover.js";
+import { discoverUrls, getCrawlProgress } from "../crawler/discover.js";
 import { getStore } from "../db/index.js";
 import {
   applyPageSnapshotRefresh,
@@ -36,6 +36,45 @@ const REFRESH_PARSE_CONCURRENCY = Math.max(
   1,
   Number(process.env.LEDGEINDEX_EXTRACT_CONCURRENCY ?? 8) || 8,
 );
+
+function pathLabelFromStartUrl(url: string): string {
+  try {
+    return new URL(url).pathname.replace(/\/+$/, "") || "/";
+  } catch {
+    return url;
+  }
+}
+
+function startRefreshDiscoverProgressSync(
+  sourceId: string,
+  meta: {
+    activePath?: string;
+    pathIndex?: number;
+    pathTotal?: number;
+    pagesAlreadyDiscovered: number;
+    maxPages: number;
+  },
+) {
+  const tick = () => {
+    const progress = getCrawlProgress(sourceId);
+    const pathPages = progress?.pagesDiscovered ?? 0;
+    patchRefreshRun(sourceId, {
+      status: "discovering",
+      phase: "discovering",
+      current: Math.min(
+        meta.maxPages,
+        meta.pagesAlreadyDiscovered + pathPages,
+      ),
+      total: meta.maxPages,
+      activePath: meta.activePath,
+      pathIndex: meta.pathIndex,
+      pathTotal: meta.pathTotal,
+    });
+  };
+  tick();
+  const timer = setInterval(tick, 400);
+  return () => clearInterval(timer);
+}
 
 function toChangelog(result: {
   baselineCaptured: boolean;
@@ -223,17 +262,70 @@ async function runDiscoverRefreshCheck(
     throw new Error("Source not found");
   }
 
-  patchRefreshRun(sourceId, {
-    status: "discovering",
-    phase: "discovering",
-    current: 0,
-    total: source.config.maxPages,
-  });
+  const startUrls = [...new Set(source.config.startUrls.filter(Boolean))];
+  if (startUrls.length === 0) {
+    throw new Error("Source has no start URLs");
+  }
 
-  const discovery = await discoverUrls(source.config, { sourceId });
+  const maxPages = source.config.maxPages;
+  const discoveredByUrl = new Map<string, { url: string; title?: string }>();
+
+  // Multi-path sources crawl one start URL at a time so the pipeline can show
+  // which path is active. Single-path keeps a one-shot discover.
+  for (let i = 0; i < startUrls.length; i++) {
+    assertRefreshNotCancelled(sourceId);
+    const remaining = Math.max(0, maxPages - discoveredByUrl.size);
+    if (remaining === 0) break;
+
+    const startUrl = startUrls[i]!;
+    const multiPath = startUrls.length > 1;
+    const pathMeta = multiPath
+      ? {
+          activePath: pathLabelFromStartUrl(startUrl),
+          pathIndex: i + 1,
+          pathTotal: startUrls.length,
+        }
+      : {
+          activePath: undefined,
+          pathIndex: undefined,
+          pathTotal: undefined,
+        };
+
+    patchRefreshRun(sourceId, {
+      status: "discovering",
+      phase: "discovering",
+      current: discoveredByUrl.size,
+      total: maxPages,
+      ...pathMeta,
+    });
+
+    const stopSync = startRefreshDiscoverProgressSync(sourceId, {
+      ...pathMeta,
+      pagesAlreadyDiscovered: discoveredByUrl.size,
+      maxPages,
+    });
+
+    try {
+      const discovery = await discoverUrls(
+        {
+          ...source.config,
+          startUrls: [startUrl],
+          maxPages: remaining,
+        },
+        { sourceId },
+      );
+      for (const page of discovery.urls) {
+        if (!page.url || discoveredByUrl.has(page.url)) continue;
+        discoveredByUrl.set(page.url, page);
+      }
+    } finally {
+      stopSync();
+    }
+  }
+
   assertRefreshNotCancelled(sourceId);
 
-  const discovered = discovery.urls.filter((page) => page.url);
+  const discovered = [...discoveredByUrl.values()];
   if (discovered.length === 0) {
     throw new Error("No pages discovered during refresh crawl");
   }
@@ -243,6 +335,9 @@ async function runDiscoverRefreshCheck(
     phase: "parsing",
     current: 0,
     total: discovered.length,
+    activePath: undefined,
+    pathIndex: undefined,
+    pathTotal: undefined,
   });
 
   const parsed = await parseUrlsForRefresh(sourceId, source, discovered);

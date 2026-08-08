@@ -136,6 +136,10 @@ export type SourceSummary = {
   versionLabel: string;
   versions: SourceVersionSummary[];
   categories: string[];
+  /** Crawl URL exclude patterns saved on the source (applied on refresh). */
+  excludePatterns?: string[];
+  /** Crawl URL include patterns saved on the source. */
+  includePatterns?: string[];
 };
 
 export type SourceDuplicateMatch = {
@@ -1069,6 +1073,12 @@ export type RefreshRunSnapshot = {
   phase: RefreshRunPhase;
   current: number;
   total: number;
+  /** Current start-path label while discovering multi-path sources (e.g. `/docs`). */
+  activePath?: string;
+  /** 1-based index of the start path currently being crawled. */
+  pathIndex?: number;
+  /** Total start paths in this refresh discover pass. */
+  pathTotal?: number;
   changelog?: RefreshChangelog;
   error?: string;
 };
