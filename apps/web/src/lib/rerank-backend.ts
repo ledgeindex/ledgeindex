@@ -6,7 +6,7 @@ export const RERANK_BACKENDS = [
     label: "Cloud Auto",
     description:
       "Cohere 3.5 first; escalate to Cohere 4 when rankings look ambiguous",
-    adminOnly: true,
+    adminOnly: false,
   },
   {
     id: "cohere",
@@ -50,15 +50,28 @@ export const RERANK_BACKENDS = [
 export type LedgeIndexRerankBackendId =
   (typeof RERANK_BACKENDS)[number]["id"];
 
-/** Admin default — Cloud Auto. Non-admins get Local Auto. */
+/** Default for everyone — Cloud Auto. Fine-grained backends stay admin-only. */
 export const DEFAULT_RERANK_BACKEND_ID: LedgeIndexRerankBackendId =
   "cohere-auto";
 export const NON_ADMIN_RERANK_BACKEND_ID: LedgeIndexRerankBackendId =
-  "local-auto";
+  "cohere-auto";
 
 /** Cloud-hosted sources: fixed fast path — Cohere auto, no picker. */
 export const CLOUD_SOURCE_RERANK_BACKEND_ID: LedgeIndexRerankBackendId =
   "cohere-auto";
+
+/** Local path for the composer Local/Cloud toggle. */
+export const LOCAL_RERANK_BACKEND_ID: LedgeIndexRerankBackendId = "local-auto";
+
+export function isCloudRerankBackend(
+  backend: LedgeIndexRerankBackendId,
+): boolean {
+  return (
+    backend === "cohere-auto" ||
+    backend === "cohere" ||
+    backend === "cohere-v4-fast"
+  );
+}
 
 export function resolveSourceHosting(input: {
   hosting?: SourceHosting | null;

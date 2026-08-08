@@ -263,13 +263,17 @@ export function stripEmbeddedGraphicsMarkdown(markdown: string): string {
 export async function fetchPageHtml(
   url: string,
   userAgent: string,
-): Promise<{ html: string; status: number }> {
+): Promise<{ html: string; status: number; contentType: string }> {
   const response = await fetch(url, {
     headers: { "User-Agent": userAgent },
     signal: AbortSignal.timeout(30_000),
   });
   const html = await response.text();
-  return { html, status: response.status };
+  return {
+    html,
+    status: response.status,
+    contentType: response.headers.get("content-type") ?? "",
+  };
 }
 
 export function extractContentFromHtml(

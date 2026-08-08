@@ -3,12 +3,18 @@
 import { useEffect, useMemo } from "react";
 import Link from "next/link";
 import { StreamingChatPanel } from "@/components/chat/streaming-chat-panel";
+import { HeaderSelect } from "@/components/ui/header-select";
 import { useSourceChatToolbar } from "@/contexts/source-chat-toolbar-context";
 import { LEDGEINDEX_CHAT_MODELS } from "@/lib/chat-models";
 import { modelSupportsThinking } from "@/lib/chat-thinking-level";
 import type { ChatSuggestion } from "@/lib/chat-suggestions";
-import { CLOUD_SOURCE_RERANK_BACKEND_ID, isCloudHostedSource, resolveSourceHosting } from "@/lib/rerank-backend";
+import {
+  CLOUD_SOURCE_RERANK_BACKEND_ID,
+  isCloudHostedSource,
+  resolveSourceHosting,
+} from "@/lib/rerank-backend";
 import { pathOptionsFromStartUrls } from "@/lib/source-paths";
+import { cn } from "@/lib/utils";
 
 export const SOURCE_CHAT_SUGGESTIONS: ChatSuggestion[] = [
   {
@@ -74,12 +80,14 @@ export function SourceChat({
 }) {
   const {
     modelId,
+    setModelId,
     rerankBackend,
     activeSource,
     setTestPromptSuggestions,
     availableModels,
     needsProviderKeys,
     chatModelsReady,
+    canChooseModel,
   } = useSourceChatToolbar();
   const pathOptions = useMemo(
     () => pathOptionsFromStartUrls(startUrls),
@@ -108,6 +116,29 @@ export function SourceChat({
     availableModels.find((model) => model.id === modelId)?.label ??
     LEDGEINDEX_CHAT_MODELS.find((model) => model.id === modelId)?.label ??
     "selected model";
+
+  const modelSelect =
+    !canChooseModel ? null : needsProviderKeys ? (
+      <Link
+        href="/settings/providers"
+        className={cn(
+          "inline-flex h-8 items-center rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5",
+          "text-xs font-medium text-amber-900 dark:text-amber-100",
+        )}
+      >
+        Add API key
+      </Link>
+    ) : chatModelsReady && availableModels.length > 0 ? (
+      <HeaderSelect
+        ariaLabel="Chat model"
+        value={modelId}
+        onChange={setModelId}
+        options={availableModels.map((model) => ({
+          value: model.id,
+          label: model.label,
+        }))}
+      />
+    ) : null;
 
   if (!chatModelsReady) {
     return (
@@ -156,6 +187,7 @@ export function SourceChat({
       welcomeMessage={welcomeMessage}
       inputPlaceholder="Ask about this documentation…"
       retrievalSidePanel
+      toolbarEnd={modelSelect}
       className="min-h-0 flex-1 border-0 shadow-none"
     />
   );

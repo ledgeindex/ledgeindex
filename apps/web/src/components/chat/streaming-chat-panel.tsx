@@ -42,9 +42,10 @@ import { DEFAULT_CHAT_MODEL_ID } from "@/lib/chat-models";
 import {
   CLOUD_SOURCE_RERANK_BACKEND_ID,
   isCloudHostedSource,
+  isCloudRerankBackend,
+  LOCAL_RERANK_BACKEND_ID,
   resolveAllowedRerankBackend,
   resolveSourceHosting,
-  rerankBackendsForUser,
   type LedgeIndexRerankBackendId,
 } from "@/lib/rerank-backend";
 import {
@@ -53,6 +54,7 @@ import {
   thinkingLevelFromDeepThinking,
 } from "@/lib/chat-thinking-level";
 import { DeepThinkingToggle } from "@/components/chat/deep-thinking-toggle";
+import { CloudLocalToggle } from "@/components/chat/cloud-local-toggle";
 import {
   PathScopePill,
   PathScopePills,
@@ -63,7 +65,6 @@ import {
   PromptInputTextarea,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
-import { HeaderSelect } from "@/components/ui/header-select";
 import { Cloud } from "lucide-react";
 import { MessageStats } from "@/components/chat/message-stats";
 import { cn } from "@/lib/utils";
@@ -132,7 +133,6 @@ export function StreamingChatPanel({
     process.env.NODE_ENV === "development" || Boolean(desktop?.isDev);
   /** Debug retrieval card/panel — admins and local/dev builds only. */
   const canSeeRetrievedSources = isAdmin || isDevEnv;
-  const rerankOptions = rerankBackendsForUser(isAdmin);
   const resolvedScope = sourceScope ?? toolbar?.activeSource?.scope;
   const resolvedHosting = resolveSourceHosting({
     hosting: sourceHosting ?? toolbar?.activeSource?.hosting,
@@ -152,6 +152,13 @@ export function StreamingChatPanel({
         rerankBackend ?? toolbar?.rerankBackend ?? localRerankBackend,
         isAdmin,
       );
+  const retrievalPath: "cloud" | "local" = isCloudRerankBackend(
+    effectiveRerankBackend,
+  )
+    ? "cloud"
+    : "local";
+  /** Cloud path uses hosted models — no per-user model picker. */
+  const showModelPicker = Boolean(toolbarEnd) && !cloudSource && retrievalPath === "local";
   const [input, setInput] = useState("");
 
   const [chatSession, setChatSession] = useState(0);
@@ -589,7 +596,7 @@ export function StreamingChatPanel({
                   ) : null}
                   {cloudSource ? (
                     <span
-                      title="Cloud source — Gemini embed + Cohere Auto (fixed)"
+                      title="Cloud source — hosted retrieval and models"
                       aria-label="Cloud retrieval path"
                       className={cn(
                         "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card-solid px-2",
@@ -602,25 +609,20 @@ export function StreamingChatPanel({
                       </span>
                     </span>
                   ) : (
-                    <HeaderSelect
-                      ariaLabel="Rerank backend"
-                      value={effectiveRerankBackend}
-                      onChange={(value) => {
-                        const next = resolveAllowedRerankBackend(
-                          value,
-                          isAdmin,
-                        );
-                        setLocalRerankBackend(next);
-                        toolbar?.setRerankBackend(next);
+                    <CloudLocalToggle
+                      value={retrievalPath}
+                      disabled={busy}
+                      onChange={(next) => {
+                        const backend =
+                          next === "cloud"
+                            ? CLOUD_SOURCE_RERANK_BACKEND_ID
+                            : LOCAL_RERANK_BACKEND_ID;
+                        setLocalRerankBackend(backend);
+                        toolbar?.setRerankBackend(backend);
                       }}
-                      options={rerankOptions.map((backend) => ({
-                        value: backend.id,
-                        label: backend.label,
-                      }))}
-                      className="h-8"
                     />
                   )}
-                  {toolbarEnd}
+                  {showModelPicker ? toolbarEnd : null}
                   <PromptInputSubmit
                     status={status}
                     disabled={!input.trim() || busy}

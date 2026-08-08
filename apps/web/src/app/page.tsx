@@ -15,8 +15,11 @@ import { ProfilerSection } from "@/components/home/profiler-section";
 import { PinpointKnowledgeSection } from "@/components/home/pinpoint-knowledge-section";
 import { RegistrySection } from "@/components/home/registry-section";
 import { SourceBuilderSection } from "@/components/home/source-builder-section";
+import { getLatestDesktopWindowsRelease } from "@/lib/desktop-release";
 
-export default function Home() {
+export default async function Home() {
+  const windowsRelease = await getLatestDesktopWindowsRelease();
+
   return (
     <div className="relative flex min-h-full flex-1 flex-col">
       <HeroAnnouncementStrip />
@@ -32,8 +35,8 @@ export default function Home() {
         <AcceleratorSection />
         <ProfilerSection />
         <PinpointKnowledgeSection />
-        <OpenSourceSection />
-        <AppsComingSection />
+        <OpenSourceSection windowsRelease={windowsRelease} />
+        <AppsComingSection windowsRelease={windowsRelease} />
         <FaqSection />
         <CtaSection />
       </main>

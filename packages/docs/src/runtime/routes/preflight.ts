@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { UnsupportedStartUrlError } from "@ledgeindex/core";
 import { preflightStartUrl } from "../crawler/preflight.js";
 import { normalizeStartUrl } from "../lib/url.js";
 
@@ -23,6 +24,15 @@ export async function preflightRoutes(fastify: FastifyInstance) {
       const result = await preflightStartUrl(url, undefined, sitemapUrls ?? []);
       return { preflight: result };
     } catch (error) {
+      if (
+        error instanceof UnsupportedStartUrlError ||
+        (error instanceof Error && error.name === "UnsupportedStartUrlError")
+      ) {
+        return reply.status(400).send({
+          error:
+            error instanceof Error ? error.message : "Unsupported start URL",
+        });
+      }
       const message =
         error instanceof Error ? error.message : "Preflight check failed";
       return reply.status(502).send({ error: message });

@@ -5,7 +5,6 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
 import { ChatTestPromptsSheet } from "@/components/chat/chat-test-prompts-sheet";
-import { HeaderSelect } from "@/components/ui/header-select";
 import { SourceCatalogButton } from "@/components/sources/source-catalog-dialog";
 import { useOptionalSourceChatToolbar } from "@/contexts/source-chat-toolbar-context";
 import { useAuth } from "@/lib/auth-context";
@@ -27,14 +26,8 @@ export function AppHeaderSourceChatControls() {
 
   const {
     activeSource,
-    modelId,
-    setModelId,
     testPromptSuggestions,
     submitTestPrompt,
-    availableModels,
-    chatModelsReady,
-    canChooseModel,
-    needsProviderKeys,
     newChatAvailable,
     requestNewChat,
   } = toolbar;
@@ -69,7 +62,7 @@ export function AppHeaderSourceChatControls() {
       {/* Flex gap inherits header drag — this is the window move handle */}
       <div className="min-h-full min-w-[1.5rem] flex-1 self-stretch" aria-hidden />
 
-      {/* Model / catalog controls — clickable */}
+      {/* Actions — clickable (model picker lives in the composer) */}
       <div
         className={cn(
           "ml-auto flex shrink-0 items-center gap-1.5 sm:gap-2",
@@ -108,33 +101,6 @@ export function AppHeaderSourceChatControls() {
             TP
           </button>
         ) : null}
-        {!canChooseModel ? null : needsProviderKeys ? (
-          <Link
-            href="/settings/providers"
-            className={cn(
-              "inline-flex h-8 max-w-[11rem] shrink-0 items-center truncate rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5",
-              "text-xs font-medium text-amber-900 dark:text-amber-100",
-              "hover:border-amber-500/60 hover:bg-amber-500/15",
-            )}
-            title="Add an OpenAI, Gemini, or DeepSeek key to chat"
-          >
-            Add API key
-          </Link>
-        ) : chatModelsReady && availableModels.length > 0 ? (
-          <HeaderSelect
-            ariaLabel="Chat model"
-            value={modelId}
-            onChange={setModelId}
-            options={availableModels.map((model) => ({
-              value: model.id,
-              label: model.label,
-            }))}
-          />
-        ) : (
-          <span className="inline-flex h-8 items-center px-2 text-xs text-muted">
-            {isDesktop ? "Models…" : null}
-          </span>
-        )}
         {sourceId ? (
           <SourceCatalogButton
             sourceId={sourceId}

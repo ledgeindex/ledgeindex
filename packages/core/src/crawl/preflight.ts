@@ -7,8 +7,13 @@ import {
 import { classifySource } from "./classify-source.js";
 import { fetchPageHtml } from "../extract/parser/extract-content.js";
 import type { SourceMetadata } from "../schemas/source-metadata.js";
-
-const BOT_USER_AGENT = "LedgeIndexBot/1.0 (+https://ledgeindex.ai)";
+import { DEFAULT_CRAWL_USER_AGENT } from "./crawl-user-agent.js";
+import {
+  assertHtmlStartUrl,
+  isPdfContentType,
+  UnsupportedStartUrlError,
+  UNSUPPORTED_PDF_START_URL_MESSAGE,
+} from "../lib/unsupported-start-url.js";
 
 export type PreflightResult = {
   url: string;
@@ -81,13 +86,21 @@ function extractFaviconUrl($: CheerioAPI, pageUrl: string): string | undefined {
 
 export async function preflightStartUrl(
   url: string,
-  userAgent = BOT_USER_AGENT,
+  userAgent = DEFAULT_CRAWL_USER_AGENT,
   customSitemapUrls: string[] = [],
 ): Promise<PreflightResult> {
-  const [{ html, status }, discovery] = await Promise.all([
+  // Fast path: reject obvious PDF start URLs before fetching HTML/metadata.
+  assertHtmlStartUrl(url);
+
+  const [{ html, status, contentType }, discovery] = await Promise.all([
     fetchPageHtml(url, userAgent),
     probeDiscoverySignals(url, userAgent, customSitemapUrls),
   ]);
+
+  // Catch extension-less PDF endpoints via Content-Type (e.g. /download?id=…).
+  if (isPdfContentType(contentType)) {
+    throw new UnsupportedStartUrlError(UNSUPPORTED_PDF_START_URL_MESSAGE);
+  }
 
   const $ = cheerio.load(html);
 

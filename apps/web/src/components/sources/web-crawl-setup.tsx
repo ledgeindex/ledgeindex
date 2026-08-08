@@ -58,6 +58,8 @@ import {
   runParsePreview,
   startIngestWorkflow,
   updateSource,
+  UNSUPPORTED_PDF_START_URL_MESSAGE,
+  isPdfUrl,
   type CrawlRun,
   type DiscoverySignals,
   type IngestPipelineSnapshot,
@@ -77,7 +79,8 @@ import {
   sourcePathLabelForUrl,
 } from "@/lib/source-paths";
 
-const BOT_USER_AGENT = "LedgeIndexBot/1.0 (+https://ledgeindex.ai)";
+const BOT_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
 const CRAWL_PREVIEW_STORAGE_KEY = "knowledgeindex:web-crawl-preview";
 const LEGACY_CRAWL_PREVIEW_STORAGE_KEY = CRAWL_PREVIEW_STORAGE_KEY;
 const INDEX_ESTIMATE_SAMPLE_LIMIT = 120;
@@ -371,7 +374,7 @@ function formatPreflightHttpError(status: number): string {
     return "Couldn't reach this URL — you can still try crawling.";
   }
   if (status === 403 || status === 401) {
-    return `Site blocked the request (HTTP ${status}) — you can still try crawling.`;
+    return `Site blocked the request (HTTP ${status}). Often Cloudflare or similar. We'll use a browser-style request; if it still fails, a headless browser crawl is the next step.`;
   }
   if (status >= 400) {
     return `Site returned HTTP ${status} — you can still try crawling.`;
@@ -707,6 +710,20 @@ export function WebCrawlSetup() {
       return;
     }
 
+    if (isPdfUrl(url)) {
+      preflightAbortRef.current?.abort();
+      setPreflightCheckedUrl(url);
+      setSourceName(formatUrlLabel(url));
+      setPreflightOgImage(null);
+      setPreflightFaviconUrl(null);
+      setPreflightTitle("");
+      setDiscoverySignals(null);
+      setSourceMetadata(null);
+      setPreflightError(UNSUPPORTED_PDF_START_URL_MESSAGE);
+      setPreflightState("error");
+      return;
+    }
+
     preflightAbortRef.current?.abort();
     const controller = new AbortController();
     preflightAbortRef.current = controller;
@@ -830,6 +847,18 @@ export function WebCrawlSetup() {
       setPreflightCheckedUrl("");
       setDiscoverySignals(null);
       setSourceMetadata(null);
+      return;
+    }
+
+    if (isPdfUrl(url)) {
+      setPreflightCheckedUrl(url);
+      setPreflightOgImage(null);
+      setPreflightFaviconUrl(null);
+      setPreflightTitle("");
+      setDiscoverySignals(null);
+      setSourceMetadata(null);
+      setPreflightError(UNSUPPORTED_PDF_START_URL_MESSAGE);
+      setPreflightState("error");
       return;
     }
 
@@ -1433,6 +1462,12 @@ export function WebCrawlSetup() {
   async function handleCrawlPreview() {
     if (config.startUrls.length === 0) {
       setError("Add at least one start URL before running crawl preview.");
+      return;
+    }
+
+    const pdfStartUrl = config.startUrls.find((url) => isPdfUrl(url));
+    if (pdfStartUrl) {
+      setError(UNSUPPORTED_PDF_START_URL_MESSAGE);
       return;
     }
 
@@ -2669,9 +2704,22 @@ function StartUrlCardBody({
       </div>
 
       {preflightState === "error" && hasUrl && preflightError ? (
-        <p className="text-[0.6875rem] leading-5 text-amber-700 dark:text-amber-300">
-          {preflightError}
-        </p>
+        <div className="space-y-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+          <p className="text-[0.6875rem] leading-5 text-amber-800 dark:text-amber-200">
+            {preflightError}
+          </p>
+          {preflightError === UNSUPPORTED_PDF_START_URL_MESSAGE ? (
+            <p className="text-[0.625rem] leading-4 text-amber-700/90 dark:text-amber-300/90">
+              Detected from the URL path (e.g. ends with .pdf). Extension-less
+              PDF downloads are also rejected after Check via Content-Type.
+            </p>
+          ) : /HTTP 403|HTTP 401/.test(preflightError) ? (
+            <p className="text-[0.625rem] leading-4 text-amber-700/90 dark:text-amber-300/90">
+              Next: retry Check (browser-style request), or use Render JavaScript
+              once browser crawl ships for harder Cloudflare challenges.
+            </p>
+          ) : null}
+        </div>
       ) : null}
 
       {recentStartUrls.length > 0 ? (

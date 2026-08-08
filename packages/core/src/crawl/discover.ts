@@ -10,6 +10,10 @@ import { extractFirstMarkdownHeading } from "../extract/parser/page-title.js";
 import { discoverSitemapUrls, parentScopePathForLandingSeed } from "./sitemap.js";
 import { shouldCrawlUrl } from "./url-matcher.js";
 import { CanonicalUrlRegistry } from "./canonical-dedupe.js";
+import {
+  assertHtmlStartUrl,
+  isPdfUrl,
+} from "../lib/unsupported-start-url.js";
 
 export type DiscoveredUrl = {
   url: string;
@@ -166,6 +170,10 @@ export async function discoverUrls(
   config: WebCrawlSourceConfig,
   options?: DiscoverOptions,
 ): Promise<DiscoverResult> {
+  for (const startUrl of config.startUrls) {
+    assertHtmlStartUrl(startUrl);
+  }
+
   const crawlConfig = createCrawlConfiguration();
 
   const urls: DiscoveredUrl[] = [];
@@ -271,12 +279,20 @@ export async function discoverUrls(
           return;
         }
 
+        if (isPdfUrl(request.url)) {
+          skipped.push({
+            url: request.url,
+            reason: "PDF URLs are not supported",
+          });
+          return;
+        }
+
         const bodyText = typeof body === "string" ? body : "";
         const isMarkdown = isMarkdownResponse(contentType, bodyText);
 
         const linkEnqueueOptions = {
           globs: linkGlobs,
-          exclude: [{ glob: "**/*.txt" }],
+          exclude: [{ glob: "**/*.txt" }, { glob: "**/*.pdf" }],
           limit: MAX_LINKS_PER_PAGE,
           transformRequestFunction: enqueueTransform,
         } as const;

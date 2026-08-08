@@ -143,6 +143,19 @@ export { discoverUrls, cancelDiscoverCrawl, getCrawlProgress } from "./crawl/dis
 
 export { preflightStartUrl } from "./crawl/preflight.js";
 
+export {
+  DEFAULT_CRAWL_USER_AGENT,
+  IDENTIFIED_BOT_USER_AGENT,
+} from "./crawl/crawl-user-agent.js";
+
+export {
+  UNSUPPORTED_PDF_START_URL_MESSAGE,
+  UnsupportedStartUrlError,
+  assertHtmlStartUrl,
+  isPdfContentType,
+  isPdfUrl,
+} from "./lib/unsupported-start-url.js";
+
 export { filterCrawlUrls } from "./crawl/crawl-url-filter.js";
 export type {
   CrawlUrlFilterEntry,

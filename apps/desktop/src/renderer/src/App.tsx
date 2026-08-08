@@ -24,6 +24,7 @@ import McpConnectPage from '@/app/(app)/mcp/connect/page'
 import ApiKeysPage from '@/app/(app)/api-keys/page'
 import DesktopProviderKeysPage from '@/app/(app)/settings/providers/page'
 import ExploreChatPage from '@/app/(app)/chat/page'
+import AdminUsersPage from '@/app/(app)/admin/users/page'
 
 const FALLBACK_DESKTOP_API = 'http://127.0.0.1:3015'
 
@@ -51,6 +52,7 @@ function AuthenticatedApp(): React.JSX.Element {
                     path="/settings/providers"
                     element={<DesktopProviderKeysPage />}
                   />
+                  <Route path="/admin/users" element={<AdminUsersPage />} />
                   <Route path="/chat" element={<ExploreChatPage />} />
                   <Route path="/" element={<Navigate to="/chat" replace />} />
                   <Route path="*" element={<Navigate to="/chat" replace />} />

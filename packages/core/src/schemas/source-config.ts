@@ -21,7 +21,12 @@ export const webCrawlSourceConfigSchema = z.object({
   excludeSelectors: z.array(z.string()).default([]),
   maxPages: z.number().int().positive().max(MAX_CRAWL_PAGES).default(DEFAULT_MAX_CRAWL_PAGES),
   modifiedAfter: z.string().datetime().optional(),
-  userAgent: z.string().min(1).default("LedgeIndexBot/1.0"),
+  userAgent: z
+    .string()
+    .min(1)
+    .default(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    ),
 });
 
 export type WebCrawlSourceConfig = z.infer<typeof webCrawlSourceConfigSchema>;

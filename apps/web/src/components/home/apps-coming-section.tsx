@@ -9,11 +9,24 @@ import {
   PLATE_WALL,
   Plate,
 } from "@/components/home/iso-plate";
+import {
+  DESKTOP_RELEASES_FALLBACK_URL,
+  type DesktopWindowsRelease,
+} from "@/lib/desktop-release";
 import { cn } from "@/lib/utils";
 
-const CHIPS = ["iOS & Android", "macOS & Windows", "Works offline"] as const;
+const CHIPS = ["Windows desktop", "iOS & Android soon", "Works offline"] as const;
 
-export function AppsComingSection() {
+type AppsComingSectionProps = {
+  windowsRelease?: DesktopWindowsRelease | null;
+};
+
+export function AppsComingSection({ windowsRelease = null }: AppsComingSectionProps) {
+  const windowsHref = windowsRelease?.downloadUrl ?? DESKTOP_RELEASES_FALLBACK_URL;
+  const windowsLabel = windowsRelease
+    ? `Download for Windows (v${windowsRelease.version})`
+    : "Download for Windows";
+
   return (
     <section
       id="apps"
@@ -26,14 +39,13 @@ export function AppsComingSection() {
       <Container className="relative">
         <div className="grid items-center gap-10 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)] lg:gap-14">
           <div>
-            <SectionBadge>Coming soon</SectionBadge>
+            <SectionBadge>Desktop live · Mobile soon</SectionBadge>
             <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               Your docs on your phone and your desk
             </h2>
             <p className="mt-3 max-w-lg text-sm leading-6 text-muted sm:text-base sm:leading-7">
-              The same answers you get in the browser, on a phone when you are
-              away from your desk. The desktop app keeps private files and repos
-              on your own machine.
+              The desktop app is ready for Windows: same dashboard, local engine,
+              private files stay on your machine. Mobile is next.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-1.5">
@@ -48,13 +60,22 @@ export function AppsComingSection() {
             </div>
 
             <div className="mt-7 flex flex-col gap-3 sm:flex-row">
-              <Button href="#" className="w-full sm:w-auto">
-                Get notified at launch
+              <Button
+                href={windowsHref}
+                className="w-full sm:w-auto"
+                rel="noopener noreferrer"
+              >
+                {windowsLabel}
               </Button>
               <Button href="#open-source" variant="secondary" className="w-full sm:w-auto">
                 Run it yourself today
               </Button>
             </div>
+            {windowsRelease ? (
+              <p className="mt-3 font-mono text-[0.6875rem] text-muted">
+                Latest installer · {windowsRelease.tag}
+              </p>
+            ) : null}
           </div>
 
           <AppsShowcase className="mx-auto w-full max-w-md lg:max-w-none" />

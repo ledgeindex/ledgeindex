@@ -436,6 +436,23 @@ export function normalizeStartUrl(input: string): string {
   return `https://${trimmed}`;
 }
 
+export const UNSUPPORTED_PDF_START_URL_MESSAGE =
+  "PDF URLs are not supported for web crawl. Use an HTML docs page as the start URL.";
+
+/** True when the URL path looks like a PDF (filename / extension). */
+export function isPdfUrl(input: string): boolean {
+  const trimmed = input.trim();
+  if (!trimmed) return false;
+
+  try {
+    const url = new URL(normalizeStartUrl(trimmed));
+    const path = url.pathname.toLowerCase();
+    return path.endsWith(".pdf") || /\/[^/]+\.pdf\//i.test(path);
+  } catch {
+    return /\.pdf(?:$|[?#])/i.test(trimmed);
+  }
+}
+
 export type DiscoverySignal = {
   found: boolean;
   url: string;
