@@ -73,7 +73,8 @@ async function listDesktopReleases(): Promise<GitHubRelease[]> {
         Accept: "application/vnd.github+json",
         "User-Agent": "ledgeindex-web",
       },
-      next: { revalidate: 3600 },
+      // Next.js fetch cache hint — ignored outside the App Router runtime.
+      ...({ next: { revalidate: 3600 } } as RequestInit),
     },
   );
   if (!response.ok) return [];

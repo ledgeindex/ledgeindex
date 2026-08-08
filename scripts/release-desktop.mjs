@@ -207,6 +207,43 @@ Do this first:
     process.exit(1);
   }
 
+  const existingTagRes = await ghFetch(
+    `${api}/repos/${PUBLIC_REPO}/git/ref/tags/${tag}`,
+    token,
+  );
+  if (existingTagRes.ok) {
+    const releaseRes = await ghFetch(
+      `${api}/repos/${PUBLIC_REPO}/releases/tags/${tag}`,
+      token,
+    );
+    let assetCount = 0;
+    if (releaseRes.ok) {
+      const release = await releaseRes.json();
+      assetCount = Array.isArray(release.assets) ? release.assets.length : 0;
+    }
+
+    if (assetCount > 0) {
+      console.error(
+        `Tag ${tag} already has a release with ${assetCount} asset(s). Bump the version and retry.`,
+      );
+      process.exit(1);
+    }
+
+    console.log(
+      `Tag ${tag} exists but has no installer assets (likely a failed/invalid workflow). Recreating tag to re-trigger CI…`,
+    );
+    const delRes = await ghFetch(
+      `${api}/repos/${PUBLIC_REPO}/git/refs/tags/${tag}`,
+      token,
+      { method: "DELETE" },
+    );
+    if (!delRes.ok && delRes.status !== 404) {
+      const body = await delRes.text();
+      console.error(`Could not delete orphan tag ${tag}:`, delRes.status, body);
+      process.exit(1);
+    }
+  }
+
   console.log(`Creating tag ${tag} @ ${sha.slice(0, 7)}…`);
   const tagRes = await ghFetch(`${api}/repos/${PUBLIC_REPO}/git/refs`, token, {
     method: "POST",

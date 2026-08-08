@@ -958,7 +958,10 @@ export default function AdminSourceUpdaterPage() {
         lastCompletedId = sourceId;
         if (abortRef.current && result === "cancelled") {
           setRowStatus((prev) => {
-            const next = { ...prev, [sourceId]: "cancelled" };
+            const next: Record<string, RowStatus> = {
+              ...prev,
+              [sourceId]: "cancelled",
+            };
             for (let j = i + 1; j < queue.length; j += 1) {
               const id = queue[j]!;
               if (next[id] === "queued" || next[id] === "running") {
@@ -975,7 +978,10 @@ export default function AdminSourceUpdaterPage() {
         lastCompletedId = sourceId;
         if (abortRef.current || message === "Cancelled") {
           setRowStatus((prev) => {
-            const next = { ...prev, [sourceId]: "cancelled" };
+            const next: Record<string, RowStatus> = {
+              ...prev,
+              [sourceId]: "cancelled",
+            };
             for (let j = i + 1; j < queue.length; j += 1) {
               const id = queue[j]!;
               if (next[id] === "queued" || next[id] === "running") {
