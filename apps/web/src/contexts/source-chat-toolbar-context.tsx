@@ -36,14 +36,19 @@ type NewChatHandler = () => void;
 
 type SourceChatToolbarContextValue = {
   activeSource: ActiveSource | null;
+  /** Explore tab — may fall back to hosted models when no local keys. */
+  exploreSession: boolean;
   modelId: LedgeIndexChatModelId;
   rerankBackend: LedgeIndexRerankBackendId;
   testPromptSuggestions: readonly ChatSuggestionInput[];
   availableModels: readonly LedgeIndexChatModel[];
   chatModelsReady: boolean;
   needsProviderKeys: boolean;
+  /** Desktop Explore/Public: point chat at the hosted API. */
+  chatUsesRemoteApi: boolean;
   newChatAvailable: boolean;
   setActiveSource: (source: ActiveSource | null) => void;
+  setExploreSession: (active: boolean) => void;
   setModelId: (modelId: LedgeIndexChatModelId) => void;
   setRerankBackend: (backendId: LedgeIndexRerankBackendId) => void;
   setTestPromptSuggestions: (
@@ -64,6 +69,7 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
   const [activeSource, setActiveSourceState] = useState<ActiveSource | null>(
     null,
   );
+  const [exploreSession, setExploreSession] = useState(false);
   const [modelId, setModelId] =
     useState<LedgeIndexChatModelId>(DEFAULT_CHAT_MODEL_ID);
   const [rerankBackend, setRerankBackendState] =
@@ -76,7 +82,9 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
   const newChatRef = useRef<NewChatHandler | null>(null);
 
   const chatModels = useDesktopChatModels({
-    useRemoteCatalog: activeSource?.scope === "global" || activeSource?.hosting === "cloud",
+    useRemoteCatalog:
+      activeSource?.scope === "global" || activeSource?.hosting === "cloud",
+    fallBackToRemoteWhenNoKeys: exploreSession,
   });
 
   useEffect(() => {
@@ -125,14 +133,17 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
   const value = useMemo(
     () => ({
       activeSource,
+      exploreSession,
       modelId,
       rerankBackend,
       testPromptSuggestions,
       availableModels: chatModels.models,
       chatModelsReady: chatModels.ready,
       needsProviderKeys: chatModels.needsKeys,
+      chatUsesRemoteApi: chatModels.useRemoteApi,
       newChatAvailable,
       setActiveSource,
+      setExploreSession,
       setModelId,
       setRerankBackend,
       setTestPromptSuggestions,
@@ -144,12 +155,14 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
     }),
     [
       activeSource,
+      exploreSession,
       modelId,
       rerankBackend,
       testPromptSuggestions,
       chatModels.models,
       chatModels.ready,
       chatModels.needsKeys,
+      chatModels.useRemoteApi,
       newChatAvailable,
       setActiveSource,
       setRerankBackend,

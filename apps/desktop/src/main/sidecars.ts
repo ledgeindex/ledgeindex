@@ -22,12 +22,16 @@ export const DESKTOP_SERVER_PORT = Number(
 
 const LOG_PREFIX = 'desktop-server'
 const ARCHIVE_NAME = 'desktop-server.tar'
+const META_NAME = 'desktop-server.meta.json'
 const VERSION_STAMP = '.ledgeindex-sidecar-version'
 
 let sidecarProcess: ChildProcess | null = null
 let spawnedByUs = false
 let status: SidecarStatus = 'idle'
 let startPromise: Promise<void> | null = null
+/** First-launch extract progress (0–100), null when not extracting / unknown. */
+let setupProgress: number | null = null
+let setupMessage: string | null = null
 
 export function resolveApiOrigin(): string {
   return `http://127.0.0.1:${DESKTOP_SERVER_PORT}`
@@ -59,6 +63,21 @@ function resolveSidecarArchivePath(): string {
   return join(process.resourcesPath, ARCHIVE_NAME)
 }
 
+function resolveSidecarMetaPath(): string {
+  return join(process.resourcesPath, META_NAME)
+}
+
+function readExpectedFileCount(): number | null {
+  try {
+    const metaPath = resolveSidecarMetaPath()
+    if (!existsSync(metaPath)) return null
+    const meta = JSON.parse(readFileSync(metaPath, 'utf8')) as { fileCount?: number }
+    return typeof meta.fileCount === 'number' && meta.fileCount > 0 ? meta.fileCount : null
+  } catch {
+    return null
+  }
+}
+
 /** Runtime cwd for packaged sidecar (extracted tree, writable). */
 function resolveProdDesktopServerDir(): string {
   return join(app.getPath('userData'), 'desktop-server')
@@ -81,10 +100,53 @@ function assertProdDesktopServerReady(serverDir: string): void {
   }
 }
 
+function extractTarWithProgress(
+  archive: string,
+  runtimeDir: string,
+  expectedFiles: number | null
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let extracted = 0
+    const bump = (): void => {
+      extracted += 1
+      if (expectedFiles && expectedFiles > 0) {
+        setupProgress = Math.min(99, Math.round((extracted / expectedFiles) * 100))
+      }
+    }
+
+    // Prefer argv form (no shell) so -xvf works consistently on Windows bsdtar.
+    const child = spawn('tar', ['-xvf', archive, '-C', runtimeDir], {
+      windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+
+    const onChunk = (chunk: Buffer): void => {
+      const text = chunk.toString('utf8')
+      for (const line of text.split(/\r?\n/)) {
+        if (line.trim()) bump()
+      }
+    }
+    child.stdout?.on('data', onChunk)
+    child.stderr?.on('data', onChunk)
+
+    child.on('error', (error) => {
+      reject(error)
+    })
+    child.on('close', (code) => {
+      if (code === 0) {
+        setupProgress = 100
+        resolve()
+        return
+      }
+      reject(new Error(`tar extract failed with code ${code}`))
+    })
+  })
+}
+
 /**
- * Ensure the sidecar tree exists under userData. Installer only ships a .tgz.
+ * Ensure the sidecar tree exists under userData. Installer only ships a .tar.
  */
-function ensureProdDesktopServerExtracted(): string {
+async function ensureProdDesktopServerExtracted(): Promise<string> {
   const runtimeDir = resolveProdDesktopServerDir()
   const archive = resolveSidecarArchivePath()
   const stampPath = join(runtimeDir, VERSION_STAMP)
@@ -102,6 +164,8 @@ function ensureProdDesktopServerExtracted(): string {
   }
 
   if (!needExtract) {
+    setupProgress = null
+    setupMessage = null
     assertProdDesktopServerReady(runtimeDir)
     return runtimeDir
   }
@@ -110,6 +174,8 @@ function ensureProdDesktopServerExtracted(): string {
   const legacyDir = join(process.resourcesPath, 'desktop-server')
   if (!existsSync(archive) && existsSync(join(legacyDir, 'dist', 'start.js'))) {
     console.log('[desktop] using legacy exploded desktop-server at', legacyDir)
+    setupProgress = null
+    setupMessage = null
     return legacyDir
   }
 
@@ -120,24 +186,30 @@ function ensureProdDesktopServerExtracted(): string {
     )
   }
 
+  const expectedFiles = readExpectedFileCount()
+  status = 'extracting'
+  setupProgress = expectedFiles ? 0 : null
+  setupMessage = 'Unpacking local server (first launch only)…'
+
   console.log(
     '[desktop] extracting desktop-server archive (first run or version change)…',
-    { archive, runtimeDir, version }
+    { archive, runtimeDir, version, expectedFiles }
   )
-  status = 'starting'
+
   rmSync(runtimeDir, { recursive: true, force: true })
   mkdirSync(runtimeDir, { recursive: true })
 
-  // Windows 10+ and CI runners ship bsdtar as `tar`.
-  execSync(`tar -xf "${archive}" -C "${runtimeDir}"`, {
-    stdio: 'ignore',
-    windowsHide: true,
-    shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/sh',
-    timeout: 600_000
-  })
+  try {
+    await extractTarWithProgress(archive, runtimeDir, expectedFiles)
+  } catch (error) {
+    setupMessage = 'Setup failed while unpacking'
+    throw error
+  }
 
   writeFileSync(stampPath, `${version}\n`, 'utf8')
   assertProdDesktopServerReady(runtimeDir)
+  setupMessage = 'Starting local server…'
+  setupProgress = 100
   console.log('[desktop] desktop-server extract complete')
   return runtimeDir
 }
@@ -362,9 +434,8 @@ async function waitForReady(timeoutMs = 180_000): Promise<void> {
 }
 
 async function spawnServerSidecar(): Promise<void> {
-  status = 'starting'
-
   if (!app.isPackaged) {
+    status = 'starting'
     freeDesktopServerPortIfNeeded()
     await waitUntilDesktopPortFree()
     // Windows can keep the socket in TIME_WAIT briefly after kill.
@@ -372,7 +443,9 @@ async function spawnServerSidecar(): Promise<void> {
   }
 
   if (app.isPackaged) {
-    const serverDir = ensureProdDesktopServerExtracted()
+    const serverDir = await ensureProdDesktopServerExtracted()
+    status = 'starting'
+    setupMessage = 'Starting local server…'
     console.log('[desktop] spawning packaged @ledgeindex/desktop-server', {
       dir: serverDir,
       port: DESKTOP_SERVER_PORT
@@ -449,6 +522,10 @@ export async function getSidecarHealth(): Promise<SidecarHealth> {
   if (reachable) {
     effective = 'ready'
     if (status !== 'ready') status = 'ready'
+    setupProgress = null
+    setupMessage = null
+  } else if (managedStatus === 'extracting') {
+    effective = 'extracting'
   } else if (managedStatus === 'starting') {
     effective = 'starting'
   } else if (managedStatus === 'error') {
@@ -462,7 +539,10 @@ export async function getSidecarHealth(): Promise<SidecarHealth> {
     managedStatus,
     reachable,
     origin,
-    port: DESKTOP_SERVER_PORT
+    port: DESKTOP_SERVER_PORT,
+    setupProgress: effective === 'extracting' ? setupProgress : null,
+    setupMessage:
+      effective === 'extracting' || effective === 'starting' ? setupMessage : null
   }
 }
 

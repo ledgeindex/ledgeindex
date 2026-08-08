@@ -16,6 +16,7 @@ import {
   MobileAppSidebarProvider,
   useMobileAppSidebar,
 } from "@/contexts/mobile-app-sidebar-context";
+import { AppOnboardingGate } from "@/components/onboarding/app-onboarding";
 import { useLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
 import { cn } from "@/lib/utils";
 
@@ -184,8 +185,10 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   return (
-    <MobileAppSidebarProvider>
-      <AppShellInner>{children}</AppShellInner>
-    </MobileAppSidebarProvider>
+    <AppOnboardingGate>
+      <MobileAppSidebarProvider>
+        <AppShellInner>{children}</AppShellInner>
+      </MobileAppSidebarProvider>
+    </AppOnboardingGate>
   );
 }

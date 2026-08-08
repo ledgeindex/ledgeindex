@@ -68,7 +68,7 @@ export function AppsComingSection() {
  * Isometric app preview: the desktop window sits on the extruded plate stack
  * from the hero, with the phone board floating in front of it.
  */
-function AppsShowcase({ className }: { className?: string }) {
+export function AppsShowcase({ className }: { className?: string }) {
   return (
     <div
       aria-hidden

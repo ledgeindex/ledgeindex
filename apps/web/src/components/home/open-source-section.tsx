@@ -2,6 +2,7 @@ import { Laptop, Package, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Eyebrow, SectionBadge } from "@/components/ui/section-badge";
+import { cn } from "@/lib/utils";
 
 const PILLARS = [
   {
@@ -35,6 +36,40 @@ const TERMINAL_LINES = [
   { prompt: true, text: "LEDGEINDEX_DATA_DIR=~/.ledgeindex ledgeindex-server" },
   { prompt: false, text: "✓ docs + company profiles ready on http://localhost:3010" },
 ] as const;
+
+export function SelfHostTerminal({ className }: { className?: string }) {
+  return (
+    <div
+      className={cn(
+        "overflow-hidden rounded-2xl border border-border bg-card-solid shadow-card",
+        className,
+      )}
+    >
+      <div className="flex items-center gap-1.5 border-b border-border bg-surface-raised px-4 py-2.5">
+        <span aria-hidden className="h-2 w-2 rounded-full bg-border" />
+        <span aria-hidden className="h-2 w-2 rounded-full bg-border" />
+        <span aria-hidden className="h-2 w-2 rounded-full bg-border" />
+        <span className="ml-2 font-mono text-[0.625rem] font-semibold tracking-[0.12em] text-muted uppercase">
+          Self-host in two commands
+        </span>
+      </div>
+      <div className="space-y-1.5 overflow-x-auto p-4 font-mono text-[0.8125rem] leading-6 sm:p-5">
+        {TERMINAL_LINES.map((line) => (
+          <p key={line.text} className="whitespace-nowrap">
+            {line.prompt ? (
+              <span aria-hidden className="mr-2 select-none text-accent">
+                $
+              </span>
+            ) : null}
+            <span className={line.prompt ? "text-foreground" : "text-muted"}>
+              {line.text}
+            </span>
+          </p>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 export function OpenSourceSection() {
   return (
@@ -96,30 +131,7 @@ export function OpenSourceSection() {
           ))}
         </div>
 
-        <div className="mx-auto mt-8 max-w-2xl overflow-hidden rounded-2xl border border-border bg-card-solid shadow-card sm:mt-10">
-          <div className="flex items-center gap-1.5 border-b border-border bg-surface-raised px-4 py-2.5">
-            <span aria-hidden className="h-2 w-2 rounded-full bg-border" />
-            <span aria-hidden className="h-2 w-2 rounded-full bg-border" />
-            <span aria-hidden className="h-2 w-2 rounded-full bg-border" />
-            <span className="ml-2 font-mono text-[0.625rem] font-semibold tracking-[0.12em] text-muted uppercase">
-              Self-host in two commands
-            </span>
-          </div>
-          <div className="space-y-1.5 overflow-x-auto p-4 font-mono text-[0.8125rem] leading-6 sm:p-5">
-            {TERMINAL_LINES.map((line) => (
-              <p key={line.text} className="whitespace-nowrap">
-                {line.prompt ? (
-                  <span aria-hidden className="mr-2 select-none text-accent">
-                    $
-                  </span>
-                ) : null}
-                <span className={line.prompt ? "text-foreground" : "text-muted"}>
-                  {line.text}
-                </span>
-              </p>
-            ))}
-          </div>
-        </div>
+        <SelfHostTerminal className="mx-auto mt-8 max-w-2xl sm:mt-10" />
 
         <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <Button href="https://github.com/ledgeindex" className="w-full sm:w-auto">

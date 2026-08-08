@@ -48,8 +48,7 @@ export function AgentGroundingSection() {
           </div>
 
           <div className="relative">
-            <GroundingBook />
-            <EvidenceHitsCard />
+            <AgentGroundingVisual />
           </div>
         </div>
       </Container>
@@ -58,6 +57,15 @@ export function AgentGroundingSection() {
 }
 
 /* ── Standing book facing the viewer (CSS 3D) ── */
+
+export function AgentGroundingVisual() {
+  return (
+    <>
+      <GroundingBook />
+      <EvidenceHitsCard />
+    </>
+  );
+}
 
 function GroundingBook() {
   return (

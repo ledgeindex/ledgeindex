@@ -82,7 +82,7 @@ const DEPTH_PADDING: Record<TreeNode["depth"], string> = {
   2: "pl-7",
 };
 
-function BuilderWorkbench() {
+export function BuilderWorkbench() {
   return (
     <div aria-hidden className="relative">
       <div className="overflow-hidden rounded-2xl border border-border bg-background shadow-card">

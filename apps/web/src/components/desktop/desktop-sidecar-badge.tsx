@@ -20,6 +20,7 @@ function labelFor(status: SidecarStatus): string {
   switch (status) {
     case "ready":
       return "On";
+    case "extracting":
     case "starting":
       return "Starting";
     case "error":
@@ -33,6 +34,7 @@ function detailFor(health: SidecarHealth): string {
   switch (health.status) {
     case "ready":
       return "Local desktop server is running.";
+    case "extracting":
     case "starting":
       return "Desktop server is starting. First boot can take a bit while packages load.";
     case "error":
@@ -80,7 +82,11 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
         if (cancelled) return;
         setHealth(next);
         const delay =
-          next.status === "starting" ? 750 : next.status === "ready" ? 8_000 : 4_000;
+          next.status === "extracting" || next.status === "starting"
+            ? 750
+            : next.status === "ready"
+              ? 8_000
+              : 4_000;
         timer = setTimeout(() => {
           void poll();
         }, delay);
@@ -131,7 +137,7 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
   const tone =
     health.status === "ready"
       ? "on"
-      : health.status === "starting"
+      : health.status === "starting" || health.status === "extracting"
         ? "starting"
         : health.status === "error"
           ? "error"
@@ -150,7 +156,8 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
           "text-muted backdrop-blur-sm transition-colors",
           "hover:border-foreground/15 hover:text-foreground",
           health.status === "ready" && "text-foreground",
-          health.status === "starting" && "text-muted-strong",
+          (health.status === "starting" || health.status === "extracting") &&
+            "text-muted-strong",
           health.status === "error" && "text-red-600 dark:text-red-400",
         )}
         title="Server status"
@@ -193,7 +200,11 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
                     "text-[0.7rem] font-semibold text-background",
                     "disabled:cursor-not-allowed disabled:opacity-55",
                   )}
-                  disabled={restarting || health.status === "starting"}
+                  disabled={
+                    restarting ||
+                    health.status === "starting" ||
+                    health.status === "extracting"
+                  }
                   onClick={() => void onRestart()}
                 >
                   {restarting ? "Restarting…" : "Restart"}

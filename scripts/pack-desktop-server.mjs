@@ -993,6 +993,24 @@ async function main() {
   log("staged", relative(root, dest));
   await smokeStagedServer();
 
+  // Count files for first-launch extract progress UI.
+  function countFiles(dir) {
+    let n = 0;
+    for (const ent of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, ent.name);
+      if (ent.isDirectory()) n += countFiles(p);
+      else n += 1;
+    }
+    return n;
+  }
+  const fileCount = countFiles(dest);
+  const metaPath = join(dirname(dest), "desktop-server.meta.json");
+  writeFileSync(
+    metaPath,
+    `${JSON.stringify({ fileCount, createdAt: new Date().toISOString() }, null, 2)}\n`,
+  );
+  log(`meta ${relative(root, metaPath)} (fileCount=${fileCount})`);
+
   // One archive for the installer: NSIS + Defender choke on ~50k node_modules files.
   // Uncompressed tar — electron-builder/NSIS already compresses the payload; gzip
   // here only slows pack + first-launch extract for little gain.

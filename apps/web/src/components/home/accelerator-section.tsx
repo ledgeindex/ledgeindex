@@ -183,7 +183,7 @@ function EngineCoreIso() {
 const cnPlateTop = `${PLATE_TOP} overflow-hidden shadow-lg`;
 
 /** Path 1 visual: the widget floating over a mock page on your site. */
-function WidgetOnSiteMock() {
+export function WidgetOnSiteMock() {
   return (
     <div
       aria-hidden

@@ -22,6 +22,8 @@ files:
 extraResources:
   - from: build/desktop-server.tar
     to: desktop-server.tar
+  - from: build/desktop-server.meta.json
+    to: desktop-server.meta.json
   # Tray + runtime icons at resources/ root (process.resourcesPath/icon.png).
   # buildResources alone only feeds electron-builder installers — it does not copy these.
   - from: resources/icon.png

@@ -9,6 +9,7 @@ import { useSourceChatToolbar } from "@/contexts/source-chat-toolbar-context";
 import { DASHBOARD_SCOPE_STORAGE_KEY } from "@/contexts/dashboard-toolbar-context";
 import {
   resolveDesktopLocalApiUrl,
+  resolveDesktopRemoteApiUrl,
   syncDesktopApiBaseForScope,
 } from "@/lib/desktop-api-routing";
 import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
@@ -16,8 +17,9 @@ import { modelSupportsThinking } from "@/lib/chat-thinking-level";
 import { cn } from "@/lib/utils";
 
 /**
- * Tool-using chat: discover personal + global sources, then retrieve evidence.
- * Desktop: chat runs on local sidecar; personal sources are local, globals may proxy remote.
+ * Playground chat: discover personal + global sources, then retrieve evidence.
+ * Desktop without local model keys uses the hosted cloud API (no key gate).
+ * With local keys, chat runs on the sidecar so personal indexes are included.
  */
 export default function ExploreChatPage(): React.JSX.Element {
   const {
@@ -27,13 +29,23 @@ export default function ExploreChatPage(): React.JSX.Element {
     availableModels,
     chatModelsReady,
     needsProviderKeys,
+    chatUsesRemoteApi,
+    setExploreSession,
   } = useSourceChatToolbar();
   const isDesktop = Boolean(getLedgeIndexDesktop());
 
   useEffect(() => {
+    setExploreSession(true);
+    return () => setExploreSession(false);
+  }, [setExploreSession]);
+
+  useEffect(() => {
     if (!isDesktop) return;
-    // Explore agent + local LLM keys live on :3015 even when Public is selected.
-    setLedgeIndexApiBaseUrl(resolveDesktopLocalApiUrl());
+    setLedgeIndexApiBaseUrl(
+      chatUsesRemoteApi
+        ? resolveDesktopRemoteApiUrl()
+        : resolveDesktopLocalApiUrl(),
+    );
     return () => {
       const stored =
         typeof window !== "undefined"
@@ -41,7 +53,7 @@ export default function ExploreChatPage(): React.JSX.Element {
           : null;
       syncDesktopApiBaseForScope(stored === "global" ? "global" : "personal");
     };
-  }, [isDesktop]);
+  }, [isDesktop, chatUsesRemoteApi]);
 
   const modelSelect =
     needsProviderKeys ? (
@@ -66,42 +78,51 @@ export default function ExploreChatPage(): React.JSX.Element {
       />
     ) : null;
 
+  // Playground falls back to cloud when there are no local keys, so this gate
+  // should only appear in edge cases (e.g. misconfigured remote catalog).
+  if (needsProviderKeys) {
+    return (
+      <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-start justify-center gap-3 p-6">
+        <div className="w-full rounded-xl border border-border bg-card-solid p-6 shadow-card">
+          <h2 className="text-base font-semibold text-foreground">
+            Add a model API key
+          </h2>
+          <p className="mt-2 text-sm text-muted">
+            Cloud Playground should work without local keys. If you see this,
+            add OpenAI, Gemini, or DeepSeek for local models, or check your
+            connection.
+          </p>
+          {isDesktop ? (
+            <Link
+              href="/settings/providers"
+              className="mt-4 inline-flex h-9 items-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-surface-raised"
+            >
+              Open Model keys
+            </Link>
+          ) : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden">
-      {needsProviderKeys ? (
-        <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-start justify-center gap-3 p-6">
-          <div className="w-full rounded-xl border border-border bg-card-solid p-6 shadow-card">
-            <h2 className="text-base font-semibold text-foreground">
-              Add a model API key
-            </h2>
-            <p className="mt-2 text-sm text-muted">
-              Explore chat needs OpenAI, Gemini, or DeepSeek configured
-              {isDesktop ? " for this desktop app" : ""}.
-            </p>
-            {isDesktop ? (
-              <Link
-                href="/settings/providers"
-                className="mt-4 inline-flex h-9 items-center rounded-lg border border-border bg-background px-3 text-sm font-medium text-foreground hover:bg-surface-raised"
-              >
-                Open Model keys
-              </Link>
-            ) : null}
-          </div>
-        </div>
-      ) : (
-        <StreamingChatPanel
-          key={`${modelId}-${rerankBackend}`}
-          chatId={`explore-chat-${modelId}-${rerankBackend}`}
-          agent="exploreAgent"
-          modelId={modelId}
-          rerankBackend={rerankBackend}
-          showDeepThinkingToggle={modelSupportsThinking(modelId)}
-          inputPlaceholder="Ask about your sources…"
-          emptyHint="Ask what sources are available (personal or global), or ask a question — Explore will pick up to 3 sources and answer from the evidence."
-          toolbarEnd={modelSelect}
-          className="min-h-0 flex-1 rounded-none border-0 shadow-none"
-        />
-      )}
+      <StreamingChatPanel
+        key={`${modelId}-${rerankBackend}-${chatUsesRemoteApi ? "cloud" : "local"}`}
+        chatId={`explore-chat-${modelId}-${rerankBackend}`}
+        agent="exploreAgent"
+        modelId={modelId}
+        rerankBackend={rerankBackend}
+        showDeepThinkingToggle={modelSupportsThinking(modelId)}
+        inputPlaceholder="Ask about your sources…"
+        emptyHint={
+          chatUsesRemoteApi
+            ? "Using cloud models — ask about public or cloud sources. Add Model keys in Settings to include local personal indexes."
+            : "Ask what sources are available (personal or global), or ask a question. Playground picks up to 3 sources and answers from the evidence."
+        }
+        toolbarEnd={modelSelect}
+        className="min-h-0 flex-1 rounded-none border-0 shadow-none"
+      />
     </div>
   );
 }

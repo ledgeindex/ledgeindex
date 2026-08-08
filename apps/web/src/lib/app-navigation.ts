@@ -29,7 +29,7 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
   },
   {
     id: "explore-chat",
-    label: "Explore",
+    label: "Playground",
     href: "/chat",
     icon: MessageSquare,
   },
