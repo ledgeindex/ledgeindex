@@ -9,7 +9,7 @@ import {
   openInAppDevTools,
   toggleInAppDevTools
 } from './devtools'
-import { DESKTOP_BROWSER_USER_AGENT, isAuthNavigationUrl } from './web-app-url'
+import { DESKTOP_BROWSER_USER_AGENT } from './web-app-url'
 import {
   DESKTOP_SERVER_PORT,
   ensureApiRunning,
@@ -66,30 +66,11 @@ function createWindow(): void {
   })
 
   win.webContents.setWindowOpenHandler((details) => {
-    const { url } = details
-    if (isAuthNavigationUrl(url)) {
-      return {
-        action: 'allow',
-        overrideBrowserWindowOptions: {
-          width: 520,
-          height: 720,
-          autoHideMenuBar: true,
-          title: 'Sign in',
-          webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            sandbox: true
-          }
-        }
-      }
-    }
-    void shell.openExternal(url)
+    // Never open target=_blank inside Electron (esp. Google auth — blocked as
+    // insecure embedded browser). Desktop Google sign-in uses shell.openExternal
+    // + loopback in google-oauth-loopback.ts.
+    void shell.openExternal(details.url)
     return { action: 'deny' }
-  })
-
-  win.webContents.on('did-create-window', (child) => {
-    child.webContents.setUserAgent(DESKTOP_BROWSER_USER_AGENT)
-    child.setMenuBarVisibility(false)
   })
 
   attachDevToolsKeyboardShortcuts(win)
@@ -121,8 +102,8 @@ function createWindow(): void {
     if (is.dev) openInAppDevTools(win)
   })
 
-  // Packaged UI stays on file:// (ActiveHue pattern). Auth uses a short-lived
-  // OAuth loopback on 127.0.0.1 — see google-oauth-loopback.ts.
+  // Packaged UI stays on file://. Google sign-in opens the system browser and
+  // returns via 127.0.0.1 loopback — see google-oauth-loopback.ts.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {

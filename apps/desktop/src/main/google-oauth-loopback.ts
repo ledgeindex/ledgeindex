@@ -1,11 +1,11 @@
 /**
- * ActiveHue-style Google OAuth loopback for packaged Electron.
- * UI stays on file://; only the OAuth callback uses http://127.0.0.1.
+ * Google OAuth loopback for packaged Electron (RFC 8252).
+ * Opens the system browser — Google blocks OAuth inside Electron BrowserWindows
+ * ("This browser or app may not be secure"). Callback still hits http://127.0.0.1.
  * Renderer then calls Firebase signInWithCredential(idToken).
  */
-import { BrowserWindow, ipcMain } from 'electron'
+import { ipcMain, shell } from 'electron'
 import { createServer, type Server } from 'node:http'
-import { DESKTOP_BROWSER_USER_AGENT } from './web-app-url'
 
 /** Avoid sidecar :3015; ActiveHue used :3011. */
 const REDIRECT_PORT = Number(
@@ -13,6 +13,7 @@ const REDIRECT_PORT = Number(
 )
 const REDIRECT_PATH = '/oauth2callback'
 const REDIRECT_URI = `http://127.0.0.1:${REDIRECT_PORT}${REDIRECT_PATH}`
+const OAUTH_TIMEOUT_MS = 5 * 60 * 1000
 
 function resolveGoogleDesktopCredentials(): { clientId: string; clientSecret: string } {
   const clientId = (
@@ -37,23 +38,19 @@ async function getGoogleIdToken(): Promise<string> {
   }
 
   let server: Server | null = null
-  let authWin: BrowserWindow | null = null
+  let timeoutId: ReturnType<typeof setTimeout> | null = null
 
   const cleanup = (): void => {
+    if (timeoutId) {
+      clearTimeout(timeoutId)
+      timeoutId = null
+    }
     try {
       server?.close()
     } catch {
       // ignore
     }
     server = null
-    if (authWin && !authWin.isDestroyed()) {
-      try {
-        authWin.close()
-      } catch {
-        // ignore
-      }
-    }
-    authWin = null
   }
 
   const codePromise = new Promise<string>((resolve, reject) => {
@@ -68,7 +65,7 @@ async function getGoogleIdToken(): Promise<string> {
         const err = urlObj.searchParams.get('error')
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' })
         res.end(
-          '<!doctype html><html><body style="font-family:system-ui;padding:2rem"><h2>Signed in</h2><p>You can close this window and return to LedgeIndex.</p></body></html>'
+          '<!doctype html><html><body style="font-family:system-ui;padding:2rem"><h2>Signed in</h2><p>You can close this tab and return to LedgeIndex.</p></body></html>'
         )
         cleanup()
         if (err) {
@@ -94,6 +91,11 @@ async function getGoogleIdToken(): Promise<string> {
     server.listen(REDIRECT_PORT, '127.0.0.1', () => {
       console.log(`[desktop] OAuth callback listening at ${REDIRECT_URI}`)
     })
+
+    timeoutId = setTimeout(() => {
+      cleanup()
+      reject(new Error('Google sign-in timed out. Complete sign-in in your browser, then try again.'))
+    }, OAUTH_TIMEOUT_MS)
   })
 
   const authUrl = [
@@ -105,23 +107,15 @@ async function getGoogleIdToken(): Promise<string> {
     '&prompt=select_account'
   ].join('')
 
-  authWin = new BrowserWindow({
-    width: 520,
-    height: 720,
-    autoHideMenuBar: true,
-    title: 'Sign in with Google',
-    webPreferences: {
-      nodeIntegration: false,
-      contextIsolation: true,
-      sandbox: true
-    }
-  })
-  authWin.setMenuBarVisibility(false)
-  authWin.webContents.setUserAgent(DESKTOP_BROWSER_USER_AGENT)
-  authWin.on('closed', () => {
-    authWin = null
-  })
-  void authWin.loadURL(authUrl)
+  // System browser only — embedded Electron Chromium is blocked by Google.
+  try {
+    await shell.openExternal(authUrl)
+  } catch (error) {
+    cleanup()
+    throw error instanceof Error
+      ? error
+      : new Error('Could not open the system browser for Google sign-in')
+  }
 
   let authorizationCode: string
   try {

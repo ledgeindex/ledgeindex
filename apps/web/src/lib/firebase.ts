@@ -72,7 +72,8 @@ export function isLedgeIndexDesktopShell(): boolean {
 
 /**
  * Google sign-in.
- * Desktop: ActiveHue loopback OAuth → signInWithCredential (works with file://).
+ * Desktop: system-browser OAuth + 127.0.0.1 loopback → signInWithCredential
+ * (Electron BrowserWindow is blocked by Google as an insecure embedded browser).
  * Web: signInWithPopup.
  */
 export async function signInWithGoogle(): Promise<UserCredential | null> {

@@ -15,16 +15,13 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-# Packaged sidecar: Electron main spawns resources/desktop-server/dist/start.js
-# (see src/main/sidecars.ts). Two-step copy so electron-builder does not drop node_modules.
+# Packaged sidecar: ship ONE archive (not ~50k node_modules files).
+# NSIS + Windows Defender install time scales with file count; a single .tar
+# keeps the installer fast. Electron extracts to userData on first launch
+# (see src/main/sidecars.ts).
 extraResources:
-  - from: build/desktop-server
-    to: desktop-server
-    filter:
-      - '**/*'
-      - '!**/node_modules/**'
-  - from: build/desktop-server/node_modules
-    to: desktop-server/node_modules
+  - from: build/desktop-server.tar
+    to: desktop-server.tar
   # Tray + runtime icons at resources/ root (process.resourcesPath/icon.png).
   # buildResources alone only feeds electron-builder installers — it does not copy these.
   - from: resources/icon.png

@@ -2,9 +2,13 @@
 /**
  * Build + stage @ledgeindex/desktop-server for electron-builder extraResources.
  *
- * Output: apps/desktop/build/desktop-server/{dist/start.js,package.json,node_modules}
+ * Output:
+ *   apps/desktop/build/desktop-server/   — staged tree (smoke + debug)
+ *   apps/desktop/build/desktop-server.tar — single archive for electron-builder
+ *     (installer ships the .tar; app extracts to userData on first launch)
+ *
  * Spawned in prod as: ELECTRON_RUN_AS_NODE=1 <electron> dist/start.js
- * with cwd = resources/desktop-server
+ * with cwd = userData/desktop-server (extracted from the archive)
  *
  * Copies a production dependency tree by resolving each package's dependencies
  * from that package's directory (Node's real module algorithm via createRequire),
@@ -21,6 +25,7 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  statSync,
   symlinkSync,
   unlinkSync,
   writeFileSync,
@@ -987,6 +992,28 @@ async function main() {
 
   log("staged", relative(root, dest));
   await smokeStagedServer();
+
+  // One archive for the installer: NSIS + Defender choke on ~50k node_modules files.
+  // Uncompressed tar — electron-builder/NSIS already compresses the payload; gzip
+  // here only slows pack + first-launch extract for little gain.
+  // Electron extracts this on first launch into userData (see sidecars.ts).
+  const archivePath = join(dirname(dest), "desktop-server.tar");
+  if (existsSync(archivePath)) {
+    rmSync(archivePath, { force: true });
+  }
+  log(
+    "creating desktop-server.tar (single archive for fast NSIS install)…",
+  );
+  execSync(`tar -cf "${archivePath}" -C "${dest}" .`, {
+    stdio: "inherit",
+    shell: process.platform === "win32" ? "cmd.exe" : "/bin/sh",
+    cwd: root,
+  });
+  if (!existsSync(archivePath)) {
+    throw new Error(`Failed to create ${archivePath}`);
+  }
+  const archiveMb = (statSync(archivePath).size / (1024 * 1024)).toFixed(1);
+  log(`archive ${relative(root, archivePath)} (${archiveMb} MB)`);
 }
 
 main().catch((err) => {

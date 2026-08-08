@@ -1,5 +1,5 @@
 import { execSync, spawn, type ChildProcess } from 'node:child_process'
-import { existsSync } from 'node:fs'
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { app, net } from 'electron'
 import type { SidecarHealth, SidecarStatus } from '../shared/sidecar-health'
@@ -9,6 +9,10 @@ import type { SidecarHealth, SidecarStatus } from '../shared/sidecar-health'
  *
  * Dedicated port — never share :3010 with web / AG / ledgeindex-api.
  * Never reuse an orphan process on our port; only the Electron-managed sidecar.
+ *
+ * Packaged layout: installer ships resources/desktop-server.tar (one file).
+ * First launch extracts into userData/desktop-server so NSIS does not copy
+ * ~50k node_modules files (that made installs take many minutes).
  */
 
 /** Desktop-only API port (web/AG keep 3010). */
@@ -17,6 +21,8 @@ export const DESKTOP_SERVER_PORT = Number(
 )
 
 const LOG_PREFIX = 'desktop-server'
+const ARCHIVE_NAME = 'desktop-server.tar'
+const VERSION_STAMP = '.ledgeindex-sidecar-version'
 
 let sidecarProcess: ChildProcess | null = null
 let spawnedByUs = false
@@ -49,8 +55,13 @@ function resolveDesktopServerDevDir(): string {
   return candidates[0]
 }
 
+function resolveSidecarArchivePath(): string {
+  return join(process.resourcesPath, ARCHIVE_NAME)
+}
+
+/** Runtime cwd for packaged sidecar (extracted tree, writable). */
 function resolveProdDesktopServerDir(): string {
-  return join(process.resourcesPath, 'desktop-server')
+  return join(app.getPath('userData'), 'desktop-server')
 }
 
 /** Fail fast with a clear message instead of Node's opaque ENOENT on missing cwd. */
@@ -59,15 +70,76 @@ function assertProdDesktopServerReady(serverDir: string): void {
   if (!existsSync(serverDir)) {
     throw new Error(
       `Packaged desktop-server missing at ${serverDir}. ` +
-        `Expected electron-builder extraResources (run: node scripts/pack-desktop-server.mjs before packaging).`
+        `Expected extracted sidecar (run pack + reinstall).`
     )
   }
   if (!existsSync(startJs)) {
     throw new Error(
       `Packaged desktop-server entry missing: ${startJs}. ` +
-        `Rebuild the sidecar (node scripts/pack-desktop-server.mjs) and re-package the app.`
+        `Delete %APPDATA%\\ledgeindex-desktop\\desktop-server and restart to re-extract.`
     )
   }
+}
+
+/**
+ * Ensure the sidecar tree exists under userData. Installer only ships a .tgz.
+ */
+function ensureProdDesktopServerExtracted(): string {
+  const runtimeDir = resolveProdDesktopServerDir()
+  const archive = resolveSidecarArchivePath()
+  const stampPath = join(runtimeDir, VERSION_STAMP)
+  const version = app.getVersion()
+  const startJs = join(runtimeDir, 'dist', 'start.js')
+
+  let needExtract = !existsSync(startJs)
+  if (!needExtract) {
+    try {
+      const stamped = existsSync(stampPath) ? readFileSync(stampPath, 'utf8').trim() : ''
+      if (stamped !== version) needExtract = true
+    } catch {
+      needExtract = true
+    }
+  }
+
+  if (!needExtract) {
+    assertProdDesktopServerReady(runtimeDir)
+    return runtimeDir
+  }
+
+  // Legacy installers shipped an exploded resources/desktop-server tree.
+  const legacyDir = join(process.resourcesPath, 'desktop-server')
+  if (!existsSync(archive) && existsSync(join(legacyDir, 'dist', 'start.js'))) {
+    console.log('[desktop] using legacy exploded desktop-server at', legacyDir)
+    return legacyDir
+  }
+
+  if (!existsSync(archive)) {
+    throw new Error(
+      `Missing ${ARCHIVE_NAME} at ${archive}. ` +
+        `Rebuild with pack-desktop-server.mjs (creates build/desktop-server.tar).`
+    )
+  }
+
+  console.log(
+    '[desktop] extracting desktop-server archive (first run or version change)…',
+    { archive, runtimeDir, version }
+  )
+  status = 'starting'
+  rmSync(runtimeDir, { recursive: true, force: true })
+  mkdirSync(runtimeDir, { recursive: true })
+
+  // Windows 10+ and CI runners ship bsdtar as `tar`.
+  execSync(`tar -xf "${archive}" -C "${runtimeDir}"`, {
+    stdio: 'ignore',
+    windowsHide: true,
+    shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/sh',
+    timeout: 600_000
+  })
+
+  writeFileSync(stampPath, `${version}\n`, 'utf8')
+  assertProdDesktopServerReady(runtimeDir)
+  console.log('[desktop] desktop-server extract complete')
+  return runtimeDir
 }
 
 function ledgeindexDataDir(): string {
@@ -300,8 +372,7 @@ async function spawnServerSidecar(): Promise<void> {
   }
 
   if (app.isPackaged) {
-    const serverDir = resolveProdDesktopServerDir()
-    assertProdDesktopServerReady(serverDir)
+    const serverDir = ensureProdDesktopServerExtracted()
     console.log('[desktop] spawning packaged @ledgeindex/desktop-server', {
       dir: serverDir,
       port: DESKTOP_SERVER_PORT
