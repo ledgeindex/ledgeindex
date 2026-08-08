@@ -63,8 +63,21 @@ type SourceChatToolbarContextValue = {
   requestNewChat: () => void;
 };
 
+// Survive Vite HMR: mixed component/hook exports invalidate this module and
+// recreate createContext() while an old Provider instance can stay mounted —
+// consumers then see null and throw. One Context identity across reloads.
+const sourceChatToolbarGlobal = globalThis as typeof globalThis & {
+  __ledgeindexSourceChatToolbarContext?: ReturnType<
+    typeof createContext<SourceChatToolbarContextValue | null>
+  >;
+};
+
 const SourceChatToolbarContext =
+  sourceChatToolbarGlobal.__ledgeindexSourceChatToolbarContext ??
   createContext<SourceChatToolbarContextValue | null>(null);
+
+sourceChatToolbarGlobal.__ledgeindexSourceChatToolbarContext =
+  SourceChatToolbarContext;
 
 export function SourceChatToolbarProvider({ children }: { children: ReactNode }) {
   const { isAdmin } = useAuth();

@@ -4,6 +4,7 @@ import { setLedgeIndexApiBaseUrl } from '@ledgeindex/client'
 import { Providers } from '@/components/providers'
 import { RequireAuthShell } from '@/components/auth/require-auth-shell'
 import { AppShell } from '@/components/app/app-shell'
+import { AppErrorBoundary } from '@/components/error-boundary'
 import { IndexedFlashProvider } from '@/contexts/indexed-flash-context'
 import { DashboardToolbarProvider } from '@/contexts/dashboard-toolbar-context'
 import { SourceChatToolbarProvider } from '@/contexts/source-chat-toolbar-context'
@@ -31,37 +32,41 @@ const FALLBACK_DESKTOP_API = 'http://127.0.0.1:3015'
 function AuthenticatedApp(): React.JSX.Element {
   return (
     <RequireAuthShell>
-      <IndexedFlashProvider>
-        <DashboardToolbarProvider>
-          <SourceChatToolbarProvider>
-            <SourceBuilderToolbarProvider>
-              <AppShell>
-                <Routes>
-                  <Route path="/dashboard" element={<DashboardPage />} />
-                  <Route path="/sources/web-crawl" element={<WebCrawlPage />} />
-                  <Route path="/sources/builder" element={<SourceBuilderPage />} />
-                  <Route
-                    path="/sources/builder/:draftId"
-                    element={<SourceBuilderDraftPage />}
-                  />
-                  <Route path="/sources/:sourceId/chat" element={<SourceChatPage />} />
-                  <Route path="/source-sets" element={<SourceSetsPage />} />
-                  <Route path="/mcp/connect" element={<McpConnectPage />} />
-                  <Route path="/api-keys" element={<ApiKeysPage />} />
-                  <Route
-                    path="/settings/providers"
-                    element={<DesktopProviderKeysPage />}
-                  />
-                  <Route path="/admin/users" element={<AdminUsersPage />} />
-                  <Route path="/chat" element={<ExploreChatPage />} />
-                  <Route path="/" element={<Navigate to="/chat" replace />} />
-                  <Route path="*" element={<Navigate to="/chat" replace />} />
-                </Routes>
-              </AppShell>
-            </SourceBuilderToolbarProvider>
-          </SourceChatToolbarProvider>
-        </DashboardToolbarProvider>
-      </IndexedFlashProvider>
+      <AppErrorBoundary label="desktop-app">
+        <IndexedFlashProvider>
+          <DashboardToolbarProvider>
+            <SourceChatToolbarProvider>
+              <SourceBuilderToolbarProvider>
+                <AppShell>
+                  <AppErrorBoundary label="page">
+                    <Routes>
+                      <Route path="/dashboard" element={<DashboardPage />} />
+                      <Route path="/sources/web-crawl" element={<WebCrawlPage />} />
+                      <Route path="/sources/builder" element={<SourceBuilderPage />} />
+                      <Route
+                        path="/sources/builder/:draftId"
+                        element={<SourceBuilderDraftPage />}
+                      />
+                      <Route path="/sources/:sourceId/chat" element={<SourceChatPage />} />
+                      <Route path="/source-sets" element={<SourceSetsPage />} />
+                      <Route path="/mcp/connect" element={<McpConnectPage />} />
+                      <Route path="/api-keys" element={<ApiKeysPage />} />
+                      <Route
+                        path="/settings/providers"
+                        element={<DesktopProviderKeysPage />}
+                      />
+                      <Route path="/admin/users" element={<AdminUsersPage />} />
+                      <Route path="/chat" element={<ExploreChatPage />} />
+                      <Route path="/" element={<Navigate to="/chat" replace />} />
+                      <Route path="*" element={<Navigate to="/chat" replace />} />
+                    </Routes>
+                  </AppErrorBoundary>
+                </AppShell>
+              </SourceBuilderToolbarProvider>
+            </SourceChatToolbarProvider>
+          </DashboardToolbarProvider>
+        </IndexedFlashProvider>
+      </AppErrorBoundary>
     </RequireAuthShell>
   )
 }
@@ -89,12 +94,14 @@ export default function App(): React.JSX.Element {
 
   return (
     <Providers>
-      <HashRouter>
-        <Routes>
-          <Route path="/login" element={<LoginPage />} />
-          <Route path="/*" element={<AuthenticatedApp />} />
-        </Routes>
-      </HashRouter>
+      <AppErrorBoundary label="root">
+        <HashRouter>
+          <Routes>
+            <Route path="/login" element={<LoginPage />} />
+            <Route path="/*" element={<AuthenticatedApp />} />
+          </Routes>
+        </HashRouter>
+      </AppErrorBoundary>
     </Providers>
   )
 }
