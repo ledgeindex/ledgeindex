@@ -32,6 +32,20 @@ import { registerGoogleOAuthIpc } from './google-oauth-loopback'
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
 
+/** ERR_ABORTED — normal during navigation, not a failure worth retrying. */
+const ERR_ABORTED = -3
+/** Safety net only. A healthy start loads on the first attempt. */
+const MAX_RENDERER_LOAD_ATTEMPTS = 3
+
+function loadRenderer(win: BrowserWindow): Promise<void> {
+  // Packaged UI stays on file://. Google sign-in opens the system browser and
+  // returns via 127.0.0.1 loopback — see google-oauth-loopback.ts.
+  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
+    return win.loadURL(process.env['ELECTRON_RENDERER_URL'])
+  }
+  return win.loadFile(join(__dirname, '../renderer/index.html'))
+}
+
 function createWindow(): void {
   const preloadPath = join(__dirname, '../preload/index.js')
   const prefs = getAppPreferences()
@@ -58,8 +72,38 @@ function createWindow(): void {
   mainWindow = win
   win.webContents.setUserAgent(DESKTOP_BROWSER_USER_AGENT)
 
-  win.webContents.on('did-fail-load', (_event, code, desc, url) => {
-    console.error('[desktop] renderer did-fail-load', { code, desc, url })
+  // Only ever reveals the window on first paint or on a dead renderer. Must not
+  // re-show later: the user closing to tray also makes the window invisible.
+  let hasRevealedWindow = false
+  const revealWindowOnce = (): void => {
+    if (win.isDestroyed() || hasRevealedWindow || prefs.startInTray) return
+    hasRevealedWindow = true
+    win.show()
+    if (is.dev) openInAppDevTools(win)
+  }
+
+  // A single failed load used to leave the window blank white until restart,
+  // e.g. when Chromium's network service restarts mid-load.
+  let loadAttempts = 1
+  win.webContents.on('did-fail-load', (_event, code, desc, url, isMainFrame) => {
+    if (!isMainFrame || code === ERR_ABORTED) return
+    console.error('[desktop] renderer did-fail-load', { code, desc, url, loadAttempts })
+    if (loadAttempts >= MAX_RENDERER_LOAD_ATTEMPTS) {
+      console.error('[desktop] giving up on renderer load after', loadAttempts, 'attempts')
+      // ready-to-show never fires for a renderer that never painted; show the
+      // window anyway so the app is not just a tray icon with no explanation.
+      revealWindowOnce()
+      return
+    }
+    const delay = Math.min(2_000, 250 * loadAttempts)
+    loadAttempts += 1
+    setTimeout(() => {
+      if (win.isDestroyed()) return
+      void loadRenderer(win)
+    }, delay)
+  })
+  win.webContents.on('did-finish-load', () => {
+    loadAttempts = 1
   })
   win.webContents.on('render-process-gone', (_event, details) => {
     console.error('[desktop] renderer process gone', details)
@@ -93,22 +137,9 @@ function createWindow(): void {
     if (mainWindow === win) mainWindow = null
   })
 
-  win.once('ready-to-show', () => {
-    if (win.isDestroyed()) return
-    if (prefs.startInTray) {
-      return
-    }
-    win.show()
-    if (is.dev) openInAppDevTools(win)
-  })
+  win.once('ready-to-show', revealWindowOnce)
 
-  // Packaged UI stays on file://. Google sign-in opens the system browser and
-  // returns via 127.0.0.1 loopback — see google-oauth-loopback.ts.
-  if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
-    void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
-  } else {
-    void win.loadFile(join(__dirname, '../renderer/index.html'))
-  }
+  void loadRenderer(win)
 }
 
 app.whenReady().then(async () => {

@@ -1,5 +1,6 @@
-import { execSync, spawn, type ChildProcess } from 'node:child_process'
+import { spawn, type ChildProcess } from 'node:child_process'
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { createConnection } from 'node:net'
 import { join } from 'node:path'
 import { app, net } from 'electron'
 import type { SidecarHealth, SidecarStatus } from '../shared/sidecar-health'
@@ -259,7 +260,10 @@ function buildSidecarEnv(): NodeJS.ProcessEnv {
     LEDGEINDEX_PROFILES: process.env.LEDGEINDEX_PROFILES?.trim() || 'docs,profile',
     LEDGEINDEX_DATA_DIR: ledgeindexDataDir(),
     LEDGEINDEX_AUTH_REQUIRED: process.env.LEDGEINDEX_AUTH_REQUIRED ?? '0',
-    LEDGEINDEX_LOCAL_USER_ID: process.env.LEDGEINDEX_LOCAL_USER_ID ?? 'ledgeindex-desktop-local'
+    LEDGEINDEX_LOCAL_USER_ID: process.env.LEDGEINDEX_LOCAL_USER_ID ?? 'ledgeindex-desktop-local',
+    // Sidecar exits on its own if Electron dies without stopping it, so no
+    // orphan can keep holding our port until the next launch.
+    LEDGEINDEX_PARENT_PID: String(process.pid)
   }
 }
 
@@ -282,67 +286,108 @@ async function probeServerReady(timeoutMs = 2000): Promise<boolean> {
   return isReachable(`${origin}/health`, timeoutMs)
 }
 
-function isPortListeningSync(port: number): boolean {
-  try {
-    if (process.platform === 'win32') {
-      const out = execSync(`netstat -ano | findstr :${port}`, {
-        encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore'],
-        timeout: 3_000,
-        windowsHide: true
-      })
-      return /LISTENING/i.test(out)
+/**
+ * TCP connect probe. Never use execSync (netstat/npx/powershell) on the main
+ * thread: it blocks Electron's event loop, so the window cannot paint or show.
+ */
+function isPortListening(port: number, timeoutMs = 400): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = createConnection({ host: '127.0.0.1', port })
+    let settled = false
+    const finish = (listening: boolean): void => {
+      if (settled) return
+      settled = true
+      socket.destroy()
+      resolve(listening)
     }
-    const out = execSync(`lsof -nP -iTCP:${port} -sTCP:LISTEN`, {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'ignore'],
-      timeout: 3_000
-    })
-    return out.trim().length > 0
+    socket.setTimeout(timeoutMs)
+    socket.once('connect', () => finish(true))
+    socket.once('timeout', () => finish(false))
+    socket.once('error', () => finish(false))
+  })
+}
+
+/** Pid of the sidecar we last spawned, so a leftover can be reclaimed by pid. */
+function sidecarPidFile(): string {
+  return join(app.getPath('userData'), 'desktop-server.pid')
+}
+
+function rememberSidecarPid(pid: number | undefined): void {
+  if (!pid) return
+  try {
+    writeFileSync(sidecarPidFile(), String(pid), 'utf8')
+  } catch {
+    // Losing the pid only costs us the reclaim path below.
+  }
+}
+
+function forgetSidecarPid(): void {
+  try {
+    rmSync(sidecarPidFile(), { force: true })
+  } catch {
+    // Nothing to clean up.
+  }
+}
+
+function readSidecarPid(): number | null {
+  try {
+    const pid = Number.parseInt(readFileSync(sidecarPidFile(), 'utf8').trim(), 10)
+    return Number.isInteger(pid) && pid > 0 ? pid : null
+  } catch {
+    return null
+  }
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
   } catch {
     return false
   }
 }
 
-function freeDesktopServerPortIfNeeded(): void {
-  if (app.isPackaged) return
+/**
+ * Reclaim our port from a sidecar that outlived a previous run. Only ever kills
+ * the pid we recorded ourselves — never "whatever owns the port", which could be
+ * the user's own `npm run dev` or an unrelated app.
+ *
+ * Returns true when a process was actually killed.
+ */
+async function reclaimPortIfNeeded(): Promise<boolean> {
+  // Normal case: the sidecar exits with us, so nothing is listening here.
+  if (!(await isPortListening(DESKTOP_SERVER_PORT))) {
+    forgetSidecarPid()
+    return false
+  }
 
-  const listening = isPortListeningSync(DESKTOP_SERVER_PORT)
-  // Health can succeed from an orphan even when netstat briefly looks empty.
-  // Always clear the port in that case before we spawn our managed process.
-  console.log(
-    '[desktop]',
-    listening ? 'freeing dedicated port' : 'ensuring dedicated port is clear',
-    DESKTOP_SERVER_PORT
-  )
+  const pid = readSidecarPid()
+  if (pid === null || !isProcessAlive(pid)) {
+    console.warn(
+      '[desktop] port',
+      DESKTOP_SERVER_PORT,
+      'is held by a process we did not start — refusing to kill it.',
+      'Stop whatever is using it, or set LEDGEINDEX_DESKTOP_SERVER_PORT to a free port.'
+    )
+    forgetSidecarPid()
+    return false
+  }
+
+  console.log('[desktop] reclaiming port', DESKTOP_SERVER_PORT, 'from previous sidecar', pid)
   try {
-    execSync(`npx --yes kill-port ${DESKTOP_SERVER_PORT}`, {
-      stdio: 'ignore',
-      // execSync types require a shell path (boolean is only valid for spawn).
-      shell: process.platform === 'win32' ? 'cmd.exe' : '/bin/sh',
-      timeout: 15_000
-    })
+    process.kill(pid)
   } catch {
-    // Port may already be free.
+    // Already gone between the liveness check and here.
   }
-
-  if (process.platform === 'win32') {
-    try {
-      execSync(
-        `powershell -NoProfile -Command "Get-NetTCPConnection -LocalPort ${DESKTOP_SERVER_PORT} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"`,
-        { stdio: 'ignore', timeout: 10_000, windowsHide: true }
-      )
-    } catch {
-      // Port may already be free.
-    }
-  }
+  forgetSidecarPid()
+  return true
 }
 
 async function waitUntilDesktopPortFree(timeoutMs = 10_000): Promise<void> {
   const deadline = Date.now() + timeoutMs
   while (Date.now() < deadline) {
-    const listening = isPortListeningSync(DESKTOP_SERVER_PORT)
-    const healthy = await probeServerReady(400)
+    const listening = await isPortListening(DESKTOP_SERVER_PORT)
+    const healthy = listening ? await probeServerReady(400) : false
     if (!listening && !healthy) return
     await new Promise((r) => setTimeout(r, 200))
   }
@@ -362,20 +407,13 @@ function logService(chunk: Buffer, stream: 'out' | 'err'): void {
   }
 }
 
-function killSidecarProcessTree(child: ChildProcess): void {
-  if (!child.pid) {
-    child.kill()
-    return
-  }
-  if (process.platform === 'win32') {
-    try {
-      execSync(`taskkill /pid ${child.pid} /T /F`, { stdio: 'ignore' })
-    } catch {
-      child.kill()
-    }
-    return
-  }
-  child.kill('SIGTERM')
+/**
+ * The sidecar is a single process (Electron-as-Node), so a plain kill is
+ * enough — no blocking `taskkill /T` on the main thread during quit. If a kill
+ * ever misses, the sidecar's parent-pid watchdog stops it seconds later.
+ */
+function killSidecar(child: ChildProcess): void {
+  child.kill(process.platform === 'win32' ? undefined : 'SIGTERM')
 }
 
 /** Recent stderr lines kept so early crash errors surface in waitForReady. */
@@ -391,6 +429,7 @@ function attachSidecarLogs(child: ChildProcess): void {
   })
   child.on('exit', (code, signal) => {
     console.log(`[desktop] @ledgeindex/desktop-server exited`, { code, signal })
+    forgetSidecarPid()
     if (sidecarProcess === child) {
       sidecarProcess = null
       spawnedByUs = false
@@ -434,9 +473,10 @@ async function waitForReady(timeoutMs = 180_000): Promise<void> {
 }
 
 async function spawnServerSidecar(): Promise<void> {
-  if (!app.isPackaged) {
-    status = 'starting'
-    freeDesktopServerPortIfNeeded()
+  if (!app.isPackaged) status = 'starting'
+
+  // Applies packaged too: a crashed run can leave a sidecar on our port.
+  if (await reclaimPortIfNeeded()) {
     await waitUntilDesktopPortFree()
     // Windows can keep the socket in TIME_WAIT briefly after kill.
     await new Promise((r) => setTimeout(r, 350))
@@ -461,19 +501,26 @@ async function spawnServerSidecar(): Promise<void> {
     })
   } else {
     const serverDir = resolveDesktopServerDevDir()
-    console.log('[desktop] spawning @ledgeindex/desktop-server (npm run dev:sidecar)', {
+    console.log('[desktop] spawning @ledgeindex/desktop-server (tsx)', {
       dir: serverDir,
       port: DESKTOP_SERVER_PORT
     })
-    sidecarProcess = spawn('npm', ['run', 'dev:sidecar'], {
+    // Run start.ts in ONE process via Electron's Node + the tsx loader.
+    // `npm run dev:sidecar` with shell:true created cmd.exe → npm → node → tsx
+    // → node, and taskkill on that tree reliably left an orphan holding the
+    // port whenever Electron did not exit cleanly.
+    sidecarProcess = spawn(process.execPath, ['--import', 'tsx', 'src/start.ts'], {
       cwd: serverDir,
-      env: buildSidecarEnv(),
-      stdio: ['ignore', 'pipe', 'pipe'],
-      shell: true
+      env: {
+        ...buildSidecarEnv(),
+        ELECTRON_RUN_AS_NODE: '1'
+      },
+      stdio: ['ignore', 'pipe', 'pipe']
     })
   }
 
   spawnedByUs = true
+  rememberSidecarPid(sidecarProcess.pid)
   attachSidecarLogs(sidecarProcess)
   await waitForReady()
   status = 'ready'
@@ -569,5 +616,5 @@ export function stopDesktopSidecars(): void {
   sidecarProcess = null
   spawnedByUs = false
   status = 'idle'
-  killSidecarProcessTree(child)
+  killSidecar(child)
 }

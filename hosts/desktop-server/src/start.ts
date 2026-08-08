@@ -1,5 +1,6 @@
 import { startLedgeIndexServer } from "@ledgeindex/server";
 import type { FastifyInstance } from "fastify";
+import { watchParentProcess } from "./parent-watchdog.js";
 
 /** Same as ag-server: docs routes need request.user (local desktop user when auth off). */
 async function registerDesktopAuth(app: FastifyInstance): Promise<void> {
@@ -17,6 +18,8 @@ function parseProfiles(): Array<"docs" | "profile"> {
     .map((p) => (p === "company" ? "profile" : p))
     .filter((p): p is "docs" | "profile" => p === "docs" || p === "profile");
 }
+
+watchParentProcess();
 
 const port = Number.parseInt(process.env.PORT ?? "3015", 10);
 const host = process.env.HOST ?? "127.0.0.1";
