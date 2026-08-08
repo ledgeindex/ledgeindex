@@ -121,7 +121,11 @@ jobs:
             dist/latest-mac.yml
           do
             for f in $pattern; do
-              files+=("$f")
+              # Literal paths (latest.yml / latest-mac.yml) only exist on the
+              # matching OS — skip missing files so Windows doesn't upload mac metadata.
+              if [[ -f "$f" ]]; then
+                files+=("$f")
+              fi
             done
           done
 
