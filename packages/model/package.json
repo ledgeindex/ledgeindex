@@ -1,0 +1,63 @@
+{
+  "name": "@ledgeindex/model",
+  "version": "0.1.7",
+  "description": "LedgeIndex model — local GGUF/node-llama-cpp runtime: discover, estimate, mount, chat, serve, benchmark",
+  "type": "module",
+  "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
+  "author": "LedgeIndex",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ledgeindex/ledgeindex.git",
+    "directory": "ledgeindex/packages/model"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./inspect": "./dist/primitives/inspect.js",
+    "./estimate": "./dist/primitives/estimate.js",
+    "./download": "./dist/primitives/download.js",
+    "./discover-lm-studio": "./dist/primitives/discover-lm-studio.js",
+    "./mount": "./dist/primitives/mount.js",
+    "./chat": "./dist/primitives/chat.js",
+    "./serve": "./dist/primitives/serve.js",
+    "./benchmark": "./dist/primitives/benchmark.js",
+    "./ai-sdk": "./dist/primitives/ai-sdk.js",
+    "./presets/gemma4-e2b": "./dist/presets/gemma4-e2b.js",
+    "./presets/gemma4-mountables": "./dist/presets/gemma4-mountables.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "model:inspect": "tsx src/primitives/inspect.ts",
+    "model:discover": "tsx src/primitives/discover-lm-studio.ts",
+    "model:estimate": "tsx src/primitives/estimate.ts",
+    "model:download": "tsx src/primitives/download.ts",
+    "model:serve": "tsx src/primitives/serve.ts",
+    "model:benchmark": "tsx src/primitives/benchmark.ts",
+    "prepublishOnly": "npm run clean && npm run build",
+    "build": "tsup",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@ai-sdk/openai": "^2.0.114",
+    "ai": "^5.0.210",
+    "node-llama-cpp": "^3.19.1",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "tsup": "^8.0.0"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js"
+}

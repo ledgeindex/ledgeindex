@@ -1,0 +1,72 @@
+appId: com.ledgeindex.desktop
+productName: LedgeIndex
+# Scoped npm name (@ledgeindex/desktop) breaks NSIS paths on Windows (${name} → @ledgeindex\desktop-...).
+# Keep artifact names slash-free for makensis + electron-updater.
+# Icons live in resources/ (tracked); build/ is gitignored (sidecar stage + local icons).
+extraMetadata:
+  name: ledgeindex-desktop
+directories:
+  buildResources: resources
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!build/desktop-server/**'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+# Packaged sidecar: ship ONE archive (not ~50k node_modules files).
+# NSIS + Windows Defender install time scales with file count; a single .tar
+# keeps the installer fast. Electron extracts to userData on first launch
+# (see src/main/sidecars.ts).
+extraResources:
+  - from: build/desktop-server.tar
+    to: desktop-server.tar
+  - from: build/desktop-server.meta.json
+    to: desktop-server.meta.json
+  # Tray + runtime icons at resources/ root (process.resourcesPath/icon.png).
+  # buildResources alone only feeds electron-builder installers — it does not copy these.
+  - from: resources/icon.png
+    to: icon.png
+  - from: resources/icon.ico
+    to: icon.ico
+asarUnpack:
+  - 'resources/**'
+win:
+  executableName: LedgeIndex
+  icon: resources/icon.ico
+nsis:
+  artifactName: LedgeIndex-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+  installerIcon: resources/icon.ico
+  uninstallerIcon: resources/icon.ico
+  installerHeaderIcon: resources/icon.ico
+mac:
+  icon: resources/icon.icns
+  entitlementsInherit: resources/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the device's camera.
+    - NSMicrophoneUsageDescription: Application requests access to the device's microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to the user's Documents folder.
+    - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
+  notarize: false
+dmg:
+  artifactName: LedgeIndex-${version}.${ext}
+linux:
+  icon: resources/icon.png
+  target:
+    - AppImage
+    - snap
+    - deb
+  maintainer: ledgeindex.com
+  category: Utility
+appImage:
+  artifactName: LedgeIndex-${version}.${ext}
+npmRebuild: false
+publish:
+  provider: github
+  owner: ledgeindex
+  repo: ledgeindex
+  releaseType: release

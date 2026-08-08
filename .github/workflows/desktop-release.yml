@@ -1,0 +1,129 @@
+name: Desktop release
+
+# Tag on the public repo (or after sync): desktop-v0.2.0
+# Creates a GitHub Release with installers + latest.yml for electron-updater.
+# Keep npm package publishes separate — do not attach @ledgeindex/* npm tags as GitHub Releases.
+#
+# electron-builder defaults to tag v${version}; our tags are desktop-v*.
+# So we package with --publish never, then attach artifacts to $GITHUB_REF_NAME via gh.
+#
+# Required GitHub Actions secrets (client Firebase config — same names as apps/web/.env.example):
+#   NEXT_PUBLIC_FIREBASE_API_KEY
+#   NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+#   NEXT_PUBLIC_FIREBASE_PROJECT_ID
+#   NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+#   NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+#   NEXT_PUBLIC_FIREBASE_APP_ID
+#   NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID          (optional)
+#   NEXT_PUBLIC_FIREBASE_FIRESTORE_DATABASE_ID   (optional)
+# Desktop Google OAuth loopback (ActiveHue-style; packaged file:// auth):
+#   LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_ID
+#   LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_SECRET
+
+on:
+  push:
+    tags:
+      - "desktop-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Build only (no publish)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: desktop-release-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest]
+    # Add macos-latest later when Apple signing/notarization is ready.
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: .
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+
+      - name: Install
+        run: npm ci
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      - name: Build client
+        run: npm run build -w @ledgeindex/client
+
+      - name: Pack desktop-server sidecar
+        run: node scripts/pack-desktop-server.mjs
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
+      - name: Build desktop
+        run: npm run build -w @ledgeindex/desktop
+        env:
+          # Injected into renderer define via electron.vite.config.ts (process.env wins over .env files).
+          NEXT_PUBLIC_FIREBASE_API_KEY: ${{ secrets.NEXT_PUBLIC_FIREBASE_API_KEY }}
+          NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          NEXT_PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_PROJECT_ID }}
+          NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          NEXT_PUBLIC_FIREBASE_APP_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_APP_ID }}
+          NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID }}
+          NEXT_PUBLIC_FIREBASE_FIRESTORE_DATABASE_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_FIRESTORE_DATABASE_ID }}
+          LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_ID }}
+          LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_SECRET }}
+
+      - name: Package installer
+        working-directory: apps/desktop
+        shell: bash
+        run: npx electron-builder --config electron-builder.yml --publish never
+
+      - name: Publish GitHub Release
+        if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}
+        working-directory: apps/desktop
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          VERSION="${TAG#desktop-v}"
+          echo "Publishing artifacts to existing tag: ${TAG} (version ${VERSION})"
+
+          shopt -s nullglob
+          files=(
+            dist/LedgeIndex-*-setup.exe
+            dist/LedgeIndex-*-setup.exe.blockmap
+            dist/latest.yml
+          )
+          if [ ${#files[@]} -eq 0 ]; then
+            echo "No release artifacts found in dist/"
+            ls -la dist || true
+            exit 1
+          fi
+          printf 'Artifacts:\n'
+          printf '  %s\n' "${files[@]}"
+
+          if gh release view "$TAG" --repo ledgeindex/ledgeindex >/dev/null 2>&1; then
+            gh release upload "$TAG" "${files[@]}" \
+              --repo ledgeindex/ledgeindex \
+              --clobber
+          else
+            gh release create "$TAG" "${files[@]}" \
+              --repo ledgeindex/ledgeindex \
+              --title "LedgeIndex Desktop ${VERSION}" \
+              --notes "LedgeIndex desktop ${VERSION}" \
+              --verify-tag
+          fi

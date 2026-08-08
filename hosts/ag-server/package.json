@@ -1,0 +1,24 @@
+{
+  "name": "@ledgeindex/hosts-ag-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AutomationGhost + LedgeIndex unified server (docs, profile, ag)",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/start.ts",
+    "dev:sidecar": "tsx src/start.ts",
+    "build": "esbuild src/start.ts --bundle --outfile=dist/start.js --platform=node --format=esm --packages=external",
+    "start": "node dist/start.js",
+    "typecheck": "tsc --noEmit -p tsconfig.check.json"
+  },
+  "dependencies": {
+    "@ledgeindex/ag": "^0.1.7",
+    "@ledgeindex/server": "^0.1.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.20.5",
+    "typescript": "^7.0.2"
+  }
+}

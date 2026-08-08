@@ -1,0 +1,32 @@
+# @ledgeindex/web — Next.js (app root moved from ledgeindex/)
+
+# dependencies
+node_modules/
+
+# next.js
+.next/
+out/
+
+# build
+build/
+*.tsbuildinfo
+
+# env (vault committed via repo policy)
+.env
+.env.local
+.env.*.local
+.env*
+!.env.vault
+!.env.project
+
+# debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# vercel
+.vercel
+
+# misc
+.DS_Store
+coverage/

@@ -1,0 +1,23 @@
+# Build / deps
+node_modules/
+.next/
+out/
+dist/
+build/
+coverage/
+.turbo/
+.vercel/
+
+# Generated
+*.tsbuildinfo
+package-lock.json
+
+# Local runtime
+.data/
+*.db
+*.db-shm
+*.db-wal
+local_cache/
+
+# Vault stays as committed
+!.env.vault

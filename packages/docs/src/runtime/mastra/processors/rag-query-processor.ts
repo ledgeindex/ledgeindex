@@ -1,0 +1,460 @@
+import type { Processor, ProcessInputArgs } from "@mastra/core/processors";
+import type { MastraDBMessage } from "@mastra/core/agent";
+import { getMetadataCatalog } from "../../retrieval/metadata-catalog-store.js";
+import { ensureCatalogHasPages } from "../../retrieval/page-catalog-rebuild.js";
+import { resolveCatalogUrlFilter } from "../../retrieval/rank-catalog-pages.js";
+import { formatCatalogForAgent, filterCatalogByUrlPrefix } from "../../retrieval/search-query-planner.js";
+import {
+  kapaRetrieveMany,
+  type KapaRetrievedChunk,
+} from "../../retrieval/kapa-retrieve.js";
+import { tryCascadeRetrieve } from "../../retrieval/cascade-retrieve.js";
+import {
+  LEDGEINDEX_RETRIEVAL_META_KEY,
+  toRetrievalMetaChunk,
+  type RetrievalMeta,
+} from "../../retrieval/retrieval-meta.js";
+import { rewriteQueries } from "../../retrieval/rewrite-queries.js";
+import {
+  assessCoverage,
+  instructionForAnswerMode,
+} from "../../retrieval/assess-coverage.js";
+import { RELAXED_RELEVANCE_THRESHOLD } from "../../vector/constants.js";
+import { logVerbose } from "../../lib/logger.js";
+import { getSourceSummary } from "../../services/source-summary.js";
+import { primaryAuxiliaryModelId } from "../../llm/chat-model-config.js";
+import { describeRerankRuntimeMeta } from "../../retrieval/rerank-backend.js";
+import {
+  isSourceScope,
+  setRequestSourceScope,
+} from "../../retrieval/rerank-request-context.js";
+
+const MAX_HISTORY_TURNS = 6;
+
+function textFromMessage(message: MastraDBMessage): string {
+  const parts = message.content?.parts;
+  if (!Array.isArray(parts)) return "";
+  return parts
+    .map((part) =>
+      part && typeof part === "object" && "text" in part
+        ? String((part as { text?: unknown }).text ?? "")
+        : "",
+    )
+    .join(" ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildHistory(messages: MastraDBMessage[]): string {
+  const turns = messages
+    .slice(0, -1)
+    .filter((m) => m.role === "user" || m.role === "assistant")
+    .slice(-MAX_HISTORY_TURNS)
+    .map((m) => {
+      const text = textFromMessage(m);
+      if (!text) return "";
+      const clipped = text.length > 300 ? `${text.slice(0, 300)}…` : text;
+      return `${m.role}: ${clipped}`;
+    })
+    .filter(Boolean);
+
+  return turns.length > 0 ? turns.join("\n") : "(no prior messages)";
+}
+
+/** Full chunk text — already bounded at ingest (~1024 tokens). No truncation. */
+function formatChunksForContext(chunks: KapaRetrievedChunk[]): string {
+  return chunks
+    .map((chunk, index) => {
+      const heading =
+        chunk.section.trim() || chunk.category.trim() || chunk.title.trim();
+      return `### Source ${index + 1}: ${chunk.title}
+URL: ${chunk.url}
+Section: ${heading}
+Score: ${chunk.score.toFixed(2)}
+
+${chunk.text}`;
+    })
+    .join("\n\n");
+}
+
+function scoreSummary(chunks: KapaRetrievedChunk[]): {
+  maxChunkScore?: number;
+  avgTop3Score?: number;
+} {
+  const scores = chunks
+    .map((chunk) => chunk.score)
+    .filter((score) => Number.isFinite(score))
+    .sort((a, b) => b - a);
+
+  if (scores.length === 0) return {};
+
+  const top3 = scores.slice(0, 3);
+  return {
+    maxChunkScore: scores[0],
+    avgTop3Score: top3.reduce((sum, score) => sum + score, 0) / top3.length,
+  };
+}
+
+function buildRetrievalMeta(input: {
+  question: string;
+  rewrittenQueries: string[];
+  rewriteMethod: RetrievalMeta["rewriteMethod"];
+  rewriteModelId?: string;
+  topicScope?: RetrievalMeta["topicScope"];
+  skippedQueries?: string[];
+  insufficient: boolean;
+  partial: boolean;
+  byQuery: Awaited<ReturnType<typeof kapaRetrieveMany>>["byQuery"];
+  chunks: KapaRetrievedChunk[];
+  catalogUrlFilter?: RetrievalMeta["catalogUrlFilter"];
+  coverage: Awaited<ReturnType<typeof assessCoverage>>;
+  cascadePassUsed?: boolean;
+  cascadeTopScore?: number;
+}): RetrievalMeta {
+  const { maxChunkScore, avgTop3Score } = scoreSummary(input.chunks);
+  const rerankRuntime = describeRerankRuntimeMeta({
+    cascadePassUsed: input.cascadePassUsed,
+  });
+
+  return {
+    question: input.question,
+    rewrittenQueries: input.rewrittenQueries,
+    rewriteMethod: input.rewriteMethod,
+    rewriteModelId: input.rewriteModelId,
+    topicScope: input.topicScope,
+    skippedQueries: input.skippedQueries,
+    queries: input.rewrittenQueries,
+    insufficient: input.insufficient,
+    partial: input.partial,
+    maxChunkScore,
+    avgTop3Score,
+    catalogUrlFilter: input.catalogUrlFilter,
+    relaxedPassUsed: input.coverage.relaxedPassUsed,
+    cascadePassUsed: input.cascadePassUsed,
+    cascadeTopScore: input.cascadeTopScore,
+    rerankBackend: rerankRuntime.rerankBackend,
+    rerankDevice: rerankRuntime.rerankDevice,
+    rerankDeviceLabel: rerankRuntime.rerankDeviceLabel,
+    answerMode: input.coverage.answerMode,
+    coverageTier: input.coverage.coverageTier,
+    coverageGraderUsed: input.coverage.coverageGraderUsed,
+    coverageReason: input.coverage.coverageReason,
+    coverageModelId: input.coverage.coverageModelId,
+    searchAttempts: input.byQuery.map((entry) => ({
+      query: entry.query,
+      chunkCount: entry.rawPrunedCount,
+      insufficient: entry.insufficient,
+      attemptType: entry.attemptType,
+      filter: entry.filter,
+      catalogMatchScore: entry.catalogMatchScore,
+      initialCount: entry.initialCount,
+      rerankedCount: entry.rerankedCount,
+      directHitCount: entry.directHitCount,
+      directHitScores: entry.directHitScores,
+      prunedCount: entry.prunedCount,
+    })),
+    chunks: input.chunks.map(toRetrievalMetaChunk),
+  };
+}
+
+function buildMultiPartAnswerInstruction(
+  topicScope: "single" | "multi",
+): string {
+  if (topicScope !== "multi") return "";
+
+  return `The user's latest message asks about multiple distinct topics.
+Structure your answer to address each part of the user's question separately — use a clear heading for each part, in the order the user asked.
+If the sources do not cover one part, say so for that part only; still answer the other parts from the sources.`;
+}
+
+/**
+ * Kapa-style pre-step: rewrite the question, run retrieval, evaluate sources,
+ * and inject the result into system context before the answer agent runs.
+ */
+export class RAGQueryProcessor implements Processor {
+  readonly id = "rag-query";
+  readonly name = "RAG Query";
+
+  async processInput({
+    messages,
+    systemMessages,
+    requestContext,
+  }: ProcessInputArgs) {
+    const sourceId =
+      typeof requestContext?.get === "function"
+        ? String(requestContext.get("source_id") ?? "").trim()
+        : "";
+    if (!sourceId) return messages;
+
+    const sourceScopeRaw =
+      typeof requestContext?.get === "function"
+        ? requestContext.get("source_scope")
+        : undefined;
+    if (isSourceScope(sourceScopeRaw)) {
+      setRequestSourceScope(sourceScopeRaw);
+    }
+
+    const docsUrlPrefix =
+      typeof requestContext?.get === "function"
+        ? String(requestContext.get("docs_url_prefix") ?? "").trim()
+        : "";
+    const docsCrawlRoot =
+      typeof requestContext?.get === "function"
+        ? String(requestContext.get("docs_crawl_root") ?? "").trim()
+        : "";
+    const pathFilter =
+      docsUrlPrefix || docsCrawlRoot
+        ? {
+            ...(docsCrawlRoot ? { crawlRoot: docsCrawlRoot } : {}),
+            ...(docsUrlPrefix ? { urlPrefix: docsUrlPrefix } : {}),
+          }
+        : undefined;
+
+    const lastUser = [...messages].reverse().find((m) => m.role === "user");
+    const question = lastUser ? textFromMessage(lastUser) : "";
+    if (!question) return messages;
+
+    const catalogRecord =
+      (await ensureCatalogHasPages(sourceId)) ??
+      (await getMetadataCatalog(sourceId));
+    // Path scope (Docs / Guides) must narrow rewrite + catalog URL hints, not just retrieval.
+    const scopedCatalog = filterCatalogByUrlPrefix(
+      catalogRecord,
+      docsUrlPrefix || docsCrawlRoot || null,
+    );
+    const catalogText = formatCatalogForAgent(scopedCatalog);
+    const history = buildHistory(messages);
+
+    // Cascade: cheap vector peek on the raw question — skip rewrite + rerank on slam dunks.
+    const cascade = await tryCascadeRetrieve({
+      query: question,
+      sourceId,
+      filter: pathFilter,
+    });
+
+    if (cascade) {
+      const agentChunks = cascade.chunks;
+      const insufficient = agentChunks.length === 0;
+      const { maxChunkScore, avgTop3Score } = scoreSummary(agentChunks);
+      const coverage = await assessCoverage({
+        question,
+        chunks: agentChunks,
+        insufficient,
+        relaxedPassUsed: false,
+        maxChunkScore,
+        avgTop3Score,
+        requestContext,
+      });
+      const sourceSummary = await getSourceSummary(sourceId);
+      const meta = buildRetrievalMeta({
+        question,
+        rewrittenQueries: [question],
+        rewriteMethod: "cascade",
+        rewriteModelId: primaryAuxiliaryModelId(),
+        topicScope: "single",
+        skippedQueries: [],
+        insufficient,
+        partial: coverage.answerMode === "partial",
+        byQuery: [
+          {
+            query: question,
+            chunks: agentChunks,
+            pruned: agentChunks,
+            prunedCount: agentChunks.length,
+            rawPrunedCount: agentChunks.length,
+            insufficient,
+            attemptType: "query" as const,
+            filter: pathFilter ?? {},
+            initialCount: cascade.candidateCount,
+            rerankedCount: 0,
+            directHitCount: agentChunks.length,
+            directHitScores: agentChunks.map((c) => c.score),
+          },
+        ],
+        chunks: agentChunks,
+        coverage,
+        cascadePassUsed: true,
+        cascadeTopScore: cascade.topScore,
+      });
+      if (sourceSummary) {
+        meta.pickedSources = [
+          {
+            id: sourceSummary.id,
+            slug: sourceSummary.slug,
+            name: sourceSummary.name,
+            faviconUrl: sourceSummary.faviconUrl ?? null,
+            startUrl: sourceSummary.startUrl || null,
+          },
+        ];
+      }
+
+      requestContext?.set?.(LEDGEINDEX_RETRIEVAL_META_KEY, meta);
+
+      logVerbose("RAG cascade early-exit", "RAGQuery", {
+        sourceId,
+        question,
+        topScore: cascade.topScore,
+        chunkCount: agentChunks.length,
+        answerMode: coverage.answerMode,
+      });
+
+      const retrievalInstruction = instructionForAnswerMode(
+        coverage.answerMode,
+        coverage.coverageReason,
+      );
+      const sourceBlock =
+        coverage.answerMode === "none"
+          ? ""
+          : `\n\nRetrieved sources:\n${formatChunksForContext(agentChunks)}`;
+
+      const systemParts = [retrievalInstruction, sourceBlock]
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+      return {
+        messages,
+        systemMessages: [
+          ...systemMessages,
+          {
+            role: "system" as const,
+            content: systemParts.join("\n\n"),
+          },
+        ],
+      };
+    }
+
+    const { queries, topicScope, method: rewriteMethod, rewriteModelId } =
+      await rewriteQueries({
+      question,
+      catalogText,
+      history,
+      requestContext,
+    });
+
+    const queryMode = topicScope === "multi" ? "merge_all" : "short_circuit";
+    const catalogUrlCandidate = scopedCatalog?.pages?.length
+      ? resolveCatalogUrlFilter(question, scopedCatalog.pages)
+      : null;
+    const catalogUrlFilter = catalogUrlCandidate
+      ? {
+          url: catalogUrlCandidate.url,
+          score: catalogUrlCandidate.score,
+          title: catalogUrlCandidate.title,
+        }
+      : undefined;
+
+    let relaxedPassUsed = false;
+    let retrieval = await kapaRetrieveMany({
+      queries,
+      sourceId,
+      queryMode,
+      catalogUrlFilter,
+      filter: pathFilter,
+    });
+
+    if (retrieval.merged.length === 0) {
+      logVerbose("RAG strict pass empty, retrying relaxed threshold", "RAGQuery", {
+        sourceId,
+        queries,
+        topicScope,
+        catalogUrlFilter: catalogUrlCandidate?.url,
+        docsUrlPrefix: docsUrlPrefix || null,
+      });
+      retrieval = await kapaRetrieveMany({
+        queries,
+        sourceId,
+        queryMode,
+        catalogUrlFilter,
+        filter: pathFilter,
+        relevanceThreshold: RELAXED_RELEVANCE_THRESHOLD,
+      });
+      relaxedPassUsed = retrieval.merged.length > 0;
+    }
+
+    const agentChunks = retrieval.merged;
+    const insufficient = agentChunks.length === 0;
+    const { maxChunkScore, avgTop3Score } = scoreSummary(agentChunks);
+    const coverage = await assessCoverage({
+      question,
+      chunks: agentChunks,
+      insufficient,
+      relaxedPassUsed,
+      maxChunkScore,
+      avgTop3Score,
+      requestContext,
+    });
+    const partial = relaxedPassUsed;
+    const sourceSummary = await getSourceSummary(sourceId);
+    const meta = buildRetrievalMeta({
+      question,
+      rewrittenQueries: queries,
+      rewriteMethod,
+      rewriteModelId,
+      topicScope,
+      skippedQueries: retrieval.skippedQueries,
+      insufficient,
+      partial,
+      byQuery: retrieval.byQuery,
+      chunks: agentChunks,
+      catalogUrlFilter: retrieval.catalogUrlFilter,
+      coverage,
+      cascadePassUsed: false,
+    });
+    if (sourceSummary) {
+      meta.pickedSources = [
+        {
+          id: sourceSummary.id,
+          slug: sourceSummary.slug,
+          name: sourceSummary.name,
+          faviconUrl: sourceSummary.faviconUrl ?? null,
+          startUrl: sourceSummary.startUrl || null,
+        },
+      ];
+    }
+
+    requestContext?.set?.(LEDGEINDEX_RETRIEVAL_META_KEY, meta);
+
+    logVerbose("RAG query processor finished", "RAGQuery", {
+      sourceId,
+      question,
+      rewrittenQueries: queries,
+      rewriteMethod,
+      rewriteModelId,
+      chunkCount: meta.chunks.length,
+      insufficient,
+      partial,
+      answerMode: coverage.answerMode,
+      coverageTier: coverage.coverageTier,
+      coverageGraderUsed: coverage.coverageGraderUsed,
+      catalogUrlFilter: retrieval.catalogUrlFilter?.applied
+        ? retrieval.catalogUrlFilter.url
+        : undefined,
+    });
+
+    const retrievalInstruction = instructionForAnswerMode(
+      coverage.answerMode,
+      coverage.coverageReason,
+    );
+    const multiPartInstruction = buildMultiPartAnswerInstruction(topicScope);
+
+    const sourceBlock =
+      coverage.answerMode === "none"
+      ? ""
+      : `\n\nRetrieved sources:\n${formatChunksForContext(agentChunks)}`;
+
+    const systemParts = [retrievalInstruction, multiPartInstruction, sourceBlock]
+      .map((part) => part.trim())
+      .filter(Boolean);
+
+    return {
+      messages,
+      systemMessages: [
+        ...systemMessages,
+        {
+          role: "system" as const,
+          content: systemParts.join("\n\n"),
+        },
+      ],
+    };
+  }
+}

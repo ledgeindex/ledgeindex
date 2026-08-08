@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en" class="h-full scroll-smooth antialiased">
+  <head>
+    <meta charset="UTF-8" />
+    <title>LedgeIndex</title>
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://*.firebaseio.com https://*.googleapis.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' data: https://fonts.gstatic.com; img-src 'self' data: blob: https:; connect-src 'self' http://localhost:* http://127.0.0.1:* https: https://*.googleapis.com https://*.firebaseio.com https://*.firebaseapp.com https://identitytoolkit.googleapis.com https://securetoken.googleapis.com https://firestore.googleapis.com; frame-src https://*.firebaseapp.com https://accounts.google.com;"
+    />
+    <script>
+      (function () {
+        try {
+          var k = 'knowledgeindex:theme'
+          var p = localStorage.getItem(k)
+          if (p !== 'light' && p !== 'dark' && p !== 'system') {
+            p = localStorage.getItem('ledgeindex:theme')
+          }
+          if (p !== 'light' && p !== 'dark' && p !== 'system') p = 'system'
+          var d =
+            p === 'dark' ||
+            (p === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+          document.documentElement.dataset.theme = d ? 'dark' : 'light'
+          document.documentElement.style.colorScheme = d ? 'dark' : 'light'
+        } catch (e) {
+          document.documentElement.dataset.theme = 'light'
+        }
+      })()
+    </script>
+  </head>
+  <body class="min-h-full flex flex-col bg-[#F7F5F2] text-foreground">
+    <div id="root" class="flex min-h-full flex-1 flex-col">
+      <div
+        id="boot-splash"
+        style="display:flex;min-height:100vh;align-items:center;justify-content:center;font:500 14px/1.4 system-ui,sans-serif;color:#57534e"
+      >
+        Opening LedgeIndex…
+      </div>
+    </div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

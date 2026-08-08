@@ -1,0 +1,38 @@
+/* LedgeIndex docs — Nextra theme + Docs/Reference tabs */
+
+.docs-tabs-container {
+  width: 100%;
+  background: inherit;
+}
+html.dark .docs-tabs-container {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+html:not(.dark) .docs-tabs-container {
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+.docs-tabs {
+  display: flex;
+  gap: 0;
+  max-width: 90rem;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding-left: 1rem !important;
+}
+.docs-tab:hover {
+  color: var(--nextra-body) !important;
+}
+
+/* Sidebar: only show the active tab section */
+.docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href="/reference"]),
+.docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href^="/reference/"]),
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href="/reference"]),
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href^="/reference/"]) {
+  display: none !important;
+}
+
+.docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href="/docs"]),
+.docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href^="/docs/"]),
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href="/docs"]),
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href^="/docs/"]) {
+  display: none !important;
+}

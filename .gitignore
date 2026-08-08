@@ -1,0 +1,53 @@
+# LedgeIndex monorepo — applies under apps/, packages/, hosts/
+# Dependencies (workspace hoisting still leaves local node_modules sometimes)
+node_modules/
+
+# Next.js (@ledgeindex/web)
+.next/
+out/
+
+# Builds
+dist/
+build/
+*.tsbuildinfo
+
+# Turbo / tooling
+.turbo/
+.vercel/
+
+# Env (vault is committed; decrypted env is not)
+.env
+.env.local
+.env.*.local
+!.env.vault
+!.env.project
+
+# Local LedgeIndex runtime (LibSQL, FileStore, vector index)
+.data/
+*.db
+*.db-shm
+*.db-wal
+*.duckdb
+*.duckdb.wal
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+
+# FastEmbed / local ML cache (docs ingest)
+local_cache/
+
+# Local smoke outputs / repo explore smokes (not published)
+.smoke-out/
+packages/repo/.smoke-out/
+packages/repo/scripts/
+
+# Local GitHub PATs — never commit
+PAT_LEDGEINDEX
+PAT_LEDDGEINDEX
+LEDGEINDEX_PUBLIC_PUSH_TOKEN
+.pat-ledgeindex

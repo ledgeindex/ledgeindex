@@ -1,0 +1,44 @@
+# Docs overview
+
+Guides for choosing packages and running the LedgeIndex pipeline. For copy-paste primitive APIs, switch to the [Reference](/reference) tab.
+
+## Packages
+
+| Package | Role | Guide |
+|---------|------|-------|
+| `@ledgeindex/core` | Crawl, extract, enrich, chunk, embed, query | [Core](/docs/core) |
+| `@ledgeindex/profile` | Site research lenses | [Profile](/docs/profile) |
+| `@ledgeindex/server` | Fastify host for docs + profile | [Server](/docs/server) |
+
+## Pipeline (concept)
+
+```text
+discover → extract → enrich → chunk → embed → store → query
+                                      │
+                                      ├─ markdown chunks → kapaRetrieve
+                                      └─ example chunks → queryExamples
+```
+
+## Quickstart
+
+```bash
+npm i @ledgeindex/core @ledgeindex/profile @ledgeindex/server
+```
+
+```ts
+import { startLedgeIndexServer } from "@ledgeindex/server";
+
+await startLedgeIndexServer({
+  profiles: ["docs", "profile"],
+  port: 3010,
+  host: "127.0.0.1",
+});
+```
+
+## Next
+
+| Goal | Page |
+|------|------|
+| Install + env | [Getting started](/docs/getting-started) |
+| Core composition | [Core](/docs/core) |
+| Primitive APIs | [Reference](/reference) |

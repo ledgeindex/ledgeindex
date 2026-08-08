@@ -1,0 +1,45 @@
+{
+  "name": "@ledgeindex/repo",
+  "version": "0.1.7",
+  "description": "LedgeIndex repo — index local/GitHub checkouts and explore for grounded usage examples",
+  "type": "module",
+  "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
+  "author": "LedgeIndex",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ledgeindex/ledgeindex.git",
+    "directory": "ledgeindex/packages/repo"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "exports": {
+    ".": "./dist/index.js",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build",
+    "build": "tsup",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@ledgeindex/core": "^0.1.7",
+    "@mastra/core": "^1.49.0",
+    "zod": "3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2",
+    "tsup": "^8.0.0"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js"
+}

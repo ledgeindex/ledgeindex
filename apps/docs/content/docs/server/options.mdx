@@ -1,0 +1,58 @@
+# Server options
+
+`createLedgeIndexServer` / `startLedgeIndexServer` accept:
+
+```ts
+type LedgeIndexProfile = "docs" | "profile";
+
+type LedgeIndexServerOptions = {
+  dataDir?: string;
+  profiles?: LedgeIndexProfile[];
+  port?: number;
+  host?: string;
+  beforeProfiles?: (app: FastifyInstance) => Promise<void>;
+  afterProfiles?: (app: FastifyInstance) => Promise<void>;
+};
+```
+
+## Fields
+
+| Field | Default | Notes |
+|-------|---------|-------|
+| `profiles` | `["docs", "profile"]` | Which capability packs to mount |
+| `port` | `PORT` env or `3010` | Used by `listen()` |
+| `host` | `HOST` env or `0.0.0.0` | Bind address |
+| `dataDir` | — | Sets `LEDGEINDEX_DATA_DIR` when provided |
+| `beforeProfiles` | — | Fastify plugins before profile routes (auth, logging, …) |
+| `afterProfiles` | — | Hooks after profile registration |
+
+## Env
+
+```bash
+LEDGEINDEX_PROFILES=docs,profile
+PORT=3010
+HOST=0.0.0.0
+LEDGEINDEX_DATA_DIR=/path/to/data
+```
+
+## Exports
+
+| Export | Purpose |
+|--------|---------|
+| `createLedgeIndexServer` | Build Fastify app + listen helper |
+| `startLedgeIndexServer` | Create and listen |
+| `LEDGEINDEX_SERVER_VERSION` | Version constant |
+| `mergeMastraContributions` | Combine Mastra contributions |
+| `mountMastraOnFastify` | Attach Mastra to Fastify |
+| `MastraContribution` | Contribution type |
+
+## Hosted example
+
+```ts
+await startLedgeIndexServer({
+  profiles: ["docs", "profile"],
+  beforeProfiles: async (app) => {
+    // e.g. auth, request logging
+  },
+});
+```

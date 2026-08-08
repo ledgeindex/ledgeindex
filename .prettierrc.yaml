@@ -1,0 +1,7 @@
+# LedgeIndex monorepo — matches @ledgeindex/web (Next.js) style
+singleQuote: false
+semi: true
+printWidth: 80
+trailingComma: es5
+arrowParens: always
+endOfLine: lf

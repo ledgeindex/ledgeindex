@@ -1,0 +1,13 @@
+/*
+ * Electron Vite project root is apps/desktop — Tailwind will NOT auto-scan
+ * apps/web unless we declare it. Without this, every utility class is missing
+ * and the UI collapses (no flex/gap/size-*).
+ */
+@source "../../../../../web/src";
+@source "../../**/*.{js,ts,jsx,tsx}";
+@source "../../../../../../node_modules/streamdown/dist/*.js";
+@source "../../../../../../node_modules/@streamdown/code/dist/*.js";
+@source "../../../../../../../node_modules/streamdown/dist/*.js";
+@source "../../../../../../../node_modules/@streamdown/code/dist/*.js";
+
+@import "../../../../../web/src/app/globals.css";
