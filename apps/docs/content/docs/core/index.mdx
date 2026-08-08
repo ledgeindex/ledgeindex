@@ -1,14 +1,14 @@
 # Core overview
 
-Core is the LedgeIndex **primitive layer**. It gives you the building blocks to crawl the web (or local pages), extract markdown, chunk it, embed it, persist it, and query it back with optional reranking.
+Core is the LedgeIndex primitive layer. It gives you the building blocks to crawl the web (or local pages), extract markdown, chunk it, embed it, persist it, and query it back with optional reranking.
 
-You compose these pieces yourself — or you let higher-level packages (profile, docs runtime) compose them for you. Core does not decide product UX; it exposes stable import paths for each stage of the pipeline.
+You compose these pieces yourself, or you let higher-level packages (profile, docs runtime) compose them for you. Core does not decide product UX. It exposes stable import paths for each stage of the pipeline.
 
 ## When to use core
 
-Use `@ledgeindex/core` when you need **direct control** over indexing and retrieval: custom crawl filters, your own chunking policy, a specific vector store, or embedding into an existing app without the full HTTP server.
+Use `@ledgeindex/core` when you need direct control over indexing and retrieval: custom crawl filters, your own chunking policy, a specific vector store, or embedding into an existing app without the full HTTP server.
 
-If you only want a structured site brief (identity / pricing / capabilities), prefer [Profile](/docs/profile). If you want ingest + chat routes out of the box, prefer [Server](/docs/server) with the `docs` profile.
+If you only want a structured site brief (identity / pricing / capabilities), prefer [Profile](/docs/profile). If you want ingest + chat routes out of the box, prefer [Server](/docs/server) with the `docs` profile ([Docs profile](/docs/docs-profile)).
 
 ## Quickstart
 
@@ -30,12 +30,12 @@ npm i @ledgeindex/core
 
 Typical flow after context exists:
 
-1. **Crawl / discover** URLs for a source  
-2. **Extract** HTML → markdown  
-3. **Chunk** + **embed** via the chunk pipeline  
-4. **Query** with your vector / catalog helpers  
+1. Crawl / discover URLs for a source
+2. Extract HTML → markdown
+3. Chunk + embed via the chunk pipeline
+4. Query with your vector / catalog helpers
 
-Visit [Pipeline stages](/docs/core/pipeline) for the stage map, or [Reference](/reference) for primitive APIs with examples.
+Visit [Pipeline stages](/docs/core/pipeline) for the stage map.
 
 ## Use core
 
@@ -50,11 +50,10 @@ import { parsePage } from "@ledgeindex/core/extract/parser/extract-content.js";
 
 ## Expand your pipeline
 
-Once context works, use this table to find the right page:
-
 | Goal | Start here |
 |------|------------|
-| Stage map (guides) | [Pipeline stages](/docs/core/pipeline) |
-| Primitive APIs + examples | [Reference](/reference) |
+| Stage map | [Pipeline stages](/docs/core/pipeline) |
+| Docs ingest / chat on top of core | [Docs profile](/docs/docs-profile) |
 | Research a site into typed lenses | [Profile](/docs/profile) |
 | Serve ingest + query over HTTP | [Server](/docs/server) |
+| Package map | [Reference](/reference) |

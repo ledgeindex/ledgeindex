@@ -1,0 +1,63 @@
+# @ledgeindex/client
+
+Minimal HTTP client for a running LedgeIndex server.
+
+## Install
+
+```bash
+npm install @ledgeindex/client
+```
+
+## Exports
+
+| Export | Purpose |
+|--------|---------|
+| `createLedgeIndexClient` | `get` / `post` / `getHealth` against `apiBaseUrl` |
+| `resolveApiBaseUrl` | Resolve base URL from env / defaults |
+
+## Setup
+
+```ts
+import { createLedgeIndexClient, resolveApiBaseUrl } from "@ledgeindex/client";
+```
+
+## Usage
+
+```ts
+const client = createLedgeIndexClient({
+  apiBaseUrl: resolveApiBaseUrl() ?? "http://127.0.0.1:3010",
+  getAuthHeaders: async () => ({
+    Authorization: `Bearer ${token}`,
+  }),
+});
+
+const health = await client.getHealth();
+const res = await client.post("/some/route", { hello: "world" });
+```
+
+## Options
+
+```ts
+type LedgeIndexClientOptions = {
+  apiBaseUrl: string;
+  getAuthHeaders?: () => Promise<Record<string, string>>;
+};
+```
+
+## Example
+
+```ts
+import { createLedgeIndexClient } from "@ledgeindex/client";
+
+const client = createLedgeIndexClient({
+  apiBaseUrl: "http://127.0.0.1:3010",
+});
+
+console.log(await client.getHealth());
+const packages = await client.get("/health/packages");
+console.log(await packages.json());
+```
+
+## Related
+
+- [createLedgeIndexServer](/reference/server/create-server)

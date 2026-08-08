@@ -12,7 +12,7 @@ export const metadata = {
     template: "%s — LedgeIndex Docs",
   },
   description:
-    "Guides and primitive reference for LedgeIndex — crawl, enrich, chunk, embed, and query documentation for agents.",
+    "Guides for LedgeIndex packages and apps — crawl, index, retrieve, chat, MCP, web, and desktop.",
 };
 
 const navbar = (

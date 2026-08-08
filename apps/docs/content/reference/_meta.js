@@ -1,9 +1,9 @@
 export default {
   index: "Overview",
-  "getting-started": "Getting started",
-  apps: "Apps",
-  "docs-profile": "Docs profile",
   core: "Core",
+  "docs-runtime": "Docs runtime",
   profile: "Profile",
+  client: "Client",
   server: "Server",
+  model: "Model",
 };

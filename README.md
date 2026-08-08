@@ -25,6 +25,7 @@ ledgeindex/                    # monorepo root (OSS git root when published)
   tsconfig.base.json
   apps/
     web/                         # @ledgeindex/web — Next.js UI (this was the old ledgeindex/ root)
+    docs/                        # @ledgeindex/docs-site — Nextra docs (port 3005)
     desktop/                     # @ledgeindex/desktop — Electron (electron-vite + React)
     mobile/                      # @ledgeindex/mobile — Expo (React Native)
   packages/                      # @ledgeindex/*
@@ -60,11 +61,17 @@ npm run dev:ledgeindex-api
 # Web UI (default :3004)
 npm run dev:ledgeindex
 # same as: npm run dev -w @ledgeindex/web
+
+# Docs site (default :3005)
+npm run dev:ledgeindex-docs
+# same as: npm run dev -w @ledgeindex/docs-site
+# or from ledgeindex/: npm run dev:docs
 ```
 
 Data defaults to `ledgeindex-api/.data/` unless `LEDGEINDEX_DATA_DIR` is set.
 
 - Health: `http://localhost:3010/health`
+- Docs: `http://localhost:3005`
 
 ---
 
@@ -90,7 +97,9 @@ Run from the npm workspace root:
 | Script | Description |
 |--------|-------------|
 | `dev:ledgeindex-api` | API + Mastra |
-| `dev:ledgeindex` | This Next.js UI |
+| `dev:ledgeindex` | Next.js web UI (:3004) |
+| `dev:ledgeindex-docs` | Docs site (:3005) |
+| `dev:ledgeindex-desktop` | Electron desktop |
 | `typecheck:ledgeindex-packages` | Typecheck `@ledgeindex/*` |
 | `test:ledgeindex-core` | Vitest for core |
 

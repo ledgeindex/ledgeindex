@@ -1,0 +1,44 @@
+# Docs profile (`@ledgeindex/docs`)
+
+The **docs** profile is the product path for documentation sources: ingest a site, store chunks, chat with retrieval, and expose tools over MCP.
+
+You usually enable it through `@ledgeindex/server` with `profiles: ["docs", ...]`. You do not need to mount the package by hand unless you are building a custom host.
+
+## What it adds
+
+- Source CRUD and ownership (personal and global/public sources)
+- Ingest and refresh workflows (crawl progress, cancel, resume)
+- RAG chat against a source (Mastra)
+- MCP HTTP transport + OAuth helpers for IDE / agent clients
+- Access helpers used by the hosted gate (approve / pending / denied)
+
+## Typical HTTP surface
+
+Exact paths live in the package routes. Expect families like:
+
+| Area | Examples |
+|------|----------|
+| Sources | `GET/POST /api/sources`, source detail and ownership |
+| Ingest | `POST /api/sources/:id/ingest/start`, progress, cancel, resume |
+| Refresh | start / status / apply / dismiss under `/api/sources/:id/refresh/*` |
+| Chat / Mastra | mounted Mastra routes when the docs contribution is active |
+| MCP | MCP HTTP path from health metadata; OAuth under the MCP OAuth paths |
+| Health | `/health`, `/health/packages`, docs health with MCP path hints |
+
+Use `GET /health` (and related package health) to confirm MCP HTTP path and profile status after boot.
+
+## Auth and early access
+
+When the host requires API auth (`LEDGEINDEX_AUTH_REQUIRED` / cloud mode), the server registers an approved-access middleware. Unapproved signed-in users get **403** with `accessStatus` of `pending` or `denied`, except for a few gate endpoints (`/api/auth/me`, `/api/access-request`, health).
+
+Admins are treated as approved. Desktop sidecars that run without that auth requirement are not blocked by this gate.
+
+Mastra agent/workflow HTTP is not left open without auth in production hosts. MCP transport and OAuth stay reachable as designed for client connect flows.
+
+## Related
+
+| Goal | Page |
+|------|------|
+| Mounting profiles | [Server](/docs/server) |
+| Crawl / chunk primitives | [Core](/docs/core) |
+| Web and desktop clients | [Apps](/docs/apps) |

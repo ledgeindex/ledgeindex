@@ -1,0 +1,74 @@
+# profileSite
+
+Crawl a site once, then run each research lens (pick URLs → fetch → structured synth).
+
+## Setup
+
+```ts
+import {
+  profileSite,
+  profile, // alias
+  runCompanyProfile,
+  defaultProfileLenses,
+} from "@ledgeindex/profile";
+```
+
+## Usage
+
+```ts
+const result = await profileSite(
+  "https://example.com/",
+  ["identity", "pricing", "capabilities"],
+  {
+    maxPages: 80,
+    // modelId: "...",
+    // sitemapOnly: true,
+    // pickOnly: true, // pick URLs only; skip fetch/synth
+    onLensStart: (lens, index, total) => {
+      console.log(lens, index + 1, "/", total);
+    },
+  },
+);
+
+const { profile } = result;
+```
+
+`modes` must include at least one lens. Default is `defaultProfileLenses()`.
+
+## Options
+
+```ts
+type ProfileOptions = {
+  modelId?: string;
+  maxPages?: number;
+  sitemapOnly?: boolean;
+  pickOnly?: boolean;
+  onLensStart?: (lens, index, total) => void;
+};
+```
+
+## Example — pick only
+
+```ts
+const { profile } = await profileSite(
+  "https://kapa.ai/",
+  ["capabilities"],
+  { pickOnly: true, maxPages: 40 },
+);
+```
+
+## Lower-level
+
+```ts
+import { runCompanyProfile } from "@ledgeindex/profile";
+
+const result = await runCompanyProfile({
+  rootUrl: "https://example.com/",
+  lenses: ["identity"],
+});
+```
+
+## Related
+
+- [Lenses](/reference/profile/lenses)
+- [Server](/reference/server/create-server) — mounts `registerProfile`

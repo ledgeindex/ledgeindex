@@ -23,6 +23,7 @@ type UseCase = {
   plateLabel: string;
   /** Corner of the isometric board this use case's satellite plate sits on. */
   corner: "nw" | "ne" | "se" | "sw";
+  comingSoon?: boolean;
 };
 
 const USE_CASES: UseCase[] = [
@@ -52,6 +53,7 @@ const USE_CASES: UseCase[] = [
       "You see the questions people ask that your pages cannot answer yet, so you know what to write next.",
     plateLabel: "GAPS",
     corner: "sw",
+    comingSoon: true,
   },
   {
     id: "agents",
@@ -131,13 +133,20 @@ export function UseCaseFocusSection() {
                       {useCase.num}
                     </span>
                     <span className="min-w-0">
-                      <span
-                        className={cn(
-                          "block text-sm font-semibold sm:text-[0.9375rem]",
-                          isActive ? "text-foreground" : "text-muted-strong",
-                        )}
-                      >
-                        {useCase.headline}
+                      <span className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <span
+                          className={cn(
+                            "text-sm font-semibold sm:text-[0.9375rem]",
+                            isActive ? "text-foreground" : "text-muted-strong",
+                          )}
+                        >
+                          {useCase.headline}
+                        </span>
+                        {useCase.comingSoon ? (
+                          <span className="rounded-full border border-border/70 bg-surface-raised px-2 py-0.5 font-mono text-[0.5625rem] font-semibold tracking-[0.1em] text-muted uppercase">
+                            Coming soon
+                          </span>
+                        ) : null}
                       </span>
                       {/* Always in flow so switching active item never changes list height */}
                       <span

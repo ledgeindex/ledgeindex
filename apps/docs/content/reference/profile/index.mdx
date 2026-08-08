@@ -1,0 +1,37 @@
+# @ledgeindex/profile
+
+Site research profile: crawl once, then run named **lenses** (identity, pricing, capabilities, …) to produce structured research output.
+
+## Install
+
+```bash
+npm install @ledgeindex/profile
+```
+
+## Primitive map
+
+| Export | Purpose | Page |
+|--------|---------|------|
+| `profileSite` / `profile` | High-level research entry | [profileSite](/reference/profile/profile-site) |
+| `runCompanyProfile` | Lower-level runner | [profileSite](/reference/profile/profile-site) |
+| lenses helpers | `defaultProfileLenses`, `parseResearchLensList`, … | [Lenses](/reference/profile/lenses) |
+| `registerProfile` | Fastify routes | used by [Server](/reference/server) |
+
+## Typical compose
+
+```ts
+import { profileSite, defaultProfileLenses } from "@ledgeindex/profile";
+
+const { profile } = await profileSite(
+  "https://kapa.ai/",
+  defaultProfileLenses(),
+);
+
+console.log(profile.identity);
+console.log(profile.pricing);
+console.log(profile.capabilities);
+```
+
+## Version
+
+`LEDGEINDEX_PROFILE_VERSION` (legacy alias `LEDGEINDEX_COMPANY_VERSION`).

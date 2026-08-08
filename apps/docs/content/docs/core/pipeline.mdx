@@ -1,6 +1,6 @@
 # Pipeline stages
 
-Each stage is a core primitive. Compose only what you need. Full API examples live under [Reference](/reference).
+Each stage is a core primitive. Compose only what you need. Guides live here; package import paths are under `@ledgeindex/core/*`.
 
 ## Crawl
 
@@ -10,28 +10,30 @@ Import under `@ledgeindex/core/crawl/*`.
 
 ## Extract
 
-Turn HTML into usable text — `parsePage` / `fetchPageHtml`.
+Turn HTML into usable text (`parsePage` / `fetchPageHtml`).
 
-See [Extract](/reference/core/extract).
+Import under `@ledgeindex/core/extract/*`.
 
 ## Enrich
 
 Extract grounded code/setup/usage examples per page (skip if none).
 
-See [Enrich](/reference/core/enrich).
+Import under `@ledgeindex/core/enrich/*`.
 
 ## Chunk
 
 Split content for embedding (`semantic-markdown` | `recursive`), then prepare/store for a source.
 
-See [Chunk](/reference/core/chunk).
+Import under `@ledgeindex/core/chunk/*`.
 
 ## Query
 
-See [Query](/reference/core/query):
+Common entry points:
 
-- `kapaRetrieve`
-- `queryExamples` (`chunkKind: "example"`)
+- `kapaRetrieve` for markdown retrieval
+- `queryExamples` with `chunkKind: "example"`
+
+Import under `@ledgeindex/core/query/*` (and related retrieve helpers).
 
 ## Schemas
 

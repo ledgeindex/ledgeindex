@@ -1,0 +1,61 @@
+# Extract
+
+Turn a URL into clean markdown (+ metadata) for chunking and enrichment.
+
+## Exports
+
+| Export | Purpose |
+|--------|---------|
+| `parsePage` | Fetch + extract main content to markdown |
+| `fetchPageHtml` | Fetch raw HTML only (when you need the document yourself) |
+
+## Setup
+
+```ts
+import { parsePage, fetchPageHtml } from "@ledgeindex/core";
+```
+
+## Usage — parsePage
+
+```ts
+const page = await parsePage("https://mastra.ai/docs/agents/overview");
+
+// page.url, page.title, page.markdown, plus extract metadata
+console.log(page.title);
+console.log(page.markdown.slice(0, 200));
+```
+
+`parsePage` is the default entry for ingest and for smokes. It uses the content extractor (readability-style) so nav/chrome are stripped before enrich/chunk.
+
+## Usage — fetchPageHtml
+
+```ts
+const html = await fetchPageHtml("https://example.com/docs/intro");
+// custom parse / DOM work on html
+```
+
+## Example — parse then enrich
+
+```ts
+import { parsePage, enrichPage } from "@ledgeindex/core";
+
+const page = await parsePage("https://mastra.ai/docs/agents/overview");
+
+const enriched = await enrichPage({
+  url: page.url,
+  title: page.title ?? "Untitled",
+  markdown: page.markdown,
+});
+
+if (enriched.status === "ok") {
+  for (const ex of enriched.examples) {
+    console.log(ex.kind, ex.section, ex.language);
+  }
+}
+```
+
+## Related
+
+- [Enrich](/reference/core/enrich) — extract grounded examples from markdown
+- [Chunk](/reference/core/chunk) — split markdown / code
+- [Crawl](/reference/core/crawl) — discover URLs first

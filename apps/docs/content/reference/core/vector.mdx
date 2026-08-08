@@ -1,0 +1,71 @@
+# Vector
+
+Embed text and talk to the chunks vector index.
+
+## Exports
+
+| Export | Purpose |
+|--------|---------|
+| `embedTexts` | Batch embed strings → `number[][]` |
+| `embedQuery` | Single query vector |
+| `getVectorStore` | Mastra vector store handle |
+| `ensureChunksIndex` | Create/ensure the chunks index exists |
+
+## Setup
+
+```ts
+import {
+  embedTexts,
+  embedQuery,
+  getVectorStore,
+  ensureChunksIndex,
+} from "@ledgeindex/core";
+```
+
+Uses the configured embedder (env / host wiring). Call `ensureChunksIndex()` before first query/store in a process.
+
+## Usage — embed
+
+```ts
+const [q] = await embedTexts(["how to create an agent"]);
+const queryVec = await embedQuery("how to create an agent");
+```
+
+## Usage — store handle
+
+```ts
+await ensureChunksIndex();
+const store = getVectorStore();
+
+const hits = await store.query({
+  indexName: "ledgeindex_chunks",
+  queryVector: queryVec,
+  topK: 20,
+  filter: { sourceId: "src_123" },
+});
+```
+
+Prefer higher-level [kapaRetrieve](/reference/core/query) / [queryExamples](/reference/core/query) unless you need raw vectors.
+
+## Example
+
+```ts
+import { embedQuery, ensureChunksIndex, getVectorStore } from "@ledgeindex/core";
+
+await ensureChunksIndex();
+const queryVector = await embedQuery("install ledgeindex");
+const store = getVectorStore();
+
+const results = await store.query({
+  indexName: "ledgeindex_chunks",
+  queryVector,
+  topK: 10,
+  filter: { sourceId: "src_123", chunkKind: "example" },
+});
+```
+
+## Related
+
+- [Chunk](/reference/core/chunk)
+- [Query](/reference/core/query) — docs RAG
+- [Query](/reference/core/query) — docs vs examples filter

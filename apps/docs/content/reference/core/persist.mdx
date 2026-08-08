@@ -1,0 +1,73 @@
+# Persist / ingest
+
+Local store, data directory, and ingest cancellation.
+
+## Exports
+
+| Export | Purpose |
+|--------|---------|
+| `getStore` | SQLite/source store handle |
+| `getDataDir` / `dataPath` | Resolve data root / join paths |
+| `assertIngestNotCancelled` | Throw if ingest cancelled |
+| `cancelIngestForSource` | Cancel in-flight ingest |
+| `IngestCancelledError` | Error class |
+| `markSourceIndexed` | Mark source as indexed (also under chunk pipeline) |
+
+## Setup
+
+```ts
+import {
+  getStore,
+  getDataDir,
+  dataPath,
+  cancelIngestForSource,
+  assertIngestNotCancelled,
+  IngestCancelledError,
+} from "@ledgeindex/core";
+```
+
+Set `LEDGEINDEX_DATA_DIR` (or pass `dataDir` via server options) before calling store helpers.
+
+## Usage — store
+
+```ts
+const store = getStore();
+const source = await store.getSource(sourceId);
+```
+
+## Usage — paths
+
+```ts
+const root = getDataDir();
+const catalogPath = dataPath("sources", sourceId, "example-catalog.json");
+```
+
+## Usage — cancel ingest
+
+```ts
+cancelIngestForSource(sourceId);
+
+try {
+  assertIngestNotCancelled(sourceId);
+} catch (e) {
+  if (e instanceof IngestCancelledError) {
+    // stop pipeline
+  }
+}
+```
+
+## Example
+
+```ts
+import { getStore, getDataDir } from "@ledgeindex/core";
+
+console.log("data dir", getDataDir());
+const store = getStore();
+const sources = await store.listSources?.(); // host-specific API surface
+```
+
+## Related
+
+- [createCoreContext](/reference/core/context)
+- [Chunk](/reference/core/chunk)
+- [Server](/reference/server/create-server) — sets `LEDGEINDEX_DATA_DIR`

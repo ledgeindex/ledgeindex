@@ -1,0 +1,65 @@
+# Lenses
+
+Named research modes for `@ledgeindex/profile`. Each lens picks relevant URLs from the crawl catalog, fetches pages, and synthesizes structured output.
+
+## Setup
+
+```ts
+import {
+  researchLensIds,
+  getResearchLens,
+  getLensDefinition,
+  defaultProfileLenses,
+  parseResearchLensList,
+  PROFILE_MODE_ID,
+} from "@ledgeindex/profile";
+```
+
+## Usage — defaults
+
+```ts
+const lenses = defaultProfileLenses();
+// typically identity, pricing, capabilities
+```
+
+## Usage — from CLI / env strings
+
+```ts
+const lenses = parseResearchLensList("identity,pricing");
+```
+
+## Usage — introspect
+
+```ts
+for (const id of researchLensIds) {
+  const def = getLensDefinition(id);
+  console.log(id, def);
+}
+
+const lens = getResearchLens("capabilities");
+```
+
+## Built-in lenses
+
+| Id | Output focus |
+|----|----------------|
+| `identity` | Who the company is, positioning |
+| `pricing` | Plans, pricing pages |
+| `capabilities` | Product features / what it does |
+
+Typed outputs: `IdentityLensOutput`, `PricingLensOutput`, `CapabilitiesLensOutput`, `CompanyProfileData`, `LensOutputById`.
+
+## Example
+
+```ts
+import { profileSite, parseResearchLensList } from "@ledgeindex/profile";
+
+const modes = parseResearchLensList(process.env.LENSES ?? "identity,capabilities");
+
+const { profile } = await profileSite("https://mastra.ai/", modes);
+console.log(profile);
+```
+
+## Related
+
+- [profileSite](/reference/profile/profile-site)

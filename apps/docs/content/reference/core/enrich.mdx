@@ -1,0 +1,98 @@
+# Enrich
+
+Analyze page markdown and extract **grounded** code / setup / usage / config examples. Never invents examples — skips when the page has none or no LLM is configured.
+
+## Exports
+
+| Export | Purpose |
+|--------|---------|
+| `enrichPage` | Main primitive |
+| `hasExampleCandidates` | Cheap gate (fences / keywords) before LLM |
+| `detectExampleCandidateSignals` | Structured signal debug |
+| `buildExampleEmbedText` | Text used for embedding an example |
+| `resolveExampleSection` | Require / normalize nearest heading |
+| `getEnrichModel` / `hasEnrichLlm` | Model resolution |
+| `ENRICH_MARKDOWN_MAX_CHARS` | Soft truncate (~18k) for local 7B |
+| schemas | `enrichPageResultSchema`, `enrichedExampleSchema`, `exampleKindSchema`, … |
+
+## Setup
+
+```ts
+import {
+  enrichPage,
+  hasExampleCandidates,
+  getEnrichModel,
+  hasEnrichLlm,
+  DEFAULT_ENRICH_LM_STUDIO_ID,
+} from "@ledgeindex/core";
+```
+
+Prefer local `qwen2.5-coder-7b-instruct` via LM Studio, else cheap OpenAI, else Gemini Flash Lite — controlled by env / `getEnrichModel()`.
+
+```bash
+export LM_STUDIO_BASE_URL=http://127.0.0.1:1234
+# optional override:
+export LEDGEINDEX_ENRICH_MODEL=lmstudio/qwen2.5-coder-7b-instruct
+```
+
+## Usage
+
+```ts
+const result = await enrichPage({
+  url: "https://docs.example.com/quickstart",
+  title: "Quickstart",
+  markdown,
+});
+
+if (result.status === "skipped") {
+  // reason: "no_examples" | "no_llm" | …
+}
+
+if (result.status === "ok") {
+  for (const ex of result.examples) {
+    // ex.kind: "code" | "setup" | "usage" | "config" | "other"
+    // ex.section: nearest heading (required)
+    // ex.body, ex.language, ex.title
+  }
+}
+```
+
+## Candidate gate
+
+```ts
+if (!hasExampleCandidates(markdown)) {
+  // skip LLM — no fences / setup signals
+}
+```
+
+## Example kinds
+
+| Kind | Meaning |
+|------|---------|
+| `code` | Runnable snippets, SDK calls, curl, shell |
+| `setup` | Install / env / getting started |
+| `usage` | How-to procedures, request/response |
+| `config` | YAML/JSON/TOML or concrete config steps |
+| `other` | Still a concrete example, none of the above |
+
+## Example
+
+```ts
+import { parsePage, enrichPage } from "@ledgeindex/core";
+
+const page = await parsePage("https://mastra.ai/docs/agents/overview");
+const enriched = await enrichPage({
+  url: page.url,
+  title: page.title ?? "Untitled",
+  markdown: page.markdown,
+  // model: "lmstudio/qwen2.5-coder-7b-instruct",
+});
+
+console.log(enriched);
+```
+
+## Related
+
+- [Chunk](/reference/core/chunk) — recursive strategy for large example bodies
+- [Chunk](/reference/core/chunk)
+- [Query](/reference/core/query) — `queryExamples` after index

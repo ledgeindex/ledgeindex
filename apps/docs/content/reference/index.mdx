@@ -1,0 +1,28 @@
+# Reference
+
+This tab is the map for **package APIs**. The long-form guides live under [Docs](/docs). Detailed per-symbol pages are still being filled out; use the table below and the package exports until then.
+
+## Packages
+
+| Package | Start here |
+|---------|------------|
+| `@ledgeindex/core` | [Core overview](/docs/core), [Pipeline](/docs/core/pipeline) |
+| `@ledgeindex/docs` | [Docs profile](/docs/docs-profile) |
+| `@ledgeindex/profile` | [Profile](/docs/profile), [API & lenses](/docs/profile/api) |
+| `@ledgeindex/server` | [Server](/docs/server), [Options](/docs/server/options) |
+| `@ledgeindex/client` | HTTP client for the running API |
+| `@ledgeindex/model` | Shared model helpers |
+| `@ledgeindex/ag` | Optional AG profile (see [Server](/docs/server)) |
+| `@ledgeindex/repo` | Shared persistence helpers used by docs |
+
+## Install versions
+
+Published packages are versioned together (currently **0.1.7**). Prefer matching versions across `@ledgeindex/*` in an app.
+
+## Runtime check
+
+```http
+GET /health/packages
+```
+
+Returns `@ledgeindex/core` / `@ledgeindex/server` versions and the active profile list.

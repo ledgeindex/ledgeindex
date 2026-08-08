@@ -1,0 +1,120 @@
+# Query
+
+Retrieve from the chunks index.
+
+## Exports
+
+| Export | Purpose |
+|--------|---------|
+| `kapaRetrieve` | Docs retrieval (search + rerank) |
+| `queryExamples` | Example retrieval (`chunkKind: "example"`) |
+| `rewriteExampleQueries` | Rewrite a question against the example catalog |
+| `getExampleCatalog` / `saveExampleCatalog` / `deleteExampleCatalog` | Example catalog store |
+| `buildExampleCatalogFromMetadata` / `formatExampleCatalogText` | Catalog helpers |
+| `ensureCatalogHasPages` | Rebuild page catalog if empty |
+| `findExamples` | Rewrite + `queryExamples` + dedupe |
+
+## Setup
+
+```ts
+import { kapaRetrieve, queryExamples } from "@ledgeindex/core";
+```
+
+## Usage — kapaRetrieve
+
+```ts
+const result = await kapaRetrieve({
+  query: "How do I configure memory?",
+  sourceId: "src_123",
+  filter: {
+    // optional: url, category, section
+  },
+});
+```
+
+## Usage — queryExamples
+
+```ts
+const hits = await queryExamples({
+  sourceId: "src_123",
+  query: "createAgent typescript",
+  exampleKind: "code",
+  language: "ts",
+  topK: 8,
+});
+
+for (const hit of hits) {
+  console.log(hit.kind, hit.section, hit.url);
+  console.log(hit.body);
+}
+```
+
+### Hit shape
+
+```ts
+type QueryExamplesHit = {
+  id: string;
+  score: number;
+  title: string;
+  kind: string;
+  language: string | null;
+  body: string;
+  embedText: string;
+  url: string;
+  section: string;
+  exampleIndex: number;
+  pageSummary: string;
+};
+```
+
+## Usage — rewrite then query
+
+```ts
+import {
+  rewriteExampleQueries,
+  getExampleCatalog,
+  formatExampleCatalogText,
+  queryExamples,
+} from "@ledgeindex/core";
+
+const catalog = await getExampleCatalog(sourceId);
+const rewritten = await rewriteExampleQueries({
+  question: "how do I set up an agent?",
+  catalogText: catalog
+    ? formatExampleCatalogText(catalog)
+    : "(no indexed examples yet)",
+});
+
+const hits = await queryExamples({
+  sourceId,
+  query: rewritten.queries[0] ?? "how do I set up an agent?",
+  exampleKind: rewritten.exampleKind,
+  language: rewritten.language,
+});
+```
+
+Or call `findExamples({ sourceId, query })` for the same sequence.
+
+## Example
+
+```ts
+import { kapaRetrieve, queryExamples } from "@ledgeindex/core";
+
+const docs = await kapaRetrieve({
+  query: "What is an agent?",
+  sourceId,
+});
+
+const examples = await queryExamples({
+  sourceId,
+  query: "new Agent tools",
+  exampleKind: "code",
+});
+```
+
+## Related
+
+- [Enrich](/reference/core/enrich)
+- [Chunk](/reference/core/chunk)
+- [Vector](/reference/core/vector)
+- [Docs runtime](/reference/docs-runtime)

@@ -1,0 +1,81 @@
+# Profile overview
+
+Profile builds a **structured research brief** for a website (or similar entity). It crawls once into a catalog, then runs one or more **lenses** — each lens picks the best URLs, fetches them, and synthesizes typed output (identity, pricing, capabilities, …).
+
+You get objects you can render in a UI or feed into agents — not a free-form dump of the whole site.
+
+## When to use profile
+
+Use `@ledgeindex/profile` when the goal is **open-ended site understanding** with fixed output shapes. You name the lenses; the package decides which pages matter and how to fill the schema.
+
+Use [Core](/core) instead when you need a durable searchable index for RAG, not a one-pass research profile. Use [Server](/server) when you want profile HTTP routes (`/api/profile/*`) beside docs ingest.
+
+## Quickstart
+
+```ts
+import { profileSite } from "@ledgeindex/profile";
+
+const { profile } = await profileSite("https://example.com/", [
+  "identity",
+  "capabilities",
+]);
+
+console.log(profile.identity);
+console.log(profile.capabilities);
+```
+
+`profile` is an alias of `profileSite`.
+
+Install:
+
+```bash
+npm i @ledgeindex/profile
+```
+
+What runs under the hood:
+
+1. Build a **crawl catalog** of the site  
+2. Per lens: **pick** URLs → **fetch** → **synthesize** structured output  
+3. Optionally expose landscape / competitor runs over HTTP when mounted on the server  
+
+## Use your profile
+
+Pass lens ids (or use defaults). Options control model, page budget, and pick-only dry runs:
+
+```ts
+import { profileSite, defaultProfileLenses } from "@ledgeindex/profile";
+
+const result = await profileSite("https://example.com/", defaultProfileLenses(), {
+  modelId: "…",
+  maxPages: 40,
+  sitemapOnly: false,
+  pickOnly: false,
+  onLensStart: (lens, index, total) => {
+    console.log(`lens ${index + 1}/${total}: ${lens}`);
+  },
+});
+```
+
+Mount on the server:
+
+```ts
+import { createLedgeIndexServer } from "@ledgeindex/server";
+
+await createLedgeIndexServer({
+  profiles: ["docs", "profile"],
+});
+```
+
+With the `profile` slot enabled:
+
+- `GET /api/profile/health`  
+- `POST /api/profile/runs` — landscape run (`EXA_API_KEY`)  
+- `GET /api/profile/runs/:id`  
+
+## Expand your profile
+
+| Goal | Start here |
+|------|------------|
+| Exports, lenses, harness | [API & lenses](/profile/api) |
+| Core crawl / chunk primitives | [Core](/core) |
+| Server mount options | [Server](/server) |

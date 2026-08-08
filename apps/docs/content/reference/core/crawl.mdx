@@ -1,0 +1,95 @@
+# Crawl
+
+Discover and filter URLs for a web source before parse/enrich.
+
+## Exports
+
+| Export | Purpose |
+|--------|---------|
+| `discoverUrls` | Crawl / sitemap discovery up to `maxPages` |
+| `preflightStartUrl` | Cheap check that a start URL is reachable / crawlable |
+| `filterCrawlUrls` | Apply include/exclude patterns to a URL list |
+| `dedupeUrlsByCanonical` | Collapse duplicates by canonical form |
+| `cancelDiscoverCrawl` | Cancel an in-flight discover for a `sourceId` |
+| `getCrawlProgress` | Read progress for a running discover |
+
+## Setup
+
+```ts
+import {
+  discoverUrls,
+  preflightStartUrl,
+  filterCrawlUrls,
+  dedupeUrlsByCanonical,
+  cancelDiscoverCrawl,
+  getCrawlProgress,
+} from "@ledgeindex/core";
+```
+
+## Usage — preflight
+
+```ts
+const ok = await preflightStartUrl("https://docs.example.com/");
+// throws or returns structured failure if the start URL cannot be used
+```
+
+## Usage — discover
+
+```ts
+const { urls, skipped } = await discoverUrls(
+  {
+    startUrls: ["https://docs.example.com/"],
+    maxPages: 200,
+    includePatterns: ["/docs/"],
+    excludePatterns: ["/blog/"],
+  },
+  { sourceId: "src_123" }, // enables progress + cancel
+);
+
+for (const u of urls) {
+  console.log(u.url, u.title);
+}
+```
+
+## Usage — filter / dedupe
+
+```ts
+const filtered = filterCrawlUrls(rawUrls, {
+  startUrls: ["https://docs.example.com/"],
+  includePatterns: ["/docs/"],
+  excludePatterns: ["/api/internal"],
+});
+
+const unique = dedupeUrlsByCanonical(filtered);
+```
+
+## Cancel + progress
+
+```ts
+const progress = getCrawlProgress("src_123");
+// { status, discovered, maxPages, ... }
+
+cancelDiscoverCrawl("src_123");
+```
+
+## Example — compose into parse
+
+```ts
+import { discoverUrls, parsePage } from "@ledgeindex/core";
+
+const { urls } = await discoverUrls({
+  startUrls: ["https://mastra.ai/docs"],
+  maxPages: 50,
+  includePatterns: ["/docs/"],
+});
+
+const pages = [];
+for (const { url } of urls) {
+  pages.push(await parsePage(url));
+}
+```
+
+## Related
+
+- [Extract](/reference/core/extract) — `parsePage` / `fetchPageHtml`
+- [Docs runtime](/reference/docs-runtime) — ingest workflow wraps crawl

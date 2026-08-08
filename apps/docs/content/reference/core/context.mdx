@@ -1,0 +1,55 @@
+# createCoreContext
+
+Builds a typed bag of adapters (`sourceRecords`, `chunkSearch`, `embedder`, `logger`) plus `dataDir`. Use when hosting code wants an explicit context object instead of ambient `getStore()` / env-only wiring.
+
+## Setup
+
+```ts
+import { createCoreContext, noopLogger } from "@ledgeindex/core";
+```
+
+## Usage
+
+```ts
+const ctx = createCoreContext({
+  dataDir: "/var/ledgeindex",
+  sourceRecords,
+  chunkSearch,
+  embedder,
+  logger: noopLogger, // optional; defaults to noop
+});
+```
+
+## Shape
+
+```ts
+type CoreContext = {
+  dataDir: string;
+  sourceRecords: SourceRecords;
+  chunkSearch: ChunkSearch;
+  embedder: Embedder;
+  logger: Logger;
+};
+```
+
+`SourceRecords`, `ChunkSearch`, and `Embedder` are interfaces you implement (or reuse from docs runtime). `noopLogger` ignores all log calls.
+
+## Example
+
+```ts
+import { createCoreContext } from "@ledgeindex/core";
+
+const ctx = createCoreContext({
+  dataDir: process.env.LEDGEINDEX_DATA_DIR ?? "./data",
+  sourceRecords: mySourceRecords,
+  chunkSearch: myChunkSearch,
+  embedder: myEmbedder,
+});
+
+ctx.logger.info?.("ready", { dataDir: ctx.dataDir });
+```
+
+## Related
+
+- [Persist / ingest](/reference/core/persist) — `getStore`, `getDataDir`
+- [Vector](/reference/core/vector) — default embed + store helpers

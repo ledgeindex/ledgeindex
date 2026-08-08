@@ -1,0 +1,72 @@
+# @ledgeindex/core
+
+Composable primitives for crawl → extract → enrich → chunk → embed → query. No HTTP server — compose these yourself or use `@ledgeindex/docs` / `@ledgeindex/server`.
+
+## Install
+
+```bash
+npm install @ledgeindex/core
+```
+
+## Primitive map
+
+| Area | Exports | Page |
+|------|---------|------|
+| Context | `createCoreContext`, `CoreContext` | [createCoreContext](/reference/core/context) |
+| Crawl | `discoverUrls`, `preflightStartUrl`, `filterCrawlUrls`, `dedupeUrlsByCanonical`, `cancelDiscoverCrawl`, `getCrawlProgress` | [Crawl](/reference/core/crawl) |
+| Extract | `parsePage`, `fetchPageHtml` | [Extract](/reference/core/extract) |
+| Enrich | `enrichPage`, `hasExampleCandidates`, `getEnrichModel`, … | [Enrich](/reference/core/enrich) |
+| Chunk | `chunk`, `prepareChunksForPages`, `storePreparedChunks`, … | [Chunk](/reference/core/chunk) |
+| Vector | `embedTexts`, `embedQuery`, `getVectorStore`, `ensureChunksIndex` | [Vector](/reference/core/vector) |
+| Query | `kapaRetrieve`, `queryExamples`, … | [Query](/reference/core/query) |
+| Persist | `getStore`, `getDataDir`, ingest cancel | [Persist](/reference/core/persist) |
+
+## Typical compose
+
+```ts
+import {
+  parsePage,
+  enrichPage,
+  chunk,
+  prepareChunksForPages,
+  storePreparedChunks,
+  queryExamples,
+} from "@ledgeindex/core";
+
+const page = await parsePage(url);
+const enriched = await enrichPage({
+  url: page.url,
+  title: page.title,
+  markdown: page.markdown,
+});
+
+await storePreparedChunks({
+  sourceId,
+  projectId,
+  prepared: await prepareChunksForPages({
+    sourceId,
+    projectId,
+    pages: [{ url: page.url, title: page.title, markdown: page.markdown, examples: enriched.status === "ok" ? enriched.examples : [] }],
+  }),
+});
+
+const examples = await queryExamples({
+  sourceId,
+  query: "create agent",
+});
+```
+
+## Env (enrich + examples)
+
+| Env | Purpose |
+|-----|---------|
+| `LM_STUDIO_BASE_URL` | Enables local enrich model |
+| `LEDGEINDEX_ENRICH_MODEL` | e.g. `lmstudio/qwen2.5-coder-7b-instruct` |
+| `LEDGEINDEX_ENRICH_EXAMPLES` | `"0"` disables ingest enrichment |
+| `LEDGEINDEX_ENRICH_CONCURRENCY` | Parallel page enrich |
+| `LEDGEINDEX_EXAMPLE_CODE_MAX_CHARS` | Split large example bodies (default ~2000) |
+| `LEDGEINDEX_DATA_DIR` | Local data root |
+
+## Version
+
+`LEDGEINDEX_CORE_VERSION` is exported as a string constant.

@@ -1,0 +1,22 @@
+# @ledgeindex/server
+
+Fastify host that mounts LedgeIndex profiles (`docs`, `profile`, `ag`) and optional Mastra contributions.
+
+## Install
+
+```bash
+npm install @ledgeindex/server
+```
+
+## Primitive map
+
+| Export | Purpose |
+|--------|---------|
+| `createLedgeIndexServer` | Build app + `listen()` |
+| `startLedgeIndexServer` | Create and listen |
+| `mergeMastraContributions` | Combine Mastra contributions |
+| `mountMastraOnFastify` | Attach Mastra to Fastify |
+| `MastraContribution` | Contribution type |
+| `LEDGEINDEX_SERVER_VERSION` | Version constant |
+
+See [createLedgeIndexServer](/reference/server/create-server).

@@ -1,28 +1,43 @@
 # Docs overview
 
-Guides for choosing packages and running the LedgeIndex pipeline. For copy-paste primitive APIs, switch to the [Reference](/reference) tab.
+Guides for running LedgeIndex and choosing packages. For a short map of API surfaces, see [Reference](/reference).
+
+## What ships today
+
+LedgeIndex is an open-core monorepo:
+
+- **Packages** under `@ledgeindex/*` (published, currently **0.1.7**)
+- **Apps**: web UI, Electron desktop, this docs site, Expo mobile
+- **Hosts**: cloud/API wrappers and local sidecars that call `@ledgeindex/server`
+
+The usual local stack is API on **3010**, web on **3004**, docs site on **3005**.
 
 ## Packages
 
 | Package | Role | Guide |
 |---------|------|-------|
 | `@ledgeindex/core` | Crawl, extract, enrich, chunk, embed, query | [Core](/docs/core) |
+| `@ledgeindex/docs` | Docs profile: sources, ingest, RAG chat, MCP | [Docs profile](/docs/docs-profile) |
 | `@ledgeindex/profile` | Site research lenses | [Profile](/docs/profile) |
-| `@ledgeindex/server` | Fastify host for docs + profile | [Server](/docs/server) |
+| `@ledgeindex/server` | Fastify host for docs + profile (+ optional ag) | [Server](/docs/server) |
+| `@ledgeindex/client` | HTTP client for the API | [Reference](/reference) |
+| `@ledgeindex/model` | Shared model helpers | [Reference](/reference) |
+| `@ledgeindex/ag` | Optional AutomationGhost profile | [Server](/docs/server) |
+| `@ledgeindex/repo` | Shared repo/data helpers used by docs | — |
 
 ## Pipeline (concept)
 
 ```text
 discover → extract → enrich → chunk → embed → store → query
                                       │
-                                      ├─ markdown chunks → kapaRetrieve
+                                      ├─ markdown chunks → retrieve / chat
                                       └─ example chunks → queryExamples
 ```
 
-## Quickstart
+## Quickstart (library)
 
 ```bash
-npm i @ledgeindex/core @ledgeindex/profile @ledgeindex/server
+npm i @ledgeindex/core @ledgeindex/docs @ledgeindex/profile @ledgeindex/server
 ```
 
 ```ts
@@ -39,6 +54,8 @@ await startLedgeIndexServer({
 
 | Goal | Page |
 |------|------|
-| Install + env | [Getting started](/docs/getting-started) |
+| Install + env + monorepo scripts | [Getting started](/docs/getting-started) |
+| Web / desktop / docs site | [Apps](/docs/apps) |
+| Ingest, chat, MCP | [Docs profile](/docs/docs-profile) |
 | Core composition | [Core](/docs/core) |
-| Primitive APIs | [Reference](/reference) |
+| API map | [Reference](/reference) |

@@ -1,0 +1,85 @@
+# createLedgeIndexServer
+
+Build a Fastify app with selected profiles, CORS, optional Mastra mount, and a `listen()` helper.
+
+## Setup
+
+```ts
+import {
+  createLedgeIndexServer,
+  startLedgeIndexServer,
+} from "@ledgeindex/server";
+```
+
+## Usage
+
+```ts
+const server = await createLedgeIndexServer({
+  profiles: ["docs", "profile"],
+  port: 3010,
+  host: "0.0.0.0",
+  dataDir: "./data",
+});
+
+await server.listen();
+// or: await startLedgeIndexServer({ ... })
+```
+
+## Options
+
+```ts
+type LedgeIndexProfile = "docs" | "profile" | "ag";
+
+type LedgeIndexServerOptions = {
+  dataDir?: string;
+  profiles?: LedgeIndexProfile[]; // default ["docs", "profile"]
+  port?: number;                  // PORT env or 3010
+  host?: string;                  // HOST env or 0.0.0.0
+  createAgMastraContribution?: () => MastraContribution; // required if profiles includes "ag"
+  beforeProfiles?: (app: FastifyInstance) => Promise<void>;
+  afterProfiles?: (app: FastifyInstance) => Promise<void>;
+};
+```
+
+| Field | Notes |
+|-------|-------|
+| `profiles` | Which packs to mount |
+| `dataDir` | Sets `LEDGEINDEX_DATA_DIR` |
+| `beforeProfiles` | Auth, logging, plugins |
+| `afterProfiles` | Hooks after registration |
+| `createAgMastraContribution` | Required for AutomationGhost `ag` profile |
+
+Legacy profile id `company` normalizes to `profile`.
+
+## Env
+
+```bash
+LEDGEINDEX_PROFILES=docs,profile
+PORT=3010
+HOST=0.0.0.0
+LEDGEINDEX_DATA_DIR=/path/to/data
+```
+
+## Example — hosted hooks
+
+```ts
+await startLedgeIndexServer({
+  profiles: ["docs", "profile"],
+  beforeProfiles: async (app) => {
+    // auth, request logging, …
+  },
+  afterProfiles: async (app) => {
+    app.get("/custom", async () => ({ ok: true }));
+  },
+});
+```
+
+## Health
+
+`GET /health/packages` returns package versions and active profiles.
+
+## Related
+
+- [Docs runtime](/reference/docs-runtime)
+- [Profile](/reference/profile)
+- [Client](/reference/client)

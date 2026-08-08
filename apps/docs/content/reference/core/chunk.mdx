@@ -1,0 +1,107 @@
+# chunk
+
+Split text for embedding, or prepare/store page chunks for a source.
+
+## Exports
+
+| Export | Purpose |
+|--------|---------|
+| `chunk` | `chunk(text, { strategy, language?, maxSize?, overlap? })` |
+| `chunkMarkdown` | Wrapper → `strategy: "semantic-markdown"` |
+| `chunkLocalFallback` / `chunkMarkdownLocalFallback` | Sync fallbacks if Mastra times out |
+| `mapToChunkLanguage` | Map language id for recursive mode |
+| constants | `SEMANTIC_MARKDOWN_*`, `RECURSIVE_CHUNK_*` |
+| `prepareChunksForPages` | Chunk pages (+ example drafts) → prepared records |
+| `storePreparedChunks` | Embed + upsert |
+| `indexPagesForSource` | Prepare + store |
+| `prepareExampleChunkDrafts` | Example drafts (`chunkKind: "example"`) |
+| `buildChunkMetadata` | Metadata for one chunk |
+| `estimateChunkCountFromMarkdown` | Size estimate |
+| `getMetadataCatalog` | Page/section catalog from stored metadata |
+| `markSourceIndexed` | Mark source indexed |
+| `getExampleCodeMaxChars` / `DEFAULT_EXAMPLE_CODE_MAX_CHARS` | Large-example split threshold |
+
+## Setup
+
+```ts
+import {
+  chunk,
+  chunkMarkdown,
+  prepareChunksForPages,
+  storePreparedChunks,
+  indexPagesForSource,
+  RECURSIVE_CHUNK_MAX_SIZE,
+} from "@ledgeindex/core";
+```
+
+## Usage — chunk
+
+```ts
+const docs = await chunk(markdown, { strategy: "semantic-markdown" });
+// or
+const docs2 = await chunkMarkdown(markdown);
+
+const code = await chunk(largeTsSource, {
+  strategy: "recursive",
+  language: "ts",
+  maxSize: RECURSIVE_CHUNK_MAX_SIZE,
+});
+```
+
+| Strategy | When |
+|----------|------|
+| `semantic-markdown` | Docs pages |
+| `recursive` | Large code / long example bodies |
+
+## Usage — prepare + store
+
+```ts
+const prepared = await prepareChunksForPages({
+  sourceId: "src_123",
+  projectId: "proj_1",
+  pages: [
+    {
+      url: page.url,
+      title: page.title,
+      markdown: page.markdown,
+      examples: enriched.status === "ok" ? enriched.examples : [],
+    },
+  ],
+  onProgress: (p) => console.log(p.phase, p.current, p.total),
+});
+
+await storePreparedChunks({
+  sourceId: "src_123",
+  projectId: "proj_1",
+  prepared,
+});
+```
+
+```ts
+await indexPagesForSource({
+  sourceId: "src_123",
+  projectId: "proj_1",
+  pages: [{ url, title, markdown }],
+});
+```
+
+## Example
+
+```ts
+import { chunk, prepareChunksForPages, storePreparedChunks } from "@ledgeindex/core";
+
+const parts = await chunk(page.markdown, { strategy: "semantic-markdown" });
+
+const prepared = await prepareChunksForPages({
+  sourceId,
+  projectId,
+  pages: [{ url: page.url, title: page.title, markdown: page.markdown }],
+});
+await storePreparedChunks({ sourceId, projectId, prepared });
+```
+
+## Related
+
+- [Enrich](/reference/core/enrich)
+- [Vector](/reference/core/vector)
+- [Query](/reference/core/query)

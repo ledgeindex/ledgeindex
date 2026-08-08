@@ -1,0 +1,66 @@
+# Core primitives
+
+Each stage lives under a dedicated import path. Compose only what you need.
+
+## Crawl
+
+Discover URLs and decide what to fetch.
+
+- Discover / probes / `llms.txt` / sitemap  
+- Canonical dedupe, URL filters, preflight  
+- Source classification  
+
+Import under `@ledgeindex/core/crawl/*`.
+
+## Extract
+
+Turn HTML into usable text.
+
+- `parsePage` / `fetchPageHtml`  
+- Page title helpers  
+- Markdown alternates  
+
+Import under `@ledgeindex/core/extract/parser/*`.
+
+## Chunk
+
+Split markdown for embedding.
+
+- `chunkMarkdown` (+ local fallback)  
+- Size / overlap constants  
+
+Import under `@ledgeindex/core` or `@ledgeindex/core/chunk`.
+
+## Chunk pipeline
+
+End-to-end indexing for a source’s pages.
+
+- Prepare chunks → store → mark indexed  
+- Chunk metadata builders  
+- Index size estimates  
+
+Import under `@ledgeindex/core/chunk-pipeline/*`.
+
+## Vector
+
+Embed and store vectors (LibSQL locally; Postgres/pgvector in production patterns).
+
+Import under `@ledgeindex/core/vector/*`.
+
+## Persist (DB)
+
+Source records, page snapshots, file / memory / pg stores.
+
+Import under `@ledgeindex/core/db/*`.
+
+## Query
+
+Retrieve chunks / pages; optional rerank backends and catalogs.
+
+Import under `@ledgeindex/core/query/*`.
+
+## Schemas
+
+Zod configs for sources and metadata.
+
+Import under `@ledgeindex/core/schemas/*`.

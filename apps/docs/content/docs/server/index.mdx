@@ -1,12 +1,12 @@
 # Server overview
 
-Server is the LedgeIndex **HTTP entrypoint**. It creates a Fastify app, optionally mounts Mastra, and registers capability packs (“profiles”) such as docs ingest/RAG and site research.
+Server is the LedgeIndex HTTP entrypoint. It creates a Fastify app, optionally mounts Mastra, and registers capability packs (“profiles”) such as docs ingest/RAG and site research.
 
-You give it which profiles to enable; it wires CORS, shared Mastra contributions, and the matching route plugins. Hosts add auth and logging around that via `beforeProfiles` / `afterProfiles`.
+You choose which profiles to enable. It wires CORS, shared Mastra contributions, and the matching route plugins. Hosts add auth and logging around that via `beforeProfiles` / `afterProfiles`.
 
 ## When to use server
 
-Use `@ledgeindex/server` when you want a **single process** that exposes LedgeIndex over HTTP — health checks, docs ingest/chat, profile landscape routes — without hand-rolling Fastify plugin order.
+Use `@ledgeindex/server` when you want a **single process** that exposes LedgeIndex over HTTP: health checks, docs ingest/chat, profile landscape routes, without hand-rolling Fastify plugin order.
 
 If you only need library APIs inside another app, import [Core](/docs/core) or [Profile](/docs/profile) directly. Server is for running LedgeIndex as a service.
 
@@ -39,18 +39,27 @@ Install:
 npm i @ledgeindex/server
 ```
 
-## Use your server
+Published package version tracks the monorepo releases (currently **0.1.7**).
+
+## Profiles
 
 Default profiles are `["docs", "profile"]`. Each id mounts a pack:
 
 | Profile id | Registers |
 |------------|-----------|
-| `docs` | Docs ingest / RAG / MCP routes + Mastra contribution |
+| `docs` | Docs ingest / RAG / MCP routes + Mastra contribution ([Docs profile](/docs/docs-profile)) |
 | `profile` | Landscape / research routes from `@ledgeindex/profile` |
+| `ag` | AutomationGhost agents/workflows (needs `createAgMastraContribution` in server options) |
 
 Legacy env value `company` still maps to `profile`.
 
-Health:
+`ag` is for hosts such as `hosts/ag-server`. Passing `"ag"` without `createAgMastraContribution` throws at startup.
+
+## Access gate
+
+After `beforeProfiles` (where hosts install auth), the server always registers the approved-access middleware from `@ledgeindex/docs`. It is a no-op unless API auth is required. On cloud installs, pending users cannot hit most routes until approved.
+
+## Health
 
 ```http
 GET /health/packages
@@ -65,5 +74,7 @@ Hosted wrappers typically parse `LEDGEINDEX_PROFILES` and pass the array into `p
 | Goal | Start here |
 |------|------------|
 | Full option list and hooks | [Options](/docs/server/options) |
+| Docs ingest / MCP | [Docs profile](/docs/docs-profile) |
 | What the profile slot does | [Profile](/docs/profile) |
 | Core primitives under the hood | [Core](/docs/core) |
+| Web and desktop | [Apps](/docs/apps) |

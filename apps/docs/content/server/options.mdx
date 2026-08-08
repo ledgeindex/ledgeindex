@@ -3,16 +3,13 @@
 `createLedgeIndexServer` / `startLedgeIndexServer` accept:
 
 ```ts
-type LedgeIndexProfile = "docs" | "profile" | "ag";
+type LedgeIndexProfile = "docs" | "profile";
 
 type LedgeIndexServerOptions = {
   dataDir?: string;
   profiles?: LedgeIndexProfile[];
   port?: number;
   host?: string;
-  /** Required when `ag` is in profiles (wired by ag-server / AutomationGhost host). */
-  createAgMastraContribution?: () => MastraContribution;
-  /** Extra plugins (Firebase auth, OAuth, logging) — hosted entry only */
   beforeProfiles?: (app: FastifyInstance) => Promise<void>;
   afterProfiles?: (app: FastifyInstance) => Promise<void>;
 };
@@ -22,15 +19,12 @@ type LedgeIndexServerOptions = {
 
 | Field | Default | Notes |
 |-------|---------|-------|
-| `profiles` | `["docs", "profile"]` | Which capability packs to mount (`docs`, `profile`, `ag`) |
+| `profiles` | `["docs", "profile"]` | Which capability packs to mount |
 | `port` | `PORT` env or `3010` | Used by `listen()` |
 | `host` | `HOST` env or `0.0.0.0` | Bind address |
 | `dataDir` | — | Sets `LEDGEINDEX_DATA_DIR` when provided |
-| `createAgMastraContribution` | — | Required if `ag` is enabled |
 | `beforeProfiles` | — | Fastify plugins before profile routes (auth, logging, …) |
 | `afterProfiles` | — | Hooks after profile registration |
-
-Body size limit is raised (32MB) so chat attachments can travel as base64 JSON.
 
 ## Env
 
@@ -59,18 +53,6 @@ await startLedgeIndexServer({
   profiles: ["docs", "profile"],
   beforeProfiles: async (app) => {
     // e.g. auth, request logging
-  },
-});
-```
-
-With AutomationGhost:
-
-```ts
-await startLedgeIndexServer({
-  profiles: ["docs", "profile", "ag"],
-  createAgMastraContribution: () => createAgMastraContribution(),
-  beforeProfiles: async (app) => {
-    // auth
   },
 });
 ```

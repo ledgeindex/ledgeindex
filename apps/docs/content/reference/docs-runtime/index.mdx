@@ -1,0 +1,74 @@
+# @ledgeindex/docs
+
+Docs **runtime**: ingest workflow (crawl → parse → enrich → embed → store), RAG agents, and MCP tools. Composes `@ledgeindex/core`.
+
+## Install
+
+```bash
+npm install @ledgeindex/docs
+```
+
+## Package exports
+
+| Export | Purpose |
+|--------|---------|
+| `registerDocsProfile` | Fastify routes for docs ingest / sources |
+| `setRegisterDocsProfile` | Wire implementation at bootstrap |
+| `createDocsMastraContribution` | Agents, workflows, MCP for Mastra mount |
+| `registerHostedInngest` | Hosted Inngest registration |
+| `LEDGEINDEX_DOCS_VERSION` | Version constant |
+
+## Setup
+
+```ts
+import {
+  registerDocsProfile,
+  createDocsMastraContribution,
+} from "@ledgeindex/docs";
+```
+
+Usually mounted via `@ledgeindex/server` with `profiles: ["docs"]` — you rarely call these directly unless building a custom host.
+
+## Ingest pipeline (primitives in order)
+
+```text
+crawl-review → parse-review → enrich → embed → store
+```
+
+| Step | Core primitives used |
+|------|----------------------|
+| Crawl | `discoverUrls`, `preflightStartUrl`, … |
+| Parse | `parsePage` |
+| Enrich | `enrichPage` (skips if no examples / no LLM) |
+| Embed | `prepareChunksForPages` / example drafts + `embedTexts` |
+| Store | `storePreparedChunks`, example catalog save |
+
+Disable enrich: `LEDGEINDEX_ENRICH_EXAMPLES=0`.
+
+## MCP tools
+
+| Tool | Backed by | Use when |
+|------|-----------|----------|
+| `ask_knowledge_source` | `kapaRetrieve` | Prose Q&A |
+| `find_examples` | `findExamples` / `queryExamples` | Code / setup / usage snippets |
+| `list_*_sources` / sets | source registry | Discover slugs before asking |
+
+Prefer source **slugs** over UUIDs.
+
+## Example — contribution only
+
+```ts
+import { createDocsMastraContribution } from "@ledgeindex/docs";
+import { mergeMastraContributions, mountMastraOnFastify } from "@ledgeindex/server";
+
+const mastra = mergeMastraContributions({
+  contributions: [createDocsMastraContribution()],
+});
+await mountMastraOnFastify(app, mastra);
+```
+
+## Related
+
+- [Core](/reference/core)
+- [Query](/reference/core/query)
+- [createLedgeIndexServer](/reference/server/create-server)

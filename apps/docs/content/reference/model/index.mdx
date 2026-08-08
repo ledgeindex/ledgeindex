@@ -1,0 +1,78 @@
+# @ledgeindex/model
+
+Local GGUF / LM Studio helpers: inspect, download, mount, chat, serve, benchmark. Used by desktop / local-model flows (e.g. AutomationGhost), not by the docs ingest path itself.
+
+## Install
+
+```bash
+npm install @ledgeindex/model
+```
+
+## Primitive map
+
+| Area | Exports |
+|------|---------|
+| Inspect | model / GGUF inspect helpers |
+| Estimate | VRAM / context estimates |
+| Download | resolve or download GGUF |
+| Discover | LM Studio discovery |
+| Mount | `mount` / `unmount` singleton runtime |
+| Chat | prompt / stream over mounted model |
+| Serve | OpenAI-compatible local serve |
+| Benchmark | TTFT / tokens-sec helpers |
+| AI SDK | bridge helpers |
+| Presets | Gemma 4 E2B / mountable presets |
+| Reasoning | thought-token / effort helpers |
+
+## Setup
+
+```ts
+import {
+  mount,
+  unmount,
+  chatPrompt,
+  discoverLmStudioModels,
+} from "@ledgeindex/model";
+```
+
+Exact named exports live in `packages/model/src/index.ts` (`inspect`, `estimate`, `download`, `discover-lm-studio`, `mount`, `chat`, `serve`, `benchmark`, `ai-sdk`, presets).
+
+## Usage — mount + chat
+
+```ts
+await mount({
+  // modelPath or modelUri
+  contextSize: 8192,
+  gpuLayers: "auto",
+});
+
+const { text, metrics } = await chatPrompt({
+  prompt: "Say hello in one sentence.",
+  systemPrompt: "You are concise.",
+  maxTokens: 64,
+});
+
+console.log(text, metrics.tokensPerSec);
+await unmount();
+```
+
+## Usage — discover LM Studio
+
+```ts
+import { discoverLmStudioModels } from "@ledgeindex/model";
+
+const found = discoverLmStudioModels();
+console.log(found);
+```
+
+## Example — preset
+
+```ts
+import { gemma4E2b /* preset helpers */ } from "@ledgeindex/model";
+// see packages/model/src/presets/*
+```
+
+## Related
+
+- Core enrich uses LM Studio via env (`LM_STUDIO_BASE_URL`) + `getEnrichModel` — separate from this mount API
+- [Core enrich](/reference/core/enrich)

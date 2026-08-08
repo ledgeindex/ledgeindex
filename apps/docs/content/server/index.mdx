@@ -1,0 +1,69 @@
+# Server overview
+
+Server is the LedgeIndex **HTTP entrypoint**. It creates a Fastify app, optionally mounts Mastra, and registers capability packs (“profiles”) such as docs ingest/RAG and site research.
+
+You give it which profiles to enable; it wires CORS, shared Mastra contributions, and the matching route plugins. Hosts add auth and logging around that via `beforeProfiles` / `afterProfiles`.
+
+## When to use server
+
+Use `@ledgeindex/server` when you want a **single process** that exposes LedgeIndex over HTTP — health checks, docs ingest/chat, profile landscape routes — without hand-rolling Fastify plugin order.
+
+If you only need library APIs inside another app, import [Core](/core) or [Profile](/profile) directly. Server is for running LedgeIndex as a service.
+
+## Quickstart
+
+```ts
+import { startLedgeIndexServer } from "@ledgeindex/server";
+
+await startLedgeIndexServer({
+  profiles: ["docs", "profile"],
+  port: 3010,
+});
+```
+
+Or create without listening yet:
+
+```ts
+import { createLedgeIndexServer } from "@ledgeindex/server";
+
+const { app, listen } = await createLedgeIndexServer({
+  profiles: ["docs", "profile"],
+});
+
+await listen();
+```
+
+Install:
+
+```bash
+npm i @ledgeindex/server
+```
+
+## Use your server
+
+Default profiles are `["docs", "profile"]`. Each id mounts a pack:
+
+| Profile id | Registers |
+|------------|-----------|
+| `docs` | Docs ingest / RAG / MCP routes + Mastra contribution |
+| `profile` | Landscape / research routes from `@ledgeindex/profile` |
+
+Legacy env value `company` still maps to `profile`.
+
+Health:
+
+```http
+GET /health/packages
+```
+
+Returns core/server versions and the active profile list.
+
+Hosted wrappers typically parse `LEDGEINDEX_PROFILES` and pass the array into `profiles`.
+
+## Expand your server
+
+| Goal | Start here |
+|------|------------|
+| Full option list and hooks | [Options](/server/options) |
+| What the profile slot does | [Profile](/profile) |
+| Core primitives under the hood | [Core](/core) |
