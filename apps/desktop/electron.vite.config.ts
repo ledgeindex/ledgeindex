@@ -14,12 +14,18 @@ function resolvePkg(id: string): string {
 }
 
 export default defineConfig(({ mode }) => {
-  // File env from apps/web, then process.env wins (CI secrets / local shell).
+  // File env from apps/web + apps/desktop, then process.env wins (CI / shell).
   const webEnv = loadEnv(mode, resolve(__dirname, '../web'), '')
+  const desktopEnv = loadEnv(mode, __dirname, '')
+  Object.assign(webEnv, desktopEnv)
   for (const [key, value] of Object.entries(process.env)) {
     if (
       value !== undefined &&
-      (key.startsWith('NEXT_PUBLIC_') || key.startsWith('VITE_'))
+      (key.startsWith('NEXT_PUBLIC_') ||
+        key.startsWith('VITE_') ||
+        key.startsWith('LEDGEINDEX_GOOGLE_DESKTOP_') ||
+        key.startsWith('GOOGLE_DESKTOP_') ||
+        key === 'LEDGEINDEX_GOOGLE_OAUTH_REDIRECT_PORT')
     ) {
       webEnv[key] = value
     }
@@ -29,7 +35,13 @@ export default defineConfig(({ mode }) => {
   }
 
   for (const [key, value] of Object.entries(webEnv)) {
-    if (key.startsWith('NEXT_PUBLIC_') || key.startsWith('VITE_')) {
+    if (
+      key.startsWith('NEXT_PUBLIC_') ||
+      key.startsWith('VITE_') ||
+      key.startsWith('LEDGEINDEX_GOOGLE_DESKTOP_') ||
+      key.startsWith('GOOGLE_DESKTOP_') ||
+      key === 'LEDGEINDEX_GOOGLE_OAUTH_REDIRECT_PORT'
+    ) {
       defineEnv[`process.env.${key}`] = JSON.stringify(value)
     }
   }

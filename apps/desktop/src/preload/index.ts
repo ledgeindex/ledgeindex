@@ -46,6 +46,8 @@ const ledgeindexDesktop = {
   ): Promise<{ startInTray: boolean; closeToTray: boolean }> =>
     ipcRenderer.invoke('settings:setAppPreferences', patch),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('update:getVersion'),
+  /** ActiveHue-style Google OAuth → ID token for Firebase signInWithCredential. */
+  oauthGoogleSignIn: (): Promise<string> => ipcRenderer.invoke('oauth:google-signin'),
   checkForUpdates: (config?: {
     provider?: 'github'
     owner?: string

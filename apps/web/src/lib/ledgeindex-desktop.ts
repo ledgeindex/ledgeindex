@@ -65,6 +65,8 @@ export type LedgeIndexDesktopApi = {
     patch: Partial<{ startInTray: boolean; closeToTray: boolean }>,
   ) => Promise<{ startInTray: boolean; closeToTray: boolean }>;
   getAppVersion?: () => Promise<string>;
+  /** Packaged desktop: Google OAuth loopback → Firebase ID token. */
+  oauthGoogleSignIn?: () => Promise<string>;
   checkForUpdates?: (
     config?: DesktopUpdateFeedConfig,
   ) => Promise<{ ok: boolean; version?: string | null; error?: string }>;

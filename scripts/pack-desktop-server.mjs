@@ -16,6 +16,7 @@ import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   realpathSync,
   renameSync,
@@ -84,6 +85,9 @@ const SKIP_PACKAGES = new Set([
   "vite",
   "prettier",
   "eslint",
+  // Browser WASM runtime — Node sidecar uses onnxruntime-node only.
+  // (@huggingface/transformers lists both; shipping web adds ~90MB for nothing.)
+  "onnxruntime-web",
 ]);
 
 const NODE_BUILTINS = new Set([
@@ -502,16 +506,41 @@ function isWorkspacePackage(name, srcDir) {
   }
 }
 
+/**
+ * Filter files while copying a single package into the stage.
+ * Per-platform builds (Windows CI vs macOS CI) only keep THIS host's natives —
+ * Mac shipping is unaffected; the Mac job packs darwin binaries separately.
+ */
 function packageCopyFilter(src) {
   const base = src.replace(/\\/g, "/");
   // Transformers.js downloads models into package-local .cache at runtime —
   // never ship a developer's HF cache (can be >1GB of .onnx weights).
   if (base.includes("/.cache/") || base.endsWith("/.cache")) return false;
-  // onnxruntime-node ships all OS natives; keep only this build host.
-  const nativeOs = base.match(
-    /\/onnxruntime-node\/bin\/(darwin|linux|win32)(\/|$)/,
+
+  // Drop nested onnx runtimes copied inside other packages (esp.
+  // @huggingface/transformers). We stage a single flat onnxruntime-node;
+  // keeping the nested copy duplicated ~200MB and re-introduced every OS.
+  // Do NOT strip all nested node_modules — packages like htmlparser2/entities
+  // need nested version pins.
+  if (
+    /\/node_modules\/(?:@[^/]+\/)?[^/]+\/node_modules\/onnxruntime-(?:node|web)(\/|$)/.test(
+      base,
+    )
+  ) {
+    return false;
+  }
+
+  // onnxruntime-node layout: bin/napi-v6/{darwin,linux,win32}/{arm64,x64}/...
+  // Older filter expected bin/win32 and never matched, so all OSes shipped.
+  const native = base.match(
+    /\/onnxruntime-node\/bin\/(?:[^/]+\/)*(darwin|linux|win32)(?:\/(arm64|arm|x64|ia32))?(\/|$)/,
   );
-  if (nativeOs && nativeOs[1] !== process.platform) return false;
+  if (native) {
+    const os = native[1];
+    const arch = native[2];
+    if (os !== process.platform) return false;
+    if (arch && arch !== process.arch) return false;
+  }
   return true;
 }
 
@@ -560,6 +589,11 @@ function copyCollectedPackages(flat, nested) {
 
   let nestedCopied = 0;
   for (const { parentName, name, srcDir } of nested) {
+    // Never nest browser/native onnx duplicates — flat onnxruntime-node is enough.
+    if (name === "onnxruntime-web" || name === "onnxruntime-node") {
+      log(`skip nested ${name} under ${parentName} (use flat onnxruntime-node)`);
+      continue;
+    }
     // Ensure parent exists (workspace packages are copied without node_modules).
     const parentTarget = destPathForPackage(parentName);
     if (!existsSync(parentTarget)) {
@@ -664,6 +698,56 @@ function assertStagedIntegrity() {
   if (!mcpPkg.dependencies?.eventsource) {
     throw new Error(
       "pack integrity: staged @modelcontextprotocol/sdk missing eventsource dependency metadata",
+    );
+  }
+
+  // Size / platform integrity
+  if (existsSync(destPathForPackage("onnxruntime-web"))) {
+    throw new Error(
+      "pack integrity: onnxruntime-web must not be staged (Node uses onnxruntime-node)",
+    );
+  }
+
+  const ortBin = join(destPathForPackage("onnxruntime-node"), "bin");
+  if (existsSync(ortBin)) {
+    const foreign = [];
+    const walk = (dir) => {
+      let entries;
+      try {
+        entries = readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const ent of entries) {
+        const p = join(dir, ent.name);
+        if (ent.isDirectory()) {
+          if (
+            (ent.name === "darwin" || ent.name === "linux" || ent.name === "win32") &&
+            ent.name !== process.platform
+          ) {
+            foreign.push(relative(ortBin, p));
+            continue;
+          }
+          walk(p);
+        }
+      }
+    };
+    walk(ortBin);
+    if (foreign.length > 0) {
+      throw new Error(
+        `pack integrity: onnxruntime-node still has foreign OS natives: ${foreign.join(", ")}`,
+      );
+    }
+  }
+
+  const hfNestedOrt = join(
+    destPathForPackage("@huggingface/transformers"),
+    "node_modules",
+    "onnxruntime-node",
+  );
+  if (existsSync(hfNestedOrt)) {
+    throw new Error(
+      "pack integrity: nested onnxruntime-node under @huggingface/transformers must not be staged",
     );
   }
 }

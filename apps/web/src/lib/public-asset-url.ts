@@ -1,6 +1,7 @@
 /**
- * Root-absolute public URLs (`/images/...`) break under Electron `loadFile`
- * (resolve to the filesystem root). Desktop needs a path relative to index.html.
+ * Public asset URLs for web + desktop.
+ * Root-absolute `/images/...` breaks under Electron `loadFile` (file://) —
+ * desktop needs a path relative to index.html.
  */
 export function publicAssetUrl(path: string): string {
   const raw = path.trim();

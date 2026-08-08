@@ -7,11 +7,13 @@ import {
   GoogleAuthProvider,
   onAuthStateChanged,
   setPersistence,
+  signInWithCredential,
   signInWithPopup,
   signOut as firebaseSignOut,
   type User,
   type UserCredential,
 } from "firebase/auth";
+import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -69,10 +71,20 @@ export function isLedgeIndexDesktopShell(): boolean {
 }
 
 /**
- * Google sign-in. Popup works in desktop when Electron allows the auth child window.
+ * Google sign-in.
+ * Desktop: ActiveHue loopback OAuth → signInWithCredential (works with file://).
+ * Web: signInWithPopup.
  */
 export async function signInWithGoogle(): Promise<UserCredential | null> {
   if (!auth) throw new Error("Firebase Auth is not configured");
+
+  const desktop = getLedgeIndexDesktop();
+  if (desktop?.oauthGoogleSignIn) {
+    const idToken = await desktop.oauthGoogleSignIn();
+    const credential = GoogleAuthProvider.credential(idToken);
+    return signInWithCredential(auth, credential);
+  }
+
   return signInWithPopup(auth, googleProvider);
 }
 

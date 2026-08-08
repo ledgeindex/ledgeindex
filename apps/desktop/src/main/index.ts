@@ -27,6 +27,7 @@ import {
   type AppPreferences
 } from './app-preferences'
 import { createAppTray, destroyAppTray } from './tray'
+import { registerGoogleOAuthIpc } from './google-oauth-loopback'
 
 let mainWindow: BrowserWindow | null = null
 let isQuitting = false
@@ -114,16 +115,14 @@ function createWindow(): void {
   win.once('ready-to-show', () => {
     if (win.isDestroyed()) return
     if (prefs.startInTray) {
-      // Stay hidden — tray click opens the window.
-      if (is.dev) {
-        // Still attach DevTools in background for debugging if needed.
-      }
       return
     }
     win.show()
     if (is.dev) openInAppDevTools(win)
   })
 
+  // Packaged UI stays on file:// (ActiveHue pattern). Auth uses a short-lived
+  // OAuth loopback on 127.0.0.1 — see google-oauth-loopback.ts.
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     void win.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -140,6 +139,7 @@ app.whenReady().then(async () => {
   })
 
   createAppTray(() => mainWindow)
+  registerGoogleOAuthIpc()
 
   ipcMain.handle('window:minimize', () => {
     mainWindow?.minimize()
@@ -216,7 +216,6 @@ app.on('before-quit', () => {
 })
 
 app.on('window-all-closed', () => {
-  // Keep running in tray when close-to-tray / start-in-tray is enabled.
   const prefs = getAppPreferences()
   if (prefs.closeToTray || prefs.startInTray) return
   stopDesktopSidecars()
