@@ -135,13 +135,14 @@ jobs:
 
           # Matrix jobs race on first create — retry upload after a peer creates the release.
           if ! gh release view "$TAG" --repo ledgeindex/ledgeindex >/dev/null 2>&1; then
+            NOTES="$(printf '%s\n\n%s\n%s' \
+              "LedgeIndex desktop ${VERSION}" \
+              'Windows: `LedgeIndex-*-setup.exe`' \
+              'macOS: `LedgeIndex-*-mac-*.dmg` (Apple Silicon + Intel). Unsigned until notarization — right-click the app → Open the first time.')"
             gh release create "$TAG" \
               --repo ledgeindex/ledgeindex \
               --title "LedgeIndex Desktop ${VERSION}" \
-              --notes "LedgeIndex desktop ${VERSION}
-
-Windows: \`LedgeIndex-*-setup.exe\`
-macOS: \`LedgeIndex-*-mac-*.dmg\` (Apple Silicon + Intel). Unsigned until notarization — right-click the app → Open the first time." \
+              --notes "$NOTES" \
               --verify-tag \
               || true
           fi
