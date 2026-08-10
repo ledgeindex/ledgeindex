@@ -10,7 +10,7 @@ export function CloudLocalToggle({
   disabled = false,
   className,
   size = "default",
-  ariaLabel = "Retrieval path",
+  ariaLabel = "Where docs are processed",
 }: {
   value: "cloud" | "local";
   onChange: (value: "cloud" | "local") => void;
@@ -37,6 +37,7 @@ export function CloudLocalToggle({
         disabled={disabled}
         compact={compact}
         label="Local"
+        title="Process and store docs on this device"
         icon={<HardDrive className={compact ? "size-3" : "size-3.5"} aria-hidden />}
         onClick={() => onChange("local")}
       />
@@ -45,6 +46,7 @@ export function CloudLocalToggle({
         disabled={disabled}
         compact={compact}
         label="Cloud"
+        title="Process and store docs in LedgeIndex cloud"
         icon={<Cloud className={compact ? "size-3" : "size-3.5"} aria-hidden />}
         onClick={() => onChange("cloud")}
       />
@@ -57,6 +59,7 @@ function ToggleOption({
   disabled,
   compact,
   label,
+  title,
   icon,
   onClick,
 }: {
@@ -64,6 +67,7 @@ function ToggleOption({
   disabled: boolean;
   compact: boolean;
   label: string;
+  title: string;
   icon: ReactNode;
   onClick: () => void;
 }) {
@@ -72,6 +76,7 @@ function ToggleOption({
       type="button"
       disabled={disabled}
       aria-pressed={active}
+      title={title}
       onClick={onClick}
       className={cn(
         "inline-flex items-center gap-1 font-medium transition-colors",

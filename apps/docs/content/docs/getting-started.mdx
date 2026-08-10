@@ -10,7 +10,6 @@ LedgeIndex is a pipeline: **discover → extract → chunk → embed → store �
 | Ingest, RAG chat, MCP for doc sources | `@ledgeindex/docs` (via server `docs` profile) |
 | Typed research output for a website | `@ledgeindex/profile` |
 | A process that serves those routes | `@ledgeindex/server` with `profiles: ["docs", "profile"]` |
-| AutomationGhost agents/workflows beside docs | add `"ag"` and host wiring (see [Server](/docs/server)) |
 
 For predetermined multi-step flows you control in your own code, call core primitives. For “figure out what’s on this site and fill these lenses,” use profile. For a deployable API, use server.
 
@@ -91,4 +90,4 @@ Then hit `GET /health/packages` to confirm versions and active profiles.
 | Sources, ingest, chat, MCP | [Docs profile](/docs/docs-profile) |
 | Core context and pipeline | [Core](/docs/core) |
 | `profileSite` and lenses | [Profile](/docs/profile) |
-| Server options and `ag` | [Server](/docs/server) |
+| Server options and hooks | [Server](/docs/server) |

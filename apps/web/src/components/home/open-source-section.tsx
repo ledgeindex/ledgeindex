@@ -2,10 +2,7 @@ import { Laptop, Package, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Eyebrow, SectionBadge } from "@/components/ui/section-badge";
-import {
-  DESKTOP_RELEASES_FALLBACK_URL,
-  type DesktopReleaseAsset,
-} from "@/lib/desktop-release";
+import { type DesktopReleaseAsset } from "@/lib/desktop-release";
 import { cn } from "@/lib/utils";
 
 type OpenSourceSectionProps = {
@@ -55,7 +52,10 @@ function buildPillars(
 const TERMINAL_LINES = [
   { prompt: true, text: "npm install @ledgeindex/server" },
   { prompt: true, text: "LEDGEINDEX_DATA_DIR=~/.ledgeindex ledgeindex-server" },
-  { prompt: false, text: "✓ docs + company profiles ready on http://localhost:3010" },
+  {
+    prompt: false,
+    text: "✓ docs + company profiles ready on http://localhost:3010",
+  },
 ] as const;
 
 export function SelfHostTerminal({ className }: { className?: string }) {
@@ -97,8 +97,6 @@ export function OpenSourceSection({
   macRelease = null,
 }: OpenSourceSectionProps) {
   const pillars = buildPillars(windowsRelease, macRelease);
-  const windowsHref = windowsRelease?.downloadUrl ?? DESKTOP_RELEASES_FALLBACK_URL;
-  const macHref = macRelease?.downloadUrl ?? DESKTOP_RELEASES_FALLBACK_URL;
 
   return (
     <section
@@ -163,26 +161,14 @@ export function OpenSourceSection({
 
         <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <Button
-            href={windowsHref}
-            className="w-full sm:w-auto"
-            rel="noopener noreferrer"
-          >
-            {windowsRelease
-              ? `Download Windows v${windowsRelease.version}`
-              : "Download for Windows"}
-          </Button>
-          <Button
-            href={macHref}
+            href="https://github.com/ledgeindex"
             variant="secondary"
             className="w-full sm:w-auto"
-            rel="noopener noreferrer"
           >
-            {macRelease
-              ? `Download Mac v${macRelease.version}`
-              : "Download for Mac"}
-          </Button>
-          <Button href="https://github.com/ledgeindex" variant="secondary" className="w-full sm:w-auto">
             Star on GitHub
+          </Button>
+          <Button href="#apps" variant="secondary" className="w-full sm:w-auto">
+            Download desktop app
           </Button>
         </div>
 

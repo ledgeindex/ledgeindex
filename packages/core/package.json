@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/core",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "LedgeIndex primitives — crawl, extract, chunk, embed, persist, query",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",

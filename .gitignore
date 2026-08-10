@@ -51,3 +51,12 @@ PAT_LEDGEINDEX
 PAT_LEDDGEINDEX
 LEDGEINDEX_PUBLIC_PUSH_TOKEN
 .pat-ledgeindex
+
+# Docs discovery / crawl scratch (local only)
+.cache/
+storage/
+
+# Maintained locally for now (Source updater starting list)
+top-typescript-docs.json
+top-typescript-docs.*.json
+apps/web/public/data/typescript-docs-catalog.json

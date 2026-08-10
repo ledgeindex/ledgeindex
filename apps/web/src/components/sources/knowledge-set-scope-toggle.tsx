@@ -32,15 +32,15 @@ export function KnowledgeSetScopeToggle({
         className,
       )}
       role="tablist"
-      aria-label="Source scope"
+      aria-label="Visibility"
       aria-disabled={disabled || undefined}
     >
       {(
         [
           {
             id: "personal" as const,
-            label: "Personal",
-            title: "Only you — private source",
+            label: "Just me",
+            title: "Only you can see this source",
             locked: false,
           },
           {
@@ -48,8 +48,9 @@ export function KnowledgeSetScopeToggle({
             label: "Public",
             title: publicLocked
               ? "Admin only — publish to the public catalog"
-              : "Public catalog — visible to everyone",
+              : "Public catalog — visible to everyone (admin)",
             locked: publicLocked,
+            adminOnly: true,
           },
         ] as const
       ).map((option) => {
@@ -88,6 +89,18 @@ export function KnowledgeSetScopeToggle({
               />
             ) : null}
             <span>{option.label}</span>
+            {"adminOnly" in option && option.adminOnly ? (
+              <span
+                className={cn(
+                  "rounded font-mono font-semibold tracking-[0.08em] uppercase",
+                  compact
+                    ? "text-[0.4375rem] opacity-70"
+                    : "ml-0.5 bg-surface-raised px-1 py-px text-[0.5rem] text-muted",
+                )}
+              >
+                admin
+              </span>
+            ) : null}
           </button>
         );
       })}

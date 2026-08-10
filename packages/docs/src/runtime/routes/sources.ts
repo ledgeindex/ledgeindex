@@ -96,21 +96,37 @@ export async function sourceRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: query.error.flatten() });
     }
 
-    if (query.data.scope === "personal") {
-      const sources = await listSourceSummariesForOwner(userId);
-      return { sources };
-    }
+    try {
+      if (query.data.scope === "personal") {
+        const sources = await listSourceSummariesForOwner(userId);
+        return { sources };
+      }
 
-    if (query.data.scope === "global") {
-      const sources = await listGlobalSourceSummaries();
-      return { sources };
-    }
+      if (query.data.scope === "global") {
+        const sources = await listGlobalSourceSummaries();
+        return { sources };
+      }
 
-    const [personal, global] = await Promise.all([
-      listSourceSummariesForOwner(userId),
-      listGlobalSourceSummaries(),
-    ]);
-    return { sources: [...global, ...personal] };
+      const [personal, global] = await Promise.all([
+        listSourceSummariesForOwner(userId),
+        listGlobalSourceSummaries(),
+      ]);
+      return { sources: [...global, ...personal] };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const cloudDown =
+        /ECONNREFUSED|5432|postgres|Cloud Postgres|CLOUD_POSTGRES/i.test(
+          message,
+        );
+      if (cloudDown && query.data.scope !== "personal") {
+        return reply.status(503).send({
+          error:
+            "Public sources need Cloud SQL Auth Proxy on :5432 (`cloud-sql-proxy … --port 5432`). Start it, then retry — or use Just me for local sources.",
+          detail: message,
+        });
+      }
+      throw error;
+    }
   });
 
   fastify.get("/api/source-categories", async (request, reply) => {

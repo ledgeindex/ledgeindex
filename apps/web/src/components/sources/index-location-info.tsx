@@ -6,14 +6,16 @@ import { Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 /**
- * Compact (i) control explaining Personal/Public vs Local/Cloud index placement.
+ * Compact (i) control explaining Just me/Public vs Local/Cloud.
  * Panel is portaled — parent cards use overflow:hidden and would clip a local popover.
  */
 export function IndexLocationInfo({
   hosting = "local",
+  scope = "personal",
   className,
 }: {
   hosting?: "local" | "cloud";
+  scope?: "personal" | "global";
   className?: string;
 }) {
   const [open, setOpen] = useState(false);
@@ -34,7 +36,7 @@ export function IndexLocationInfo({
       const button = buttonRef.current;
       if (!button) return;
       const rect = button.getBoundingClientRect();
-      const panelWidth = 264;
+      const panelWidth = 280;
       const gap = 6;
       const left = Math.min(
         Math.max(8, rect.right - panelWidth),
@@ -83,18 +85,19 @@ export function IndexLocationInfo({
 
   const where =
     hosting === "cloud"
-      ? "LedgeIndex cloud servers"
-      : "this device (local sidecar)";
+      ? "LedgeIndex cloud"
+      : "this device";
+  const visibility = scope === "global" ? "everyone (public)" : "only you";
 
   return (
     <div className={cn("shrink-0", className)}>
       <button
         ref={buttonRef}
         type="button"
-        aria-label="Where is the index stored?"
+        aria-label="About storage and visibility"
         aria-expanded={open}
         aria-controls={panelId}
-        title="Where is the index stored?"
+        title="About storage and visibility"
         onClick={() => setOpen((current) => !current)}
         className={cn(
           "inline-flex size-7 items-center justify-center rounded-md border border-border bg-card-solid text-muted transition-colors",
@@ -111,27 +114,33 @@ export function IndexLocationInfo({
               ref={panelRef}
               id={panelId}
               role="dialog"
-              aria-label="Index location"
+              aria-label="Source location and visibility"
               style={panelStyle}
               className="rounded-xl border border-border bg-card-solid p-3 shadow-card"
             >
               <p className="text-[0.6875rem] font-semibold tracking-wide text-foreground uppercase">
-                Where the index goes
+                Storage and visibility
               </p>
-              <p className="mt-1.5 text-xs leading-5 text-muted">
-                Right now this source indexes on{" "}
-                <span className="font-medium text-foreground">{where}</span>.
-              </p>
-              <ul className="mt-2 space-y-1.5 text-xs leading-5 text-muted">
-                <li>
-                  <span className="font-medium text-foreground">Local</span> —
-                  on this machine; works offline in Desktop.
-                </li>
-                <li>
-                  <span className="font-medium text-foreground">Cloud</span> —
-                  hosted by LedgeIndex; available from any device.
-                </li>
-              </ul>
+              <div className="mt-2 space-y-2.5 text-xs leading-5 text-muted">
+                <div>
+                  <p className="font-medium text-foreground">Storage</p>
+                  <p className="mt-0.5">
+                    Local or Cloud: where the docs are processed and kept. Right
+                    now:{" "}
+                    <span className="font-medium text-foreground">{where}</span>.
+                  </p>
+                </div>
+                <div>
+                  <p className="font-medium text-foreground">Visibility</p>
+                  <p className="mt-0.5">
+                    Just me or Public: who can see this source. Right now:{" "}
+                    <span className="font-medium text-foreground">
+                      {visibility}
+                    </span>
+                    .
+                  </p>
+                </div>
+              </div>
             </div>,
             document.body,
           )

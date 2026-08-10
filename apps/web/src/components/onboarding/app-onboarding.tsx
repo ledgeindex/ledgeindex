@@ -1,7 +1,12 @@
 "use client";
 
-import { useCallback, useLayoutEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import {
+  useCallback,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import { DesktopTitleBar } from "@/components/desktop/desktop-titlebar";
 import { WidgetOnSiteMock } from "@/components/home/accelerator-section";
 import { AgentGroundingVisual } from "@/components/home/agent-grounding-section";
@@ -20,33 +25,103 @@ import { useLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
 import { publicAssetUrl } from "@/lib/public-asset-url";
 import { cn } from "@/lib/utils";
 
+/** Scale children to fit the box without clipping (works at high browser zoom). */
+function FitScale({
+  children,
+  width,
+  height,
+  className,
+}: {
+  children: ReactNode;
+  width: number;
+  height: number;
+  className?: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+
+    const update = () => {
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      if (w < 8 || h < 8) return;
+      const next = Math.min(1, w / width, h / height);
+      setScale(Number.isFinite(next) && next > 0 ? next : 1);
+    };
+
+    update();
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    window.addEventListener("resize", update);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", update);
+    };
+  }, [width, height]);
+
+  return (
+    <div
+      ref={ref}
+      className={cn(
+        "relative flex h-full min-h-0 w-full items-center justify-center overflow-hidden",
+        className,
+      )}
+    >
+      <div
+        className="shrink-0"
+        style={{
+          width,
+          height,
+          transform: `scale(${scale})`,
+          transformOrigin: "center center",
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 function OnboardingVisual({ stepId }: { stepId: AppOnboardingStepId }) {
   switch (stepId) {
     case "welcome":
       return (
-        <HeroChatShowcase className="mx-auto w-full max-w-sm scale-[0.92] sm:max-w-md sm:scale-100" />
+        <FitScale width={420} height={460}>
+          <HeroChatShowcase className="h-full w-full max-w-none" />
+        </FitScale>
       );
     case "sources":
       return (
-        <div className="mx-auto w-full max-w-md sm:max-w-lg">
-          <BuilderWorkbench />
-        </div>
+        <FitScale width={480} height={360}>
+          <div className="h-full w-full">
+            <BuilderWorkbench />
+          </div>
+        </FitScale>
       );
     case "hosting":
       return (
-        <AppsShowcase className="mx-auto w-full max-w-sm scale-[0.92] sm:max-w-md sm:scale-100" />
+        <FitScale width={420} height={400}>
+          <AppsShowcase className="h-full w-full max-w-none" />
+        </FitScale>
       );
     case "chat":
       return (
-        <div className="relative mx-auto w-full max-w-md sm:max-w-lg">
-          <AgentGroundingVisual />
-        </div>
+        <FitScale width={480} height={380}>
+          <div className="relative h-full w-full">
+            <AgentGroundingVisual />
+          </div>
+        </FitScale>
       );
     case "start":
       return (
-        <div className="mx-auto w-full max-w-sm sm:max-w-md">
-          <WidgetOnSiteMock />
-        </div>
+        <FitScale width={420} height={320}>
+          <div className="h-full w-full">
+            <WidgetOnSiteMock />
+          </div>
+        </FitScale>
       );
     default:
       return null;
@@ -55,12 +130,9 @@ function OnboardingVisual({ stepId }: { stepId: AppOnboardingStepId }) {
 
 function AppOnboardingFlow({
   uid,
-  onComplete,
 }: {
   uid: string;
-  onComplete: () => void;
 }) {
-  const router = useRouter();
   const desktop = useLedgeIndexDesktop();
   const [step, setStep] = useState(0);
   const total = APP_ONBOARDING_STEPS.length;
@@ -68,18 +140,20 @@ function AppOnboardingFlow({
   const isLast = step === total - 1;
 
   const finish = useCallback(
-    (href?: string) => {
+    (href: string) => {
       markAppOnboardingComplete(uid);
-      onComplete();
-      if (href) router.push(href);
+      // Hard nav: soft router.push can be dropped when the overlay unmounts
+      // (especially in Electron), so both CTAs looked like they went nowhere
+      // useful / to the same leftover dashboard screen.
+      window.location.assign(href);
     },
-    [uid, onComplete, router],
+    [uid],
   );
 
   return (
     <div
       className={cn(
-        "fixed inset-0 z-[300] flex flex-col bg-background [-webkit-app-region:no-drag]",
+        "fixed inset-0 z-[300] flex flex-col overflow-hidden bg-background [-webkit-app-region:no-drag]",
         desktop && "pt-9",
       )}
       role="dialog"
@@ -88,8 +162,8 @@ function AppOnboardingFlow({
     >
       <DesktopTitleBar />
 
-      <div className="flex min-h-0 flex-1 flex-col px-4 py-5 sm:px-8 sm:py-8">
-        <div className="mx-auto flex w-full max-w-5xl items-center gap-2.5">
+      <div className="mx-auto flex min-h-0 w-full max-w-5xl flex-1 flex-col px-4 pt-3 sm:px-8 sm:pt-5">
+        <div className="flex shrink-0 items-center gap-2.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={publicAssetUrl("/images/logo.webp?v=2")}
@@ -107,29 +181,29 @@ function AppOnboardingFlow({
           </span>
         </div>
 
-        <div className="mx-auto grid w-full max-w-5xl flex-1 items-center gap-8 py-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-12">
-          <div className="order-2 min-w-0 lg:order-1">
+        <div className="mt-3 flex min-h-0 flex-1 flex-col gap-4 lg:mt-4 lg:flex-row lg:items-stretch lg:gap-8">
+          <div className="shrink-0 lg:flex lg:w-[min(22rem,38%)] lg:flex-col lg:justify-center">
             <h1
               id="app-onboarding-title"
-              className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl lg:text-4xl"
+              className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl"
             >
               {current.title}
             </h1>
-            <p className="mt-4 max-w-md text-base leading-7 text-muted sm:text-lg sm:leading-8">
+            <p className="mt-2 max-w-md text-sm leading-6 text-muted sm:mt-3 sm:text-base sm:leading-7">
               {current.body}
             </p>
           </div>
 
           <div
             key={current.id}
-            className="order-1 flex min-h-[14rem] items-center justify-center lg:order-2"
+            className="min-h-0 flex-1"
             aria-hidden
           >
             <OnboardingVisual stepId={current.id} />
           </div>
         </div>
 
-        <div className="mx-auto flex w-full max-w-5xl flex-col gap-4">
+        <div className="shrink-0 border-t border-border bg-background pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:pt-4">
           <div
             className="flex gap-1.5"
             aria-label={`Step ${step + 1} of ${total}`}
@@ -145,7 +219,7 @@ function AppOnboardingFlow({
             ))}
           </div>
 
-          <div className="flex items-center gap-2 sm:justify-end">
+          <div className="mt-3 flex items-center gap-2 sm:justify-end">
             {step > 0 ? (
               <Button
                 variant="secondary"
@@ -168,7 +242,7 @@ function AppOnboardingFlow({
                   className="h-11 flex-1 rounded-lg px-5 sm:flex-none sm:min-w-[9rem]"
                   onClick={() => finish("/sources/web-crawl?fresh=1")}
                 >
-                  Add a source
+                  New source
                 </Button>
               </>
             ) : (
@@ -217,12 +291,7 @@ export function AppOnboardingGate({
   }
 
   if (needed && user) {
-    return (
-      <AppOnboardingFlow
-        uid={user.uid}
-        onComplete={() => setNeeded(false)}
-      />
-    );
+    return <AppOnboardingFlow uid={user.uid} />;
   }
 
   return <>{children}</>;

@@ -38,6 +38,7 @@ export const docsIdentityKindSchema = z.enum([
   "frameworks",
   "libraries",
   "apis-services",
+  "tooling",
   "uncategorized",
 ]);
 
@@ -84,6 +85,7 @@ export const DOCS_IDENTITY_KIND_LABELS: Record<DocsIdentityKind, string> = {
   frameworks: "Frameworks",
   libraries: "Libraries",
   "apis-services": "APIs & Services",
+  tooling: "Tooling",
   uncategorized: "Uncategorized",
 };
 

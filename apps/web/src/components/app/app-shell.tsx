@@ -12,6 +12,7 @@ import { AppSidebar } from "@/components/app/app-sidebar";
 import { DesktopHeaderTrailing } from "@/components/desktop/desktop-chrome";
 import { DesktopSidecarBadge } from "@/components/desktop/desktop-sidecar-badge";
 import { DesktopTitleBar } from "@/components/desktop/desktop-titlebar";
+import { ThemeToggle } from "@/components/theme-toggle-slot";
 import {
   MobileAppSidebarProvider,
   useMobileAppSidebar,
@@ -98,6 +99,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const lockViewport =
     pathname.startsWith("/sources/web-crawl") ||
     pathname === "/chat" ||
+    pathname === "/admin/source-updater" ||
     /^\/sources\/[^/]+\/chat$/.test(pathname);
   const isSourceChat = /^\/sources\/[^/]+\/chat$/.test(pathname);
   const isSourceBuilderDetail = /^\/sources\/builder\/[^/]+$/.test(pathname);
@@ -120,7 +122,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           "relative z-0 flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
           !showAppHeader && desktop && "pt-9",
           // While the drawer is open, kill header drag so Electron doesn't steal
-          // clicks from the overlay sidebar (theme toggle, nav links).
+          // clicks from the overlay sidebar (nav links).
           desktop && isOpen && "[&_header]:[-webkit-app-region:no-drag]",
         )}
       >
@@ -168,6 +170,15 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                 </div>
               </div>
             )}
+            <div
+              className={cn(
+                "z-10 inline-flex shrink-0 items-center gap-1.5",
+                desktop && "[-webkit-app-region:no-drag]",
+              )}
+              onDoubleClick={(event) => event.stopPropagation()}
+            >
+              <ThemeToggle />
+            </div>
             <DesktopHeaderTrailing />
           </header>
         ) : null}

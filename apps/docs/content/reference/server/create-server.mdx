@@ -28,14 +28,13 @@ await server.listen();
 ## Options
 
 ```ts
-type LedgeIndexProfile = "docs" | "profile" | "ag";
+type LedgeIndexProfile = "docs" | "profile";
 
 type LedgeIndexServerOptions = {
   dataDir?: string;
   profiles?: LedgeIndexProfile[]; // default ["docs", "profile"]
   port?: number;                  // PORT env or 3010
   host?: string;                  // HOST env or 0.0.0.0
-  createAgMastraContribution?: () => MastraContribution; // required if profiles includes "ag"
   beforeProfiles?: (app: FastifyInstance) => Promise<void>;
   afterProfiles?: (app: FastifyInstance) => Promise<void>;
 };
@@ -43,11 +42,10 @@ type LedgeIndexServerOptions = {
 
 | Field | Notes |
 |-------|-------|
-| `profiles` | Which packs to mount |
+| `profiles` | Which packs to mount (`docs`, `profile`) |
 | `dataDir` | Sets `LEDGEINDEX_DATA_DIR` |
 | `beforeProfiles` | Auth, logging, plugins |
 | `afterProfiles` | Hooks after registration |
-| `createAgMastraContribution` | Required for AutomationGhost `ag` profile |
 
 Legacy profile id `company` normalizes to `profile`.
 

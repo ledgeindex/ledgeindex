@@ -5,7 +5,6 @@ import { usePathname, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
 import { LogOut } from "lucide-react";
 import { SiteBrand } from "@/components/site-brand";
-import { ThemeToggle } from "@/components/theme-toggle-slot";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { APP_NAV_ITEMS, isAppNavActive } from "@/lib/app-navigation";
@@ -67,9 +66,14 @@ function AppSidebarInner({
     >
       <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-3">
         <SiteBrand href="/dashboard" showWordmark />
-        <div className="flex items-center gap-1">
-          <ThemeToggle />
-        </div>
+        {appVersion ? (
+          <span
+            className="shrink-0 font-mono text-[0.625rem] text-muted/70"
+            title={`App version ${appVersion}`}
+          >
+            v{appVersion}
+          </span>
+        ) : null}
       </div>
 
       <nav className="flex flex-1 flex-col gap-1 overflow-y-auto px-3 py-4">
@@ -98,22 +102,17 @@ function AppSidebarInner({
       <div className="border-t border-border px-4 py-4">
         {user ? (
           <div className="mb-3 min-w-0">
-            <p className="truncate text-sm font-medium text-foreground">
-              {user.displayName ?? "Signed in"}
-            </p>
-            <div className="flex items-baseline gap-2">
-              <p className="truncate text-xs text-muted">{user.email}</p>
-              {appVersion ? (
-                <span className="ml-auto shrink-0 font-mono text-[0.625rem] text-muted/60">
-                  v{appVersion}
+            <div className="flex min-w-0 items-center gap-2">
+              <p className="truncate text-sm font-medium text-foreground">
+                {user.displayName ?? "Signed in"}
+              </p>
+              {isAdmin ? (
+                <span className="shrink-0 font-mono text-[0.5625rem] font-semibold tracking-[0.12em] text-accent uppercase">
+                  Admin
                 </span>
               ) : null}
             </div>
-            {isAdmin ? (
-              <p className="mt-1 font-mono text-[0.5625rem] font-semibold tracking-[0.12em] text-accent uppercase">
-                Admin
-              </p>
-            ) : null}
+            <p className="truncate text-xs text-muted">{user.email}</p>
           </div>
         ) : null}
         <Button

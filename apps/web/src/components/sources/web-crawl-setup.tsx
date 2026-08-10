@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { IngestPipelineFlow } from "@/components/sources/ingest-pipeline-flow";
 import { CrawlUrlFilterAssistant } from "@/components/sources/crawl-url-filter-assistant";
+import { NewSourceFirstHint } from "@/components/sources/new-source-first-hint";
 import { MobileMenuButton } from "@/components/app/app-shell";
 import {
   KnowledgeSetScopeToggle,
@@ -2225,32 +2226,84 @@ export function WebCrawlSetup() {
             <ToolbarDivider />
 
             <ConfigPill
-              label="Rendering"
-              icon={<RenderingIcon />}
-              compactSummary={renderJs ? "JS" : "Off"}
-              summary={renderJs ? "JavaScript on" : "Static HTML"}
-              description="Headless browser for client-rendered sites."
+              label="Storage"
+              icon={<StorageIcon />}
+              compactSummary={
+                sourceScope === "global" || !hostingCaps.localAvailable
+                  ? "Cloud"
+                  : sourceHosting === "local"
+                    ? "Local"
+                    : "Cloud"
+              }
+              summary={
+                sourceScope === "global" || !hostingCaps.localAvailable
+                  ? "Cloud"
+                  : sourceHosting === "local"
+                    ? "Local"
+                    : "Cloud"
+              }
+              description="Where the docs are processed and kept."
               disabled={toolbarLocked}
             >
-              <div className={configPanelInsetClass}>
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-sm font-medium text-foreground">
-                      Render JavaScript
+              <div className={cn(configPanelInsetClass, "space-y-3")}>
+                {sourceScope === "personal" && hostingCaps.localAvailable ? (
+                  <>
+                    <p className="text-xs leading-5 text-muted">
+                      Local keeps everything on this device. Cloud stores it on
+                      LedgeIndex servers.
                     </p>
-                    <p className="mt-0.5 text-xs text-muted">
-                      Slower crawls — not available yet
-                    </p>
-                  </div>
-                  <Switch
-                    checked={renderJs}
-                    onChange={setRenderJs}
-                    label="Render JavaScript"
-                    disabled
-                  />
-                </div>
+                    <SourceHostingToggle
+                      value={sourceHosting}
+                      onChange={setSourceHosting}
+                      disabled={toolbarLocked}
+                      size="default"
+                    />
+                  </>
+                ) : (
+                  <p className="text-xs leading-5 text-muted">
+                    {sourceScope === "global"
+                      ? "Public sources are always stored in the cloud."
+                      : "Cloud storage is used in this environment."}
+                  </p>
+                )}
               </div>
             </ConfigPill>
+
+            {isAdmin ? (
+              <>
+                <ToolbarDivider />
+                <ConfigPill
+                  label="Visibility"
+                  icon={<VisibilityIcon />}
+                  compactSummary={
+                    sourceScope === "global" ? "Public" : "Just me"
+                  }
+                  summary={sourceScope === "global" ? "Public" : "Just me"}
+                  description="Who can see this source."
+                  disabled={toolbarLocked}
+                >
+                  <div className={cn(configPanelInsetClass, "space-y-3")}>
+                    <p className="text-xs leading-5 text-muted">
+                      Just me keeps it private. Public (admin) publishes it to
+                      the shared catalog.
+                    </p>
+                    <KnowledgeSetScopeToggle
+                      value={sourceScope}
+                      onChange={handleScopeChange}
+                      disabled={toolbarLocked}
+                      size="default"
+                    />
+                  </div>
+                </ConfigPill>
+              </>
+            ) : null}
+
+            <div className="flex shrink-0 items-center px-1">
+              <IndexLocationInfo
+                hosting={sourceScope === "global" ? "cloud" : sourceHosting}
+                scope={sourceScope}
+              />
+            </div>
             </div>
             </div>
 
@@ -2293,15 +2346,6 @@ export function WebCrawlSetup() {
                 : discoveredUrls.length
             }
             onSubmit={handleCrawlPreview}
-            isAdmin={isAdmin}
-            sourceScope={sourceScope}
-            onScopeChange={handleScopeChange}
-            sourceHosting={sourceHosting}
-            onHostingChange={setSourceHosting}
-            showHostingToggle={
-              sourceScope === "personal" && hostingCaps.localAvailable
-            }
-            toolbarLocked={toolbarLocked}
             onAbortCrawl={abortCrawl}
           />
           </div>
@@ -2357,29 +2401,6 @@ export function WebCrawlSetup() {
               }
               headerAside={
                 <div className="flex shrink-0 items-center gap-1.5">
-                  {isAdmin ? (
-                    <KnowledgeSetScopeToggle
-                      value={sourceScope}
-                      onChange={handleScopeChange}
-                      disabled={toolbarLocked}
-                      size="compact"
-                      className="shrink-0 border-border/80 bg-card-solid/80"
-                    />
-                  ) : null}
-                  {sourceScope === "personal" && hostingCaps.localAvailable ? (
-                    <SourceHostingToggle
-                      value={sourceHosting}
-                      onChange={setSourceHosting}
-                      disabled={toolbarLocked}
-                      size="compact"
-                      className="shrink-0"
-                    />
-                  ) : null}
-                  <IndexLocationInfo
-                    hosting={
-                      sourceScope === "global" ? "cloud" : sourceHosting
-                    }
-                  />
                   <button
                     type="button"
                     onClick={handleContinueToExtraction}
@@ -3217,6 +3238,8 @@ function StartUrlCardBody({
         </Button>
       </div>
 
+      <NewSourceFirstHint hasUrl={hasUrl} />
+
       {preflightState === "error" && hasUrl && preflightError ? (
         <div className="space-y-1.5 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
           <p className="text-[0.6875rem] leading-5 text-amber-800 dark:text-amber-200">
@@ -3356,13 +3379,6 @@ function StartUrlCard({
   crawlCardPhase,
   pagesDiscovered,
   onSubmit,
-  isAdmin = false,
-  sourceScope,
-  onScopeChange,
-  sourceHosting = "local",
-  onHostingChange,
-  showHostingToggle = false,
-  toolbarLocked = false,
   onAbortCrawl,
 }: {
   primaryStartUrl: string;
@@ -3386,13 +3402,6 @@ function StartUrlCard({
   crawlCardPhase: CrawlCardPhase;
   pagesDiscovered: number;
   onSubmit: () => void;
-  isAdmin?: boolean;
-  sourceScope: KnowledgeSetScope;
-  onScopeChange: (scope: KnowledgeSetScope) => void;
-  sourceHosting?: SourceHosting;
-  onHostingChange?: (hosting: SourceHosting) => void;
-  showHostingToggle?: boolean;
-  toolbarLocked?: boolean;
   onAbortCrawl?: () => void;
 }) {
   const hasUrl = Boolean(primaryStartUrl.trim());
@@ -3449,15 +3458,15 @@ function StartUrlCard({
           : "idle";
   const widgetLabel = isCrawling
     ? pagesDiscovered > 0
-      ? `Ingestion pipeline · Crawling site (${pagesDiscovered} / ${maxPages})`
-      : "Ingestion pipeline · Crawling site"
+      ? `Finding pages · ${pagesDiscovered} / ${maxPages}`
+      : "Finding pages in your docs"
     : isCrawlComplete
-      ? `Ingestion pipeline · ${pagesDiscovered} page${pagesDiscovered === 1 ? "" : "s"} found`
+      ? `${pagesDiscovered} page${pagesDiscovered === 1 ? "" : "s"} ready`
       : preflightState === "loading"
-        ? "Ingestion pipeline · Checking site"
+        ? "Checking your docs"
         : showSitePreview
-          ? `Ingestion pipeline · ${detectedName}`
-          : "Ingestion pipeline · Web crawl";
+          ? detectedName
+          : "Add docs from a URL";
 
   const showDiscoveryFooter =
     preflightState === "loading" || discoverySignals != null;
@@ -3487,27 +3496,6 @@ function StartUrlCard({
         label={widgetLabel}
         aside={
           <>
-            {isAdmin ? (
-              <KnowledgeSetScopeToggle
-                value={sourceScope}
-                onChange={onScopeChange}
-                disabled={toolbarLocked}
-                size="compact"
-                className="shrink-0 border-border/80 bg-card-solid/80"
-              />
-            ) : null}
-            {showHostingToggle && onHostingChange ? (
-              <SourceHostingToggle
-                value={sourceHosting}
-                onChange={onHostingChange}
-                disabled={toolbarLocked}
-                size="compact"
-                className="shrink-0"
-              />
-            ) : null}
-            <IndexLocationInfo
-              hosting={sourceScope === "global" ? "cloud" : sourceHosting}
-            />
             {busy === "crawl" ? (
               <button
                 type="button"
@@ -3943,11 +3931,21 @@ function DiscoveryIcon() {
   );
 }
 
-function RenderingIcon() {
+function StorageIcon() {
   return (
     <svg viewBox="0 0 20 20" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
-      <path d="M3.5 5.5h13v9h-13z" strokeLinejoin="round" />
-      <path d="M7.5 14.5v2M12.5 14.5v2" strokeLinecap="round" />
+      <rect x="3.5" y="4" width="13" height="4" rx="1" />
+      <rect x="3.5" y="12" width="13" height="4" rx="1" />
+      <path d="M6.5 6h.01M6.5 14h.01" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function VisibilityIcon() {
+  return (
+    <svg viewBox="0 0 20 20" className="size-3.5" fill="none" stroke="currentColor" strokeWidth="1.5" aria-hidden>
+      <path d="M2.5 10s2.75-4.5 7.5-4.5S17.5 10 17.5 10s-2.75 4.5-7.5 4.5S2.5 10 2.5 10z" />
+      <circle cx="10" cy="10" r="2" />
     </svg>
   );
 }

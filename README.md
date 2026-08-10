@@ -29,11 +29,11 @@ ledgeindex/                    # monorepo root (OSS git root when published)
     desktop/                     # @ledgeindex/desktop — Electron (electron-vite + React)
     mobile/                      # @ledgeindex/mobile — Expo (React Native)
   packages/                      # @ledgeindex/*
-  hosts/                         # ag-server, desktop-server, api alias
+  hosts/                         # desktop-server, api alias
 ```
 
 Hosted cloud API entry (if you keep a separate deploy repo) is typically a thin `start` wrapper around `@ledgeindex/server`.
-Minimal open-source install: use **`docs`** and **`profile`** profiles (`LEDGEINDEX_PROFILES=docs,profile`). Agents and workflows for AutomationGhost live in **`@ledgeindex/ag`**; **`automationghost-engine`** depends on that package (not the other way around). Use **`hosts/ag-server`** in this monorepo to run docs + profile + ag together. LedgeIndex Electron uses **`hosts/desktop-server`** (docs + profile sidecar).
+Minimal open-source install: use **`docs`** and **`profile`** profiles (`LEDGEINDEX_PROFILES=docs,profile`). LedgeIndex Electron uses **`hosts/desktop-server`** (docs + profile sidecar).
 
 ---
 
@@ -79,14 +79,14 @@ Data defaults to `ledgeindex-api/.data/` unless `LEDGEINDEX_DATA_DIR` is set.
 
 See [`env.example`](./env.example) — copy to `ledgeindex-api/.env`.
 
-| Variable | Purpose |
-|----------|---------|
-| `LEDGEINDEX_DATA_DIR` | Writable data dir |
-| `LEDGEINDEX_PROFILES` | `docs`, `profile` |
-| `PORT` / `HOST` | API listen (default `3010`) |
-| `GOOGLE_GENERATIVE_AI_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` | Models |
-| `COHERE_API_KEY` | Rerank (optional) |
-| `LEDGEINDEX_VECTOR_BACKEND` | `libsql` or `pgvector` |
+| Variable                                                               | Purpose                     |
+| ---------------------------------------------------------------------- | --------------------------- |
+| `LEDGEINDEX_DATA_DIR`                                                  | Writable data dir           |
+| `LEDGEINDEX_PROFILES`                                                  | `docs`, `profile`           |
+| `PORT` / `HOST`                                                        | API listen (default `3010`) |
+| `GOOGLE_GENERATIVE_AI_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` | Models                      |
+| `COHERE_API_KEY`                                                       | Rerank (optional)           |
+| `LEDGEINDEX_VECTOR_BACKEND`                                            | `libsql` or `pgvector`      |
 
 ---
 
@@ -94,27 +94,26 @@ See [`env.example`](./env.example) — copy to `ledgeindex-api/.env`.
 
 Run from the npm workspace root:
 
-| Script | Description |
-|--------|-------------|
-| `dev:ledgeindex-api` | API + Mastra |
-| `dev:ledgeindex` | Next.js web UI (:3004) |
-| `dev:ledgeindex-docs` | Docs site (:3005) |
-| `dev:ledgeindex-desktop` | Electron desktop |
+| Script                          | Description               |
+| ------------------------------- | ------------------------- |
+| `dev:ledgeindex-api`            | API + Mastra              |
+| `dev:ledgeindex`                | Next.js web UI (:3004)    |
+| `dev:ledgeindex-docs`           | Docs site (:3005)         |
+| `dev:ledgeindex-desktop`        | Electron desktop          |
 | `typecheck:ledgeindex-packages` | Typecheck `@ledgeindex/*` |
-| `test:ledgeindex-core` | Vitest for core |
+| `test:ledgeindex-core`          | Vitest for core           |
 
 ---
 
 ## Packages
 
-| Package | Description |
-|---------|-------------|
-| `@ledgeindex/core` | Crawl, chunk, vector, query |
-| `@ledgeindex/docs` | Ingest, RAG, MCP, routes |
+| Package               | Description                     |
+| --------------------- | ------------------------------- |
+| `@ledgeindex/core`    | Crawl, chunk, vector, query     |
+| `@ledgeindex/docs`    | Ingest, RAG, MCP, routes        |
 | `@ledgeindex/profile` | Site / entity research profiles |
-| `@ledgeindex/server` | `startLedgeIndexServer` |
-| `@ledgeindex/client` | HTTP client |
-| `@ledgeindex/ag` | Optional AG profile |
+| `@ledgeindex/server`  | `startLedgeIndexServer`         |
+| `@ledgeindex/client`  | HTTP client                     |
 
 ---
 

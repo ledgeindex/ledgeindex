@@ -14,6 +14,7 @@ export const PREDEFINED_SOURCE_CATEGORIES: SourceCategoryPreset[] = [
   { slug: "frameworks", label: "Frameworks", group: "kind" },
   { slug: "libraries", label: "Libraries", group: "kind" },
   { slug: "apis-services", label: "APIs & Services", group: "kind" },
+  { slug: "tooling", label: "Tooling", group: "kind" },
 
   { slug: "javascript", label: "JavaScript", group: "language" },
   { slug: "typescript", label: "TypeScript", group: "language" },
@@ -28,7 +29,8 @@ export const LEGACY_SOURCE_KIND_ALIASES: Record<string, string> = {
   framework: "frameworks",
   library: "libraries",
   service: "apis-services",
-  tool: "apis-services",
+  tool: "tooling",
+  tooling: "tooling",
   "language-docs": "libraries",
 };
 

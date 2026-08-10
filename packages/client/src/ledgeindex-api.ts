@@ -269,9 +269,32 @@ export class KnowledgeIndexApiError extends Error {
   }
 }
 
-function formatApiErrorPayload(error: unknown): string {
-  if (typeof error === "string") return error;
-  if (!error || typeof error !== "object") return "Request failed";
+function formatApiErrorPayload(error: unknown, data?: unknown): string {
+  if (typeof error === "string") {
+    // Fastify default: { error: "Internal Server Error", message: "…" }
+    if (
+      (/^internal server error$/i.test(error) ||
+        /^service unavailable$/i.test(error)) &&
+      data &&
+      typeof data === "object" &&
+      "message" in data &&
+      typeof (data as { message?: unknown }).message === "string"
+    ) {
+      return (data as { message: string }).message;
+    }
+    return error;
+  }
+  if (!error || typeof error !== "object") {
+    if (
+      data &&
+      typeof data === "object" &&
+      "message" in data &&
+      typeof (data as { message?: unknown }).message === "string"
+    ) {
+      return (data as { message: string }).message;
+    }
+    return "Request failed";
+  }
 
   if ("message" in error && typeof error.message === "string") {
     return error.message;
@@ -413,8 +436,8 @@ async function requestApi<T>(
     if (options?.notFoundAsNull && response.status === 404) {
       return null;
     }
-    const payload = data as { error?: unknown };
-    const message = formatApiErrorPayload(payload.error);
+    const payload = data as { error?: unknown; message?: unknown };
+    const message = formatApiErrorPayload(payload.error, data);
     throw new KnowledgeIndexApiError(message, response.status);
   }
 

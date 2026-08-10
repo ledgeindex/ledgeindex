@@ -92,24 +92,35 @@ export function SourceCategoryBadges({
   );
 }
 
-function FilterBadge({
+export function FilterBadge({
   active,
   onClick,
   children,
+  disabled = false,
+  title,
+  className,
 }: {
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
+  disabled?: boolean;
+  title?: string;
+  className?: string;
 }) {
   return (
     <button
       type="button"
+      title={title}
+      disabled={disabled}
+      aria-pressed={active}
       onClick={onClick}
       className={cn(
         "inline-flex items-center gap-1 rounded-md border px-2.5 py-1 font-mono text-[0.5625rem] font-semibold tracking-[0.08em] uppercase transition-colors",
         active
           ? "border-foreground/20 bg-foreground text-background"
           : "border-border bg-card-solid text-muted hover:border-foreground/15 hover:text-foreground",
+        disabled && "pointer-events-none opacity-50",
+        className,
       )}
     >
       {children}

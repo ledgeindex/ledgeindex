@@ -67,7 +67,7 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
   },
   {
     id: "provider-keys",
-    label: "Model keys",
+    label: "Model Provider Keys",
     href: "/settings/providers",
     icon: Sparkles,
     desktopOnly: true,

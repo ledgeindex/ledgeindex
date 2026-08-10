@@ -9,6 +9,6 @@
     "start": "node ../../../ledgeindex-api/dist/server.js"
   },
   "dependencies": {
-    "@ledgeindex/server": "^0.1.7"
+    "@ledgeindex/server": "^0.1.8"
   }
 }

@@ -9,10 +9,8 @@ import {
   PLATE_WALL,
   Plate,
 } from "@/components/home/iso-plate";
-import {
-  DESKTOP_RELEASES_FALLBACK_URL,
-  type DesktopReleaseAsset,
-} from "@/lib/desktop-release";
+import { DesktopDownloadButtons } from "@/components/home/desktop-download-buttons";
+import { type DesktopReleaseAsset } from "@/lib/desktop-release";
 import { cn } from "@/lib/utils";
 
 const CHIPS = ["Windows & Mac", "iOS & Android soon", "Works offline"] as const;
@@ -26,15 +24,6 @@ export function AppsComingSection({
   windowsRelease = null,
   macRelease = null,
 }: AppsComingSectionProps) {
-  const windowsHref = windowsRelease?.downloadUrl ?? DESKTOP_RELEASES_FALLBACK_URL;
-  const windowsLabel = windowsRelease
-    ? `Download for Windows (v${windowsRelease.version})`
-    : "Download for Windows";
-  const macHref = macRelease?.downloadUrl ?? DESKTOP_RELEASES_FALLBACK_URL;
-  const macLabel = macRelease
-    ? `Download for Mac (v${macRelease.version})`
-    : "Download for Mac";
-
   return (
     <section
       id="apps"
@@ -67,32 +56,27 @@ export function AppsComingSection({
               ))}
             </div>
 
-            <div className="mt-7 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
-              <Button
-                href={windowsHref}
-                className="w-full sm:w-auto"
-                rel="noopener noreferrer"
-              >
-                {windowsLabel}
-              </Button>
-              <Button
-                href={macHref}
-                variant="secondary"
-                className="w-full sm:w-auto"
-                rel="noopener noreferrer"
-              >
-                {macLabel}
-              </Button>
-              <Button href="#open-source" variant="secondary" className="w-full sm:w-auto">
-                Run it yourself today
-              </Button>
+            <div className="mt-7">
+              <DesktopDownloadButtons
+                windowsRelease={windowsRelease}
+                macRelease={macRelease}
+                trailing={
+                  <Button
+                    href="#open-source"
+                    variant="secondary"
+                    className="w-full sm:w-auto"
+                  >
+                    Run it yourself today
+                  </Button>
+                }
+              />
+              {windowsRelease || macRelease ? (
+                <p className="mt-3 font-mono text-[0.6875rem] text-muted">
+                  Latest installer ·{" "}
+                  {windowsRelease?.tag ?? macRelease?.tag}
+                </p>
+              ) : null}
             </div>
-            {windowsRelease || macRelease ? (
-              <p className="mt-3 font-mono text-[0.6875rem] text-muted">
-                Latest installer ·{" "}
-                {windowsRelease?.tag ?? macRelease?.tag}
-              </p>
-            ) : null}
           </div>
 
           <AppsShowcase className="mx-auto w-full max-w-md lg:max-w-none" />

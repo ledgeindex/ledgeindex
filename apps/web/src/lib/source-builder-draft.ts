@@ -55,7 +55,7 @@ export type BuilderSourceMetadata = {
   detectedSignals: string[];
   docsIdentity?: {
     overallSummary?: string;
-    kind?: "frameworks" | "libraries" | "apis-services" | "uncategorized";
+    kind?: "frameworks" | "libraries" | "apis-services" | "tooling" | "uncategorized";
     language?: "javascript" | "typescript" | "python" | "other";
     updatedAt?: string;
     generatedAt?: string;

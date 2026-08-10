@@ -29,6 +29,7 @@ export type DocsIdentityKind =
   | "frameworks"
   | "libraries"
   | "apis-services"
+  | "tooling"
   | "uncategorized";
 
 export type DocsIdentityLanguage =
@@ -61,6 +62,7 @@ export const DOCS_IDENTITY_KIND_LABELS: Record<DocsIdentityKind, string> = {
   frameworks: "Frameworks",
   libraries: "Libraries",
   "apis-services": "APIs & Services",
+  tooling: "Tooling",
   uncategorized: "Uncategorized",
 };
 

@@ -35,3 +35,10 @@ export function SourceCloudBadge({
     </span>
   );
 }
+
+export function resolveSourceStorage(
+  source: Pick<SourceSummary, "scope" | "hosting">,
+): "local" | "cloud" {
+  if (source.scope === "global") return "cloud";
+  return source.hosting === "cloud" ? "cloud" : "local";
+}

@@ -53,9 +53,9 @@ export const docsIdentityLensSchema = z.object({
     ),
   /** Shelf: frameworks, libraries, APIs & services, or uncategorized. */
   kind: z
-    .enum(["frameworks", "libraries", "apis-services", "uncategorized"])
+    .enum(["frameworks", "libraries", "apis-services", "tooling", "uncategorized"])
     .describe(
-      "Primary shelf: frameworks | libraries | apis-services | uncategorized",
+      "Primary shelf: frameworks | libraries | apis-services | tooling | uncategorized",
     ),
   /** Primary language the docs are about. */
   language: z
@@ -376,10 +376,11 @@ export const RESEARCH_LENSES: { [K in ResearchLens]: LensDefinition<K> } = {
 Your job is DOCS IDENTITY — same pattern as other profile lenses: use the picked pages as evidence, then write ONE profile for the site/docs URL that was profiled.
 
 1. overallSummary (required): 2–4 sentences on what this documentation covers — topics, who it helps, what questions it answers. Write about the docs set as a whole (e.g. mastra.ai/docs), NOT a list of nested URLs.
-2. kind (required): exactly one of "frameworks" | "libraries" | "apis-services" | "uncategorized"
+2. kind (required): exactly one of "frameworks" | "libraries" | "apis-services" | "tooling" | "uncategorized"
    - frameworks = app/agent frameworks, platforms you build on
-   - libraries = SDKs, packages, helpers
+   - libraries = SDKs, packages, helpers you import into apps
    - apis-services = hosted APIs, SaaS, cloud services
+   - tooling = compilers, bundlers, linters, test runners, package managers, CLIs
    - uncategorized = unclear or mixed
 3. language (required): exactly one of "javascript" | "typescript" | "python" | "other" for the primary language the docs target.
 4. citations: ground claims when possible.
