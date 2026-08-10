@@ -16,6 +16,7 @@ import {
   refreshHasChanges,
 } from "@/lib/admin-source-updater";
 import { syncDesktopApiBaseForScope } from "@/lib/desktop-api-routing";
+import { publicAssetUrl } from "@/lib/public-asset-url";
 import { cn } from "@/lib/utils";
 import {
   applySourceRefresh,
@@ -86,7 +87,14 @@ const CATALOG_PATHS_FILTER_OPTIONS: readonly {
   { value: "failed", label: "Failed" },
 ];
 
-const CATALOG_DATA_URL = "/data/typescript-docs-catalog.json";
+const CATALOG_DATA_PATH = "data/typescript-docs-catalog.json";
+
+function catalogDataUrl(cacheBust = false): string {
+  const base = publicAssetUrl(CATALOG_DATA_PATH);
+  if (!cacheBust) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}t=${Date.now()}`;
+}
 
 function catalogPathsBucket(
   entry: TypescriptDocsCatalogEntry,
@@ -1388,7 +1396,7 @@ export default function AdminSourceUpdaterPage() {
     let cancelled = false;
     setCatalogLoading(true);
     setCatalogError(null);
-    void fetch(`${CATALOG_DATA_URL}?t=${Date.now()}`, { cache: "no-store" })
+    void fetch(catalogDataUrl(true), { cache: "no-store" })
       .then(async (res) => {
         if (!res.ok) throw new Error(`Failed to load catalog (${res.status})`);
         return (await res.json()) as TypescriptDocsCatalog;
@@ -1422,7 +1430,7 @@ export default function AdminSourceUpdaterPage() {
     setCatalogLoading(true);
     setCatalogError(null);
     try {
-      const res = await fetch(CATALOG_DATA_URL, { cache: "no-store" });
+      const res = await fetch(catalogDataUrl(true), { cache: "no-store" });
       if (!res.ok) throw new Error(`Catalog HTTP ${res.status}`);
       const data = (await res.json()) as TypescriptDocsCatalog;
       const entries = (data.entries ?? []).map(normalizeCatalogEntry);

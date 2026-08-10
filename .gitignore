@@ -59,4 +59,3 @@ storage/
 # Maintained locally for now (Source updater starting list)
 top-typescript-docs.json
 top-typescript-docs.*.json
-apps/web/public/data/typescript-docs-catalog.json
