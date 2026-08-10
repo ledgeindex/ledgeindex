@@ -25,8 +25,10 @@ import { getSourceSummary } from "../../services/source-summary.js";
 import { primaryAuxiliaryModelId } from "../../llm/chat-model-config.js";
 import { describeRerankRuntimeMeta } from "../../retrieval/rerank-backend.js";
 import {
+  isRequestRerankBackend,
+  isSourceHosting,
   isSourceScope,
-  setRequestSourceScope,
+  runWithRetrievalContext,
 } from "../../retrieval/rerank-request-context.js";
 
 const MAX_HISTORY_TURNS = 6;
@@ -190,10 +192,57 @@ export class RAGQueryProcessor implements Processor {
       typeof requestContext?.get === "function"
         ? requestContext.get("source_scope")
         : undefined;
-    if (isSourceScope(sourceScopeRaw)) {
-      setRequestSourceScope(sourceScopeRaw);
-    }
+    const sourceScope = isSourceScope(sourceScopeRaw)
+      ? sourceScopeRaw
+      : "personal";
+    const hostingRaw =
+      typeof requestContext?.get === "function"
+        ? requestContext.get("source_hosting")
+        : undefined;
+    const sourceHosting = isSourceHosting(hostingRaw)
+      ? hostingRaw
+      : sourceScope === "global"
+        ? "cloud"
+        : "local";
+    const backendRaw =
+      typeof requestContext?.get === "function"
+        ? requestContext.get("rerank_backend")
+        : undefined;
+    // Cloud indexes always use Cohere; local indexes honor the UI Local/Cloud toggle.
+    const backend =
+      sourceHosting === "cloud"
+        ? "cohere-auto"
+        : isRequestRerankBackend(backendRaw)
+          ? backendRaw
+          : undefined;
 
+    return runWithRetrievalContext(
+      {
+        sourceScope,
+        sourceHosting,
+        ...(backend ? { backend } : {}),
+      },
+      () =>
+        this.runRagWithContext({
+          messages,
+          systemMessages,
+          requestContext,
+          sourceId,
+        }),
+    );
+  }
+
+  private async runRagWithContext({
+    messages,
+    systemMessages,
+    requestContext,
+    sourceId,
+  }: {
+    messages: ProcessInputArgs["messages"];
+    systemMessages: ProcessInputArgs["systemMessages"];
+    requestContext: ProcessInputArgs["requestContext"];
+    sourceId: string;
+  }) {
     const docsUrlPrefix =
       typeof requestContext?.get === "function"
         ? String(requestContext.get("docs_url_prefix") ?? "").trim()
@@ -250,7 +299,7 @@ export class RAGQueryProcessor implements Processor {
         question,
         rewrittenQueries: [question],
         rewriteMethod: "cascade",
-        rewriteModelId: primaryAuxiliaryModelId(),
+        rewriteModelId: primaryAuxiliaryModelId(requestContext),
         topicScope: "single",
         skippedQueries: [],
         insufficient,

@@ -154,3 +154,85 @@ export function normalizeCatalogEntry(
     docsDomain: entry.docsDomain ?? null,
   };
 }
+
+/**
+ * Hand-picked Top 50 for Source updater — frameworks, runtimes, data, UI, and
+ * tooling admins usually want first. Order is display priority (not downloads).
+ */
+export const CURATED_TOP_DOCS_PACKAGES = [
+  "typescript",
+  "node",
+  "bun",
+  "deno",
+  "react",
+  "next",
+  "vue",
+  "svelte",
+  "astro",
+  "@angular/core",
+  "express",
+  "fastify",
+  "hono",
+  "@nestjs/core",
+  "prisma",
+  "drizzle-orm",
+  "typeorm",
+  "kysely",
+  "@supabase/supabase-js",
+  "graphql",
+  "@apollo/client",
+  "@trpc/server",
+  "axios",
+  "tailwindcss",
+  "shadcn",
+  "@mui/material",
+  "lucide-react",
+  "zod",
+  "valibot",
+  "zustand",
+  "jotai",
+  "@reduxjs/toolkit",
+  "react-hook-form",
+  "@tanstack/react-query",
+  "vite",
+  "vitest",
+  "esbuild",
+  "turbo",
+  "storybook",
+  "playwright",
+  "cypress",
+  "jest",
+  "eslint",
+  "prettier",
+  "tsx",
+  "lodash",
+  "dayjs",
+  "@octokit/rest",
+  "ai",
+  "openai",
+] as const;
+
+const CURATED_TOP_DOCS_RANK = new Map(
+  CURATED_TOP_DOCS_PACKAGES.map((name, index) => [name, index]),
+);
+
+export function isCuratedTopDocsPackage(packageName: string): boolean {
+  return CURATED_TOP_DOCS_RANK.has(packageName);
+}
+
+export function curatedTopDocsRank(packageName: string): number | null {
+  const rank = CURATED_TOP_DOCS_RANK.get(packageName);
+  return rank == null ? null : rank + 1;
+}
+
+export function compareCuratedTopDocs(
+  a: Pick<TypescriptDocsCatalogEntry, "package">,
+  b: Pick<TypescriptDocsCatalogEntry, "package">,
+): number {
+  const aRank = CURATED_TOP_DOCS_RANK.get(a.package);
+  const bRank = CURATED_TOP_DOCS_RANK.get(b.package);
+  if (aRank != null && bRank != null) return aRank - bRank;
+  if (aRank != null) return -1;
+  if (bRank != null) return 1;
+  return a.package.localeCompare(b.package);
+}

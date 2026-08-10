@@ -12,35 +12,63 @@ import { resolveSourceStorage } from "@/components/sources/source-cloud-badge";
 import { pageCatalogPathLabel } from "@/lib/catalog-view";
 import { IDLE_INGEST_PIPELINE } from "@/lib/ingest-pipeline";
 import {
+  pipelineFromCatalogIngest,
   pipelineFromRefreshSnapshot,
   refreshHasChanges,
 } from "@/lib/admin-source-updater";
-import { syncDesktopApiBaseForScope } from "@/lib/desktop-api-routing";
+import {
+  syncApiBaseForHosting,
+  syncDesktopApiBaseForScope,
+} from "@/lib/desktop-api-routing";
+import { getDevProjectId, setDevProjectId } from "@/lib/dev-project";
 import { publicAssetUrl } from "@/lib/public-asset-url";
+import { useHostingCapabilities } from "@/lib/use-hosting-capabilities";
 import { cn } from "@/lib/utils";
 import {
   applySourceRefresh,
+  cancelIngest,
   cancelSourceRefresh,
+  checkSourceDuplicates,
+  createProject,
+  createSource,
   dismissSourceRefresh,
+  getCrawlProgress,
+  getIngestWorkflowStatus,
+  getSource,
   getSourceRefreshStatus,
+  KnowledgeIndexApiError,
   listSources,
+  resumeIngestWorkflow,
+  startIngestWorkflow,
   startSourceRefreshCheck,
+  updateSource,
+  type IngestPipelineSnapshot,
   type RefreshChangelog,
   type RefreshPageRef,
   type RefreshRunSnapshot,
+  type SourceHosting,
+  type SourceMetadata,
   type SourceSummary,
+  type WebCrawlConfig,
 } from "@/lib/ledgeindex-api";
 import {
   isCatalogEntryCrawlReady,
   normalizeCatalogEntry,
+  compareCuratedTopDocs,
+  curatedTopDocsRank,
+  isCuratedTopDocsPackage,
+  CURATED_TOP_DOCS_PACKAGES,
+  effectiveCatalogDocsUrl,
   type TypescriptDocsCatalog,
   type TypescriptDocsCatalogEntry,
 } from "@/lib/typescript-docs-catalog";
 import { CatalogPathsMaintainPanel } from "@/components/admin/catalog-paths-maintain-panel";
 import { CatalogManualPackageForm } from "@/components/admin/catalog-manual-package-form";
+import type { DocsIdentityKind } from "@/lib/source-metadata";
 
 type UpdaterTab = "sources" | "catalog";
 type StorageFilter = "all" | "local" | "cloud";
+type CatalogCrawlMode = "full" | "paths-only";
 type CatalogCategoryFilter =
   | "all"
   | "frameworks"
@@ -916,6 +944,87 @@ function categoryLabel(category: string): string {
   }
 }
 
+const CATALOG_CRAWL_USER_AGENT =
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
+
+function catalogDocsIdentityKind(
+  category: string,
+): DocsIdentityKind | undefined {
+  switch (category) {
+    case "frameworks":
+    case "libraries":
+    case "apis-services":
+    case "tooling":
+    case "uncategorized":
+      return category;
+    default:
+      return undefined;
+  }
+}
+
+function catalogSourceName(entry: TypescriptDocsCatalogEntry): string {
+  return entry.package;
+}
+
+function catalogCrawlConfig(startUrls: string[], entry: TypescriptDocsCatalogEntry): WebCrawlConfig {
+  return {
+    startUrls,
+    includePatterns: [],
+    excludePatterns: [...entry.excludePatterns],
+    excludeDownloadPatterns: [],
+    patternsAreRegex: Boolean(entry.patternsAreRegex),
+    renderJs: false,
+    useProxy: false,
+    enableSitemap: true,
+    sitemapOnly: false,
+    sitemapUrls: [],
+    fileTypes: ["html"],
+    contentSelectors: ["article", "main", ".content", ".documentation"],
+    excludeSelectors: ["nav", "footer", ".sidebar", ".toc", ".navigation"],
+    maxPages: 1000,
+    userAgent: CATALOG_CRAWL_USER_AGENT,
+  };
+}
+
+function catalogSourceMetadata(
+  entry: TypescriptDocsCatalogEntry,
+): SourceMetadata {
+  const kind = catalogDocsIdentityKind(entry.category);
+  return {
+    sourceType: "documentation",
+    sourceTypeConfidence: 1,
+    origin: "external",
+    version: entry.selectedVersion || "latest",
+    versionSource: "user",
+    detectedSignals: ["typescript-docs-catalog", `npm:${entry.package}`],
+    docsIdentity: {
+      overallSummary: entry.description ?? undefined,
+      kind,
+      language: "typescript",
+      paths: [],
+    },
+  };
+}
+
+function catalogRowStatusLabel(status: RowStatus): string {
+  switch (status) {
+    case "queued":
+      return "queued";
+    case "running":
+      return "updating";
+    case "updated":
+      return "done";
+    case "up-to-date":
+      return "exists";
+    case "error":
+      return "error";
+    case "cancelled":
+      return "cancelled";
+    default:
+      return "";
+  }
+}
+
 function CatalogExcludeBadge({ entry }: { entry: TypescriptDocsCatalogEntry }) {
   if (entry.excludePatterns.length === 0) return null;
   return (
@@ -994,12 +1103,15 @@ function CatalogPathBadges({
   compact = false,
   selectedUrls,
   onToggleUrl,
+  allowDeselectMain = false,
 }: {
   entry: TypescriptDocsCatalogEntry;
   compact?: boolean;
-  /** When set, badges become selectable (main is always on). */
+  /** When set, badges become selectable. Main stays locked unless allowDeselectMain. */
   selectedUrls?: Set<string> | null;
   onToggleUrl?: (url: string, next: boolean) => void;
+  /** When true (paths-only crawl), main docs can be unchecked. */
+  allowDeselectMain?: boolean;
 }) {
   const badges = catalogPathBadges(entry);
   if (badges.length === 0) return null;
@@ -1009,14 +1121,14 @@ function CatalogPathBadges({
     <div className={cn("flex flex-wrap gap-1", compact ? "mt-1" : "mt-0.5")}>
       {badges.map((badge) => {
         const key = normalizePathKey(badge.url);
-        const checked = badge.primary
+        const lockedMain = Boolean(badge.primary && !allowDeselectMain);
+        const checked = lockedMain
           ? true
           : selectedUrls
             ? [...selectedUrls].some((url) => normalizePathKey(url) === key)
             : false;
-        const optionalOff = selectable && !badge.primary && !checked;
 
-        if (selectable && !compact) {
+        if (selectable) {
           return (
             <div
               key={`${badge.kind}:${badge.url}`}
@@ -1025,38 +1137,61 @@ function CatalogPathBadges({
                 badge.primary || checked
                   ? "border-accent/40 bg-accent/10 text-accent"
                   : "border-border bg-surface-alt text-muted hover:border-border/80 hover:text-foreground",
+                compact && "gap-1",
               )}
             >
               <input
                 type="checkbox"
                 className="size-3 shrink-0 cursor-pointer"
                 checked={checked}
-                disabled={badge.primary}
+                disabled={lockedMain}
                 onChange={(event) => {
-                  if (badge.primary) return;
+                  if (lockedMain) return;
                   onToggleUrl?.(badge.url, event.target.checked);
                 }}
+                onClick={(event) => event.stopPropagation()}
                 aria-label={`Include ${badge.kind} path ${badge.label || badge.url}`}
                 title={
-                  badge.primary
+                  lockedMain
                     ? "Main docs path is always included"
-                    : "Include this path in the crawl"
+                    : "Include this path in the update"
                 }
               />
+              <button
+                type="button"
+                className="inline-flex min-w-0 items-center gap-1 truncate text-left hover:underline"
+                disabled={lockedMain}
+                title={
+                  lockedMain
+                    ? "Main docs path is always included"
+                    : checked
+                      ? "Click to exclude from update"
+                      : "Click to include in update"
+                }
+                onClick={() => {
+                  if (lockedMain) return;
+                  onToggleUrl?.(badge.url, !checked);
+                }}
+              >
+                <span className="shrink-0 tracking-[0.06em] uppercase">
+                  {badge.kind}
+                  {!compact && badge.primary ? " · main" : ""}
+                </span>
+                <span className="min-w-0 truncate normal-case tracking-normal opacity-80">
+                  {compact
+                    ? formatStartPathLabel(badge.url)
+                    : badge.label || formatStartPathLabel(badge.url)}
+                </span>
+              </button>
               <a
                 href={badge.url}
                 target="_blank"
                 rel="noreferrer"
                 title={`Open ${badge.url}`}
-                className="inline-flex min-w-0 items-center gap-1 truncate hover:underline"
+                className="shrink-0 text-muted hover:text-accent"
+                onClick={(event) => event.stopPropagation()}
               >
-                <span className="shrink-0 tracking-[0.06em] uppercase">
-                  {badge.kind}
-                  {badge.primary ? " · main" : ""}
-                </span>
-                <span className="min-w-0 truncate normal-case tracking-normal opacity-80">
-                  {badge.label || formatStartPathLabel(badge.url)}
-                </span>
+                ↗
               </a>
             </div>
           );
@@ -1073,11 +1208,7 @@ function CatalogPathBadges({
               "inline-flex max-w-full items-center gap-1 truncate rounded-md border px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold transition-colors hover:border-accent/50",
               badge.primary
                 ? "border-accent/40 bg-accent/10 text-accent"
-                : optionalOff
-                  ? "border-border/60 bg-surface-alt/60 text-muted opacity-50"
-                  : checked && selectedUrls
-                    ? "border-accent/35 bg-accent/8 text-accent"
-                    : "border-border bg-surface-alt text-muted hover:text-foreground",
+                : "border-border bg-surface-alt text-muted hover:text-foreground",
             )}
           >
             <span className="shrink-0 tracking-[0.06em] uppercase">
@@ -1101,6 +1232,7 @@ function CatalogDetailPanel({
   displayRank,
   selectedUrls,
   onToggleUrl,
+  allowDeselectMain = false,
   canPersistPaths,
   onPathsSaved,
 }: {
@@ -1109,6 +1241,7 @@ function CatalogDetailPanel({
   displayRank: number | null;
   selectedUrls?: Set<string> | null;
   onToggleUrl?: (url: string, next: boolean) => void;
+  allowDeselectMain?: boolean;
   canPersistPaths: boolean;
   onPathsSaved: (next: TypescriptDocsCatalogEntry) => void;
 }) {
@@ -1211,11 +1344,12 @@ function CatalogDetailPanel({
 
       <section className="space-y-1.5">
         <p className="font-mono text-[0.5625rem] font-semibold tracking-[0.12em] text-muted uppercase">
-          Crawl selection
+          Update paths
         </p>
         <p className="text-[0.625rem] leading-4 text-muted">
-          When adding sets from Top N, main docs is always included. Tick
-          optional paths to crawl them too
+          {allowDeselectMain
+            ? "Paths-only: nothing pre-selected — tick the path(s) to update (main optional). Package must already exist from a prior full update."
+            : "When adding sets from Top N, main docs is always included. Tick optional paths to include them too"}
           {optionalCount > 0 ? ` · ${optionalCount} optional` : ""}.
         </p>
         {pathBadges.length > 0 ? (
@@ -1223,6 +1357,7 @@ function CatalogDetailPanel({
             entry={entry}
             selectedUrls={selectedUrls ?? null}
             onToggleUrl={onToggleUrl}
+            allowDeselectMain={allowDeselectMain}
           />
         ) : (
           <p className="text-xs text-muted">
@@ -1251,7 +1386,7 @@ function CatalogDetailPanel({
           ))}
         </div>
         <p className="text-[0.625rem] text-muted">
-          Default crawl target: {entry.selectedVersion}
+          Default update target: {entry.selectedVersion}
           {entry.versions.length === 1
             ? " (only latest tree detected)"
             : " (multi-version site)"}
@@ -1265,7 +1400,7 @@ function CatalogDetailPanel({
         </p>
         {entry.excludePatterns.length === 0 ? (
           <p className="text-xs text-muted">
-            None yet — fill via exclude-pattern script, then crawls skip
+            None yet — fill via exclude-pattern script, then updates skip
             unwanted trees.
           </p>
         ) : (
@@ -1295,6 +1430,7 @@ function CatalogDetailPanel({
 
 export default function AdminSourceUpdaterPage() {
   const { isAdmin } = useAuth();
+  const hostingCaps = useHostingCapabilities();
   const [tab, setTab] = useState<UpdaterTab>("sources");
   const [scope, setScope] = useState<KnowledgeSetScope>("personal");
   const [storageFilter, setStorageFilter] = useState<StorageFilter>("all");
@@ -1308,14 +1444,24 @@ export default function AdminSourceUpdaterPage() {
   const [focusSourceId, setFocusSourceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [runningMode, setRunningMode] = useState<"refresh" | "catalog-crawl">(
+    "refresh",
+  );
   const [stopping, setStopping] = useState(false);
   const [currentSourceId, setCurrentSourceId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<RefreshRunSnapshot | null>(null);
+  const [catalogIngestSnapshot, setCatalogIngestSnapshot] =
+    useState<IngestPipelineSnapshot | null>(null);
+  const [catalogCrawlPages, setCatalogCrawlPages] = useState<number | null>(
+    null,
+  );
   const [queueIndex, setQueueIndex] = useState(0);
   const [queueTotal, setQueueTotal] = useState(0);
   const [lastRunIds, setLastRunIds] = useState<string[]>([]);
   const abortRef = useRef(false);
   const currentSourceIdRef = useRef<string | null>(null);
+  const catalogIngestRunIdRef = useRef<string | null>(null);
+  const catalogPollStopRef = useRef<(() => void) | null>(null);
 
   const [catalog, setCatalog] = useState<TypescriptDocsCatalog | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
@@ -1339,6 +1485,18 @@ export default function AdminSourceUpdaterPage() {
   const [catalogPathsFilter, setCatalogPathsFilter] =
     useState<CatalogPathsFilter>("all");
   const [showFailedMissingDocs, setShowFailedMissingDocs] = useState(false);
+  const [catalogTop50Only, setCatalogTop50Only] = useState(true);
+  const [catalogCrawlMode, setCatalogCrawlMode] =
+    useState<CatalogCrawlMode>("full");
+  const [catalogRowStatus, setCatalogRowStatus] = useState<
+    Record<string, RowStatus>
+  >({});
+  const [catalogRowError, setCatalogRowError] = useState<
+    Record<string, string>
+  >({});
+  const [catalogCrawlPackage, setCatalogCrawlPackage] = useState<string | null>(
+    null,
+  );
   const canPersistCatalogPaths =
     process.env.NODE_ENV === "development";
 
@@ -1350,6 +1508,12 @@ export default function AdminSourceUpdaterPage() {
     if (includeOptional) return badges.map((badge) => badge.url);
     const main = badges.find((badge) => badge.primary)?.url ?? entry.docs;
     return main ? [main] : [];
+  }
+
+  /** Initial path ticks when (re)selecting a package — empty in paths-only so you pick. */
+  function initialCatalogPaths(entry: TypescriptDocsCatalogEntry): string[] {
+    if (catalogCrawlMode === "paths-only") return [];
+    return defaultCatalogPaths(entry, includeOptionalPathsAll);
   }
 
   function pathsSetForPackage(packageName: string): Set<string> {
@@ -1486,6 +1650,9 @@ export default function AdminSourceUpdaterPage() {
     const q = catalogQuery.trim().toLowerCase();
     return catalogReviewEntries
       .filter((entry) => {
+        if (catalogTop50Only && !isCuratedTopDocsPackage(entry.package)) {
+          return false;
+        }
         if (catalogCategory !== "all" && entry.category !== catalogCategory) {
           return false;
         }
@@ -1501,14 +1668,26 @@ export default function AdminSourceUpdaterPage() {
           (entry.pathsStatus ?? "").toLowerCase().includes(q)
         );
       })
-      .sort((a, b) => compareCatalogEntries(a, b, catalogRankMode));
+      .sort((a, b) =>
+        catalogTop50Only
+          ? compareCuratedTopDocs(a, b)
+          : compareCatalogEntries(a, b, catalogRankMode),
+      );
   }, [
     catalogReviewEntries,
     catalogCategory,
     catalogPathsFilter,
     catalogQuery,
     catalogRankMode,
+    catalogTop50Only,
   ]);
+
+  const catalogTop50PresentCount = useMemo(() => {
+    if (!catalog) return 0;
+    return catalog.entries.filter((entry) =>
+      isCuratedTopDocsPackage(entry.package),
+    ).length;
+  }, [catalog]);
 
   const catalogDisplayRankByPackage = useMemo(() => {
     const map = new Map<string, number>();
@@ -1601,23 +1780,70 @@ export default function AdminSourceUpdaterPage() {
     return changelogs[activeFocusId] ?? null;
   }, [activeFocusId, changelogs, snapshot]);
 
-  const pipeline = useMemo(
-    () =>
-      running
-        ? pipelineFromRefreshSnapshot(snapshot)
-        : IDLE_INGEST_PIPELINE.map((node) => ({ ...node })),
-    [running, snapshot],
-  );
+  const pipeline = useMemo(() => {
+    if (!running) {
+      return IDLE_INGEST_PIPELINE.map((node) => ({ ...node }));
+    }
+    if (runningMode === "catalog-crawl") {
+      return pipelineFromCatalogIngest({
+        snapshot: catalogIngestSnapshot,
+        crawlPages: catalogCrawlPages,
+        maxPages: 1000,
+      });
+    }
+    return pipelineFromRefreshSnapshot(snapshot);
+  }, [
+    running,
+    runningMode,
+    catalogIngestSnapshot,
+    catalogCrawlPages,
+    snapshot,
+  ]);
 
   const headline = useMemo(() => {
     if (tab === "catalog") {
-      if (selectedCatalog.size === 0) return "Select packages to add";
+      if (running && runningMode === "catalog-crawl") {
+        const pkgBit = catalogCrawlPackage
+          ? `${catalogCrawlPackage} · ${queueIndex + 1} / ${queueTotal}`
+          : `${queueIndex + 1} / ${queueTotal}`;
+        const crawlNode = catalogIngestSnapshot?.pipeline?.find(
+          (node) => node.id === "crawl",
+        );
+        const runningNode = catalogIngestSnapshot?.pipeline?.find(
+          (node) => node.status === "running",
+        );
+        if (
+          typeof catalogCrawlPages === "number" &&
+          (!catalogIngestSnapshot ||
+            crawlNode?.status === "running" ||
+            crawlNode?.status === "pending")
+        ) {
+          return `Updating ${pkgBit} · ${catalogCrawlPages} pages`;
+        }
+        if (runningNode?.detail) {
+          return `${runningNode.label}: ${runningNode.detail} · ${pkgBit}`;
+        }
+        if (catalogIngestSnapshot?.suspendedStep) {
+          return `Updating · ${pkgBit}`;
+        }
+        return `Updating ${pkgBit}`;
+      }
+      if (selectedCatalog.size === 0) {
+        return catalogCrawlMode === "paths-only"
+          ? "Paths-only: select a package, then tick path(s) to update"
+          : "Select packages to update";
+      }
       const pathCount = [...selectedCatalog].reduce((sum, pkg) => {
-        return sum + (selectedCatalogPaths[pkg]?.length ?? 1);
+        return sum + (selectedCatalogPaths[pkg]?.length ?? 0);
       }, 0);
+      if (catalogCrawlMode === "paths-only") {
+        return pathCount === 0
+          ? `${selectedCatalog.size} selected · tick path(s) to update (main not forced)`
+          : `${selectedCatalog.size} selected — ready to update (${pathCount} path${pathCount === 1 ? "" : "s"})`;
+      }
       return includeOptionalPathsAll
-        ? `${selectedCatalog.size} selected · ${pathCount} paths (optional on)`
-        : `${selectedCatalog.size} selected · main path only (${pathCount})`;
+        ? `${selectedCatalog.size} selected — ready to update · ${pathCount || selectedCatalog.size} paths`
+        : `${selectedCatalog.size} selected — ready to update`;
     }
     if (!running) {
       return selected.size > 0
@@ -1635,10 +1861,15 @@ export default function AdminSourceUpdaterPage() {
     }
     return `${focusSource.name} · ${queueIndex + 1} / ${queueTotal}${pathBit}`;
   }, [
+    catalogCrawlMode,
+    catalogCrawlPackage,
+    catalogCrawlPages,
+    catalogIngestSnapshot,
     focusSource,
     queueIndex,
     queueTotal,
     running,
+    runningMode,
     selected.size,
     selectedCatalog.size,
     selectedCatalogPaths,
@@ -1648,6 +1879,12 @@ export default function AdminSourceUpdaterPage() {
     snapshot?.pathTotal,
     tab,
   ]);
+
+  const catalogSelectedPathCount = useMemo(() => {
+    return [...selectedCatalog].reduce((sum, pkg) => {
+      return sum + (selectedCatalogPaths[pkg]?.length ?? 0);
+    }, 0);
+  }, [selectedCatalog, selectedCatalogPaths]);
 
   function rememberChangelog(
     sourceId: string,
@@ -1712,7 +1949,7 @@ export default function AdminSourceUpdaterPage() {
         if (entry) {
           setSelectedCatalogPaths((pathsPrev) => ({
             ...pathsPrev,
-            [packageName]: defaultCatalogPaths(entry, includeOptionalPathsAll),
+            [packageName]: initialCatalogPaths(entry),
           }));
         }
       }
@@ -1748,10 +1985,7 @@ export default function AdminSourceUpdaterPage() {
     setSelectedCatalogPaths((prev) => {
       const next = { ...prev };
       for (const entry of catalogEntries) {
-        next[entry.package] = defaultCatalogPaths(
-          entry,
-          includeOptionalPathsAll,
-        );
+        next[entry.package] = initialCatalogPaths(entry);
       }
       return next;
     });
@@ -1774,7 +2008,8 @@ export default function AdminSourceUpdaterPage() {
     const entry = catalog?.entries.find((row) => row.package === packageName);
     if (!entry?.docs) return;
     const mainKey = normalizePathKey(entry.docs);
-    if (normalizePathKey(url) === mainKey) return;
+    const isMain = normalizePathKey(url) === mainKey;
+    if (isMain && catalogCrawlMode !== "paths-only") return;
 
     setSelectedCatalog((prev) => {
       if (prev.has(packageName)) return prev;
@@ -1785,12 +2020,17 @@ export default function AdminSourceUpdaterPage() {
 
     setSelectedCatalogPaths((prev) => {
       const current = new Set(
-        prev[packageName] ?? defaultCatalogPaths(entry, false),
+        prev[packageName] ??
+          (catalogCrawlMode === "paths-only"
+            ? []
+            : defaultCatalogPaths(entry, false)),
       );
       if (enabled) current.add(url);
       else current.delete(url);
-      // Always keep main.
-      current.add(entry.docs!);
+      // Keep main unless paths-only mode explicitly allows removing it.
+      if (catalogCrawlMode !== "paths-only" && entry.docs) {
+        current.add(entry.docs);
+      }
       return { ...prev, [packageName]: [...current] };
     });
   }
@@ -1881,6 +2121,7 @@ export default function AdminSourceUpdaterPage() {
 
     abortRef.current = false;
     setRunning(true);
+    setRunningMode("refresh");
     setStopping(false);
     setError(null);
     setQueueTotal(queue.length);
@@ -1975,11 +2216,405 @@ export default function AdminSourceUpdaterPage() {
     const activeId = currentSourceIdRef.current;
     if (activeId) {
       try {
-        await cancelSourceRefresh(activeId);
+        if (runningMode === "catalog-crawl") {
+          await cancelIngest(activeId);
+        } else {
+          await cancelSourceRefresh(activeId);
+        }
       } catch {
         // ignore — local abort still stops the loop
       }
     }
+    stopCatalogIngestPolling();
+  }
+
+  function resolveCatalogHosting(): SourceHosting {
+    if (scope === "global" || !hostingCaps.localAvailable) return "cloud";
+    return hostingCaps.default;
+  }
+
+  async function ensurePersonalProjectId(): Promise<string> {
+    const existing = getDevProjectId();
+    if (existing) return existing;
+    const { project } = await createProject("My LedgeIndex project");
+    setDevProjectId(project.id);
+    return project.id;
+  }
+
+  async function ensureCatalogSource(input: {
+    entry: TypescriptDocsCatalogEntry;
+    crawlUrls: string[];
+    hosting: SourceHosting;
+    mode: CatalogCrawlMode;
+  }): Promise<{ sourceId: string; ingestUrls: string[] }> {
+    const { entry, crawlUrls, hosting, mode } = input;
+    const name = catalogSourceName(entry);
+    const sourceMetadata = catalogSourceMetadata(entry);
+    const versionLabel = entry.selectedVersion || "latest";
+    const identityUrl =
+      effectiveCatalogDocsUrl(entry) || entry.docs || crawlUrls[0]!;
+
+    syncApiBaseForHosting({ scope, hosting });
+
+    const { duplicate } = await checkSourceDuplicates({
+      url: identityUrl,
+      scope,
+      versionLabel,
+    });
+
+    if (mode === "paths-only" && !duplicate?.existing?.id) {
+      throw new Error(
+        "Paths-only update needs an existing source — run a full update first",
+      );
+    }
+
+    if (duplicate?.existing?.id) {
+      const sourceId = duplicate.existing.id;
+      if (mode === "paths-only") {
+        const { source } = await getSource(sourceId);
+        const existingStarts = (source.config.startUrls ?? []).filter(Boolean);
+        const persistedStarts = [
+          ...new Set([...existingStarts, ...crawlUrls]),
+        ];
+        await updateSource(sourceId, {
+          name,
+          config: catalogCrawlConfig(persistedStarts, entry),
+          sourceMetadata,
+        });
+        return { sourceId, ingestUrls: crawlUrls };
+      }
+
+      await updateSource(sourceId, {
+        name,
+        config: catalogCrawlConfig(crawlUrls, entry),
+        sourceMetadata,
+      });
+      return { sourceId, ingestUrls: crawlUrls };
+    }
+
+    const createInput = {
+      name,
+      scope,
+      hosting,
+      config: catalogCrawlConfig(crawlUrls, entry),
+      sourceMetadata,
+      versionMode: "new" as const,
+      versionLabel,
+    };
+
+    if (scope === "global") {
+      const { source } = await createSource(createInput);
+      return { sourceId: source.id, ingestUrls: crawlUrls };
+    }
+
+    let projectId = await ensurePersonalProjectId();
+    try {
+      const { source } = await createSource({ ...createInput, projectId });
+      return { sourceId: source.id, ingestUrls: crawlUrls };
+    } catch (error) {
+      if (
+        !(error instanceof KnowledgeIndexApiError) ||
+        error.status !== 404 ||
+        !projectId
+      ) {
+        throw error;
+      }
+      const { project } = await createProject("My LedgeIndex project");
+      setDevProjectId(project.id);
+      projectId = project.id;
+      const { source } = await createSource({ ...createInput, projectId });
+      return { sourceId: source.id, ingestUrls: crawlUrls };
+    }
+  }
+
+  function stopCatalogIngestPolling() {
+    catalogPollStopRef.current?.();
+    catalogPollStopRef.current = null;
+  }
+
+  function startCatalogIngestPolling(sourceId: string) {
+    stopCatalogIngestPolling();
+    let cancelled = false;
+
+    const tick = async () => {
+      try {
+        const progress = await getCrawlProgress(sourceId);
+        if (!cancelled) {
+          setCatalogCrawlPages(progress.pagesDiscovered);
+        }
+      } catch {
+        // ignore transient crawl-progress errors
+      }
+
+      const runId = catalogIngestRunIdRef.current;
+      if (!runId || cancelled) return;
+      try {
+        const { snapshot: live } = await getIngestWorkflowStatus(
+          sourceId,
+          runId,
+        );
+        if (!cancelled && live) {
+          setCatalogIngestSnapshot(live);
+        }
+      } catch {
+        // ignore transient status errors while start/resume is in flight
+      }
+    };
+
+    void tick();
+    const interval = window.setInterval(() => {
+      void tick();
+    }, 750);
+
+    catalogPollStopRef.current = () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }
+
+  async function runCatalogIngestToCompletion(
+    sourceId: string,
+    config: WebCrawlConfig,
+  ): Promise<void> {
+    catalogIngestRunIdRef.current = null;
+    setCatalogCrawlPages(0);
+    // Optimistic strip: crawl running before start returns.
+    setCatalogIngestSnapshot({
+      runId: "",
+      status: "running",
+      pipeline: pipelineFromCatalogIngest({
+        snapshot: null,
+        crawlPages: 0,
+        maxPages: config.maxPages || 1000,
+      }),
+    });
+    startCatalogIngestPolling(sourceId);
+
+    try {
+      const { snapshot: started } = await startIngestWorkflow(sourceId, {
+        config,
+      });
+      let snap: IngestPipelineSnapshot = started;
+      catalogIngestRunIdRef.current = snap.runId;
+      setCatalogIngestSnapshot(snap);
+
+      while (snap.status !== "success") {
+        if (abortRef.current) {
+          throw new Error("Cancelled");
+        }
+        if (snap.status === "failed") {
+          throw new Error(snap.error || "Ingest failed");
+        }
+
+        if (snap.suspendedStep === "crawl-review-step") {
+          const payload = snap.suspendPayload as {
+            urls?: { url: string }[];
+          };
+          const urls = (payload.urls ?? []).map((row) => row.url).filter(Boolean);
+          if (urls.length === 0) {
+            throw new Error("No pages discovered for crawl");
+          }
+          const { snapshot: next } = await resumeIngestWorkflow(
+            sourceId,
+            snap.runId,
+            {
+              step: "crawl-review-step",
+              resumeData: { selectedUrls: urls, enrichExamples: false },
+            },
+          );
+          snap = next;
+          catalogIngestRunIdRef.current = snap.runId;
+          setCatalogIngestSnapshot(snap);
+          continue;
+        }
+
+        if (snap.suspendedStep === "parse-review-step") {
+          const { snapshot: next } = await resumeIngestWorkflow(
+            sourceId,
+            snap.runId,
+            {
+              step: "parse-review-step",
+              resumeData: { confirmed: true, enrichExamples: false },
+            },
+          );
+          snap = next;
+          catalogIngestRunIdRef.current = snap.runId;
+          setCatalogIngestSnapshot(snap);
+          continue;
+        }
+
+        if (snap.suspendedStep === "enrich-step") {
+          const { snapshot: next } = await resumeIngestWorkflow(
+            sourceId,
+            snap.runId,
+            {
+              step: "enrich-step",
+              resumeData: { confirmed: true },
+            },
+          );
+          snap = next;
+          catalogIngestRunIdRef.current = snap.runId;
+          setCatalogIngestSnapshot(snap);
+          continue;
+        }
+
+        throw new Error(
+          snap.suspendedStep
+            ? `Unexpected ingest pause: ${snap.suspendedStep}`
+            : "Ingest did not complete",
+        );
+      }
+
+      setCatalogIngestSnapshot(snap);
+    } finally {
+      stopCatalogIngestPolling();
+    }
+  }
+
+  async function crawlOneCatalogPackage(
+    packageName: string,
+  ): Promise<RowStatus> {
+    const entry =
+      catalog?.entries.find((row) => row.package === packageName) ?? null;
+    if (!entry) throw new Error("Package not in catalog");
+    if (!isCatalogEntryCrawlReady(entry)) {
+      throw new Error(
+        `Docs not crawl-ready (${entry.docsStatus || "missing"})`,
+      );
+    }
+
+    const crawlUrls = (
+      selectedCatalogPaths[packageName] ??
+      defaultCatalogPaths(entry, includeOptionalPathsAll)
+    ).filter(Boolean);
+    if (crawlUrls.length === 0) {
+      throw new Error(
+        catalogCrawlMode === "paths-only"
+          ? "No paths selected for paths-only update"
+          : "No start URLs selected",
+      );
+    }
+
+    const hosting = resolveCatalogHosting();
+    setCatalogCrawlPackage(packageName);
+    setFocusCatalogPackage(packageName);
+    setCatalogRowStatus((prev) => ({ ...prev, [packageName]: "running" }));
+
+    const { sourceId, ingestUrls } = await ensureCatalogSource({
+      entry,
+      crawlUrls,
+      hosting,
+      mode: catalogCrawlMode,
+    });
+    setCurrentSourceId(sourceId);
+    currentSourceIdRef.current = sourceId;
+
+    if (abortRef.current) throw new Error("Cancelled");
+
+    // Persist full selection on source for "full"; for paths-only, source already
+    // has merged starts — ingest only the selected path URL(s).
+    const ingestConfig = catalogCrawlConfig(ingestUrls, entry);
+    await runCatalogIngestToCompletion(sourceId, ingestConfig);
+    return "updated";
+  }
+
+  async function startCatalogCrawlQueue() {
+    if (running || selectedCatalog.size === 0 || !catalog) return;
+    const queue = [...selectedCatalog];
+    if (queue.length === 0) return;
+
+    abortRef.current = false;
+    setRunning(true);
+    setRunningMode("catalog-crawl");
+    setStopping(false);
+    setError(null);
+    setSnapshot(null);
+    setCatalogIngestSnapshot(null);
+    setCatalogCrawlPages(null);
+    catalogIngestRunIdRef.current = null;
+    stopCatalogIngestPolling();
+    setQueueTotal(queue.length);
+    setQueueIndex(0);
+    setCatalogCrawlPackage(queue[0] ?? null);
+    setFocusCatalogPackage(queue[0] ?? null);
+    setCatalogRowError({});
+    setCatalogRowStatus((prev) => {
+      const next = { ...prev };
+      for (const pkg of queue) next[pkg] = "queued";
+      return next;
+    });
+
+    const hosting = resolveCatalogHosting();
+    syncApiBaseForHosting({ scope, hosting });
+
+    for (let i = 0; i < queue.length; i += 1) {
+      if (abortRef.current) {
+        setCatalogRowStatus((prev) => {
+          const next = { ...prev };
+          for (let j = i; j < queue.length; j += 1) {
+            const pkg = queue[j]!;
+            if (next[pkg] === "queued" || next[pkg] === "running") {
+              next[pkg] = "cancelled";
+            }
+          }
+          return next;
+        });
+        break;
+      }
+
+      const packageName = queue[i]!;
+      setQueueIndex(i);
+      try {
+        const result = await crawlOneCatalogPackage(packageName);
+        if (abortRef.current && result === "cancelled") {
+          setCatalogRowStatus((prev) => {
+            const next: Record<string, RowStatus> = {
+              ...prev,
+              [packageName]: "cancelled",
+            };
+            for (let j = i + 1; j < queue.length; j += 1) {
+              const pkg = queue[j]!;
+              if (next[pkg] === "queued" || next[pkg] === "running") {
+                next[pkg] = "cancelled";
+              }
+            }
+            return next;
+          });
+          break;
+        }
+        setCatalogRowStatus((prev) => ({ ...prev, [packageName]: result }));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Update failed";
+        if (abortRef.current || message === "Cancelled") {
+          setCatalogRowStatus((prev) => {
+            const next: Record<string, RowStatus> = {
+              ...prev,
+              [packageName]: "cancelled",
+            };
+            for (let j = i + 1; j < queue.length; j += 1) {
+              const pkg = queue[j]!;
+              if (next[pkg] === "queued" || next[pkg] === "running") {
+                next[pkg] = "cancelled";
+              }
+            }
+            return next;
+          });
+          break;
+        }
+        setCatalogRowStatus((prev) => ({ ...prev, [packageName]: "error" }));
+        setCatalogRowError((prev) => ({ ...prev, [packageName]: message }));
+      }
+    }
+
+    setRunning(false);
+    setStopping(false);
+    setCurrentSourceId(null);
+    currentSourceIdRef.current = null;
+    setCatalogCrawlPackage(null);
+    stopCatalogIngestPolling();
+    catalogIngestRunIdRef.current = null;
+    // Keep last ingest snapshot visible on the strip after the queue finishes.
+    void load(scope);
   }
 
   if (!isAdmin) {
@@ -2005,7 +2640,7 @@ export default function AdminSourceUpdaterPage() {
         </FilterBadge>
         <FilterBadge
           active={tab === "catalog"}
-          disabled={running}
+          disabled={running && tab !== "catalog"}
           onClick={() => setTab("catalog")}
         >
           Top {catalog ? catalogUsableEntries.length : "…"}
@@ -2109,8 +2744,38 @@ export default function AdminSourceUpdaterPage() {
               aria-hidden
             />
             <FilterBadge
+              active={scope === "personal"}
+              disabled={running}
+              onClick={() => handleScopeChange("personal")}
+            >
+              Just me
+            </FilterBadge>
+            <FilterBadge
+              active={scope === "global"}
+              disabled={running}
+              onClick={() => handleScopeChange("global")}
+              title="Public catalog — needs Postgres"
+            >
+              Public
+            </FilterBadge>
+            <span
+              className="mx-0.5 hidden h-4 w-px bg-border sm:inline-block"
+              aria-hidden
+            />
+            <FilterBadge
+              active={catalogTop50Only}
+              disabled={running}
+              onClick={() => setCatalogTop50Only((prev) => !prev)}
+              title="Hand-picked frameworks, runtimes, data, UI, and tooling"
+            >
+              Top {CURATED_TOP_DOCS_PACKAGES.length}
+              <span className="opacity-60">
+                ({catalogTop50PresentCount})
+              </span>
+            </FilterBadge>
+            <FilterBadge
               active={false}
-              disabled={catalogEntries.length === 0}
+              disabled={running || catalogEntries.length === 0}
               onClick={toggleAllCatalog}
             >
               {catalogEntries.length > 0 &&
@@ -2122,15 +2787,101 @@ export default function AdminSourceUpdaterPage() {
             </FilterBadge>
             <FilterBadge
               active={includeOptionalPathsAll}
-              disabled={selectedCatalog.size === 0}
+              disabled={
+                running ||
+                selectedCatalog.size === 0 ||
+                catalogCrawlMode === "paths-only"
+              }
               onClick={() => setIncludeOptionalPaths(!includeOptionalPathsAll)}
+              title={
+                catalogCrawlMode === "paths-only"
+                  ? "In paths-only mode, pick paths per package instead"
+                  : undefined
+              }
             >
               {includeOptionalPathsAll
                 ? "Optional: all"
                 : "Optional: main"}
             </FilterBadge>
             <FilterBadge
+              active={catalogCrawlMode === "paths-only"}
+              disabled={running}
+              onClick={() => {
+                setCatalogCrawlMode((prev) => {
+                  const next =
+                    prev === "full" ? "paths-only" : "full";
+                  if (next === "paths-only") {
+                    // Clear ticks — pick exactly which path(s) to update (main not forced).
+                    setSelectedCatalogPaths((pathsPrev) => {
+                      const updated = { ...pathsPrev };
+                      for (const pkg of selectedCatalog) {
+                        updated[pkg] = [];
+                      }
+                      return updated;
+                    });
+                  } else {
+                    // Re-lock main docs into every selected package.
+                    setSelectedCatalogPaths((pathsPrev) => {
+                      const updated = { ...pathsPrev };
+                      for (const pkg of selectedCatalog) {
+                        const entry = catalog?.entries.find(
+                          (row) => row.package === pkg,
+                        );
+                        if (!entry?.docs) continue;
+                        const current = new Set(
+                          updated[pkg] ??
+                            defaultCatalogPaths(entry, includeOptionalPathsAll),
+                        );
+                        current.add(entry.docs);
+                        updated[pkg] = [...current];
+                      }
+                      return updated;
+                    });
+                  }
+                  return next;
+                });
+              }}
+              title="Paths only: tick the path(s) to update (main can stay off). Needs an existing source from a prior full update."
+            >
+              {catalogCrawlMode === "paths-only"
+                ? "Scope: paths only"
+                : "Scope: full"}
+            </FilterBadge>
+            <FilterBadge
+              active={selectedCatalog.size > 0 && !running}
+              disabled={
+                running ||
+                selectedCatalog.size === 0 ||
+                (catalogCrawlMode === "paths-only" &&
+                  catalogSelectedPathCount === 0)
+              }
+              onClick={() => void startCatalogCrawlQueue()}
+              title={
+                catalogCrawlMode === "paths-only"
+                  ? catalogSelectedPathCount === 0
+                    ? "Tick at least one path badge on a selected package"
+                    : `Paths-only: merge selected paths into existing ${scope === "global" ? "public" : "personal"} sources and index those URLs`
+                  : `Create or update ${scope === "global" ? "public" : "personal"} sources for selected packages`
+              }
+            >
+              <RefreshCw className="size-3" aria-hidden />
+              Update {selectedCatalog.size > 0 ? selectedCatalog.size : ""}{" "}
+              selected
+            </FilterBadge>
+            {running && runningMode === "catalog-crawl" ? (
+              <FilterBadge
+                active={false}
+                disabled={stopping}
+                onClick={() => void stopQueue()}
+                className="border-red-500/40 text-red-700 hover:border-red-500/50 hover:text-red-700 dark:text-red-300"
+              >
+                <Square className="size-2.5 fill-current" aria-hidden />
+                {stopping ? "Stopping…" : "Stop sync"}
+              </FilterBadge>
+            ) : null}
+            <FilterBadge
               active={showFailedMissingDocs}
+              disabled={running}
               onClick={() => setShowFailedMissingDocs((prev) => !prev)}
               title="Include docs that failed verification or are still uncertain/missing"
             >
@@ -2142,6 +2893,7 @@ export default function AdminSourceUpdaterPage() {
                 <FilterBadge
                   key={option.value}
                   active={active}
+                  disabled={running || catalogTop50Only}
                   onClick={() => setCatalogRankMode(option.value)}
                 >
                   {option.label}
@@ -2157,6 +2909,7 @@ export default function AdminSourceUpdaterPage() {
               value={catalogQuery}
               onChange={(event) => setCatalogQuery(event.target.value)}
               placeholder="Search packages…"
+              disabled={running}
               className="h-7 min-w-[10rem] flex-1 rounded-md border border-border bg-card-solid px-2.5 text-xs text-foreground placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-foreground/20 sm:max-w-[14rem]"
             />
           </>
@@ -2410,9 +3163,19 @@ export default function AdminSourceUpdaterPage() {
                   {catalogEntries.map((entry) => {
                     const checked = selectedCatalog.has(entry.package);
                     const focused = focusCatalogPackage === entry.package;
+                    const crawlStatus = catalogRowStatus[entry.package] ?? "idle";
+                    const crawlError = catalogRowError[entry.package];
+                    const statusLabel = catalogRowStatusLabel(crawlStatus);
+                    const curatedRank = curatedTopDocsRank(entry.package);
                     const rankLabel = String(
-                      catalogDisplayRankByPackage.get(entry.package) ?? "—",
+                      catalogTop50Only && curatedRank != null
+                        ? curatedRank
+                        : (catalogDisplayRankByPackage.get(entry.package) ??
+                            "—"),
                     );
+                    const rankTitle = catalogTop50Only
+                      ? `Curated Top ${CURATED_TOP_DOCS_PACKAGES.length} #${rankLabel}`
+                      : `Rank #${rankLabel} (${catalogRankMode})`;
                     return (
                       <li key={entry.package}>
                         <div
@@ -2425,12 +3188,13 @@ export default function AdminSourceUpdaterPage() {
                             type="checkbox"
                             className="size-3.5 shrink-0"
                             checked={checked}
+                            disabled={running}
                             onChange={() => toggleCatalog(entry.package)}
                             aria-label={`Select ${entry.package}`}
                           />
                           <span
                             className="w-8 shrink-0 text-right font-mono text-[0.6875rem] font-semibold tabular-nums text-muted"
-                            title={`Rank #${rankLabel} (${catalogRankMode})`}
+                            title={rankTitle}
                           >
                             {rankLabel}
                           </span>
@@ -2446,6 +3210,23 @@ export default function AdminSourceUpdaterPage() {
                                 <p className="truncate text-sm font-medium text-foreground">
                                   {entry.package}
                                 </p>
+                                {statusLabel ? (
+                                  <span
+                                    className={cn(
+                                      "rounded-md border px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] uppercase",
+                                      crawlStatus === "updated"
+                                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
+                                        : crawlStatus === "error"
+                                          ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+                                          : crawlStatus === "running"
+                                            ? "border-accent/35 bg-accent/10 text-accent"
+                                            : "border-border bg-surface-alt text-muted",
+                                    )}
+                                    title={crawlError || undefined}
+                                  >
+                                    {statusLabel}
+                                  </span>
+                                ) : null}
                                 <span className="rounded-md border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-muted uppercase">
                                   {categoryLabel(entry.category)}
                                 </span>
@@ -2482,13 +3263,31 @@ export default function AdminSourceUpdaterPage() {
                                   ? formatUrlLabel(entry.docs)
                                   : "docs pending"}
                               </p>
+                              {crawlError ? (
+                                <p className="mt-0.5 truncate text-[0.625rem] text-red-600 dark:text-red-300">
+                                  {crawlError}
+                                </p>
+                              ) : null}
                               <CatalogPathBadges
                                 entry={entry}
                                 compact
+                                allowDeselectMain={
+                                  catalogCrawlMode === "paths-only"
+                                }
                                 selectedUrls={
                                   selectedCatalog.has(entry.package)
                                     ? pathsSetForPackage(entry.package)
                                     : null
+                                }
+                                onToggleUrl={
+                                  selectedCatalog.has(entry.package)
+                                    ? (url, next) =>
+                                        toggleCatalogPath(
+                                          entry.package,
+                                          url,
+                                          next,
+                                        )
+                                    : undefined
                                 }
                               />
                               {entry.versions.length > 1 ? (
@@ -2543,6 +3342,7 @@ export default function AdminSourceUpdaterPage() {
                   if (!focusCatalogEntry) return;
                   toggleCatalogPath(focusCatalogEntry.package, url, next);
                 }}
+                allowDeselectMain={catalogCrawlMode === "paths-only"}
                 canPersistPaths={canPersistCatalogPaths}
                 onPathsSaved={applySavedCatalogEntry}
               />
@@ -2555,7 +3355,7 @@ export default function AdminSourceUpdaterPage() {
               headline={headline}
               variant="banner"
               bannerSize="strip"
-              animate={false}
+              animate={running && runningMode === "catalog-crawl"}
               className="w-full"
             />
           </div>

@@ -16,7 +16,8 @@ import {
   type LedgeIndexChatModelId,
 } from "@/lib/chat-models";
 import {
-  DEFAULT_RERANK_BACKEND_ID,
+  CLOUD_SOURCE_RERANK_BACKEND_ID,
+  LOCAL_RERANK_BACKEND_ID,
   resolveAllowedRerankBackend,
   type LedgeIndexRerankBackendId,
 } from "@/lib/rerank-backend";
@@ -88,7 +89,7 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
   const [modelId, setModelId] =
     useState<LedgeIndexChatModelId>(DEFAULT_CHAT_MODEL_ID);
   const [rerankBackend, setRerankBackendState] =
-    useState<LedgeIndexRerankBackendId>(DEFAULT_RERANK_BACKEND_ID);
+    useState<LedgeIndexRerankBackendId>(LOCAL_RERANK_BACKEND_ID);
   const [testPromptSuggestions, setTestPromptSuggestions] = useState<
     readonly ChatSuggestionInput[]
   >([]);
@@ -121,6 +122,16 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
       resolveAllowedRerankBackend(current, isAdmin),
     );
   }, [isAdmin]);
+
+  // Local indexes default to local MiniLM; cloud indexes force Cohere Auto.
+  useEffect(() => {
+    if (!activeSource) return;
+    setRerankBackendState(
+      isCloudSource
+        ? CLOUD_SOURCE_RERANK_BACKEND_ID
+        : LOCAL_RERANK_BACKEND_ID,
+    );
+  }, [activeSource?.sourceId, isCloudSource]);
 
   const setRerankBackend = useCallback(
     (backendId: LedgeIndexRerankBackendId) => {

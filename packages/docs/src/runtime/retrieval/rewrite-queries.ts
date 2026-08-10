@@ -27,8 +27,8 @@ export async function rewriteQueries(input: {
   history: string;
   requestContext?: { get?: (key: string) => unknown };
 }): Promise<RewriteResult> {
-  const model = resolveRewriteModelConfig();
-  const rewriteModelId = primaryAuxiliaryModelId();
+  const model = resolveRewriteModelConfig(input.requestContext);
+  const rewriteModelId = primaryAuxiliaryModelId(input.requestContext);
 
   const agent = new Agent({
     id: "query-rewrite-agent",

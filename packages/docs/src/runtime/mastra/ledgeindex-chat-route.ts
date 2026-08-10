@@ -8,6 +8,7 @@ import {
   usageHasCounts,
   type NormalizedTokenUsage,
 } from "../llm/token-usage.js";
+import { mergeChatRequestContext } from "./merge-chat-request-context.js";
 
 export type LedgeindexChatRouteOptions = {
   path: string;
@@ -32,10 +33,12 @@ export function ledgeindexChatRoute({
       const requestStartedAt = Date.now();
       const params = await c.req.json();
       const mastra = c.get("mastra");
-      const contextRequestContext = c.get("requestContext");
-
-      const effectiveRequestContext =
-        contextRequestContext || params.requestContext;
+      // Middleware often installs an empty RequestContext that would shadow the
+      // client body (model_id, rerank_backend, source_id, …). Merge both.
+      const effectiveRequestContext = mergeChatRequestContext({
+        middleware: c.get("requestContext"),
+        body: params.requestContext,
+      });
 
       let accumulatedStepUsage: NormalizedTokenUsage | undefined;
 

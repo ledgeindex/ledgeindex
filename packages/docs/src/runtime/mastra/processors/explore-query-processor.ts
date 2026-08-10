@@ -467,6 +467,7 @@ async function routeExploreIntentWithLlm(input: {
   question: string;
   history: string;
   catalogText: string;
+  requestContext?: { get?: (key: string) => unknown };
 }): Promise<{ intent: ExploreIntent; reason: string } | null> {
   const agent = new Agent({
     id: "explore-router-agent",
@@ -483,7 +484,7 @@ Rules:
 - Prefer "retrieve" only when the latest user message itself asks for information from sources (including short follow-ups like "how?", "why?", "and for React?", "show an example").
 - Prefer "list_sources" when they ask what sources/sets/indexes are available.
 - When unsure whether they want more docs evidence, prefer "chat" unless the message is clearly a question.`,
-    model: resolveRewriteModelConfig(),
+    model: resolveRewriteModelConfig(input.requestContext),
   });
 
   try {
@@ -516,6 +517,7 @@ async function routeExploreIntent(input: {
   question: string;
   history: string;
   catalogText: string;
+  requestContext?: { get?: (key: string) => unknown };
 }): Promise<{ intent: ExploreIntent; reason: string }> {
   const mode = resolveExploreIntentRouterMode();
 
@@ -556,6 +558,7 @@ async function pickSources(input: {
   question: string;
   history: string;
   sources: ExploreSource[];
+  requestContext?: { get?: (key: string) => unknown };
 }): Promise<string[]> {
   if (input.sources.length === 0) return [];
   if (input.sources.length === 1) return [input.sources[0]!.slug];
@@ -565,7 +568,7 @@ async function pickSources(input: {
     name: "Explore Source Picker",
     instructions: `Pick up to ${MAX_PICKED_SOURCES} source slugs that are most likely to answer the user's question.
 Only use slugs from the provided catalog (personal and/or global). Prefer fewer sources when one is clearly enough.`,
-    model: resolveRewriteModelConfig(),
+    model: resolveRewriteModelConfig(input.requestContext),
   });
 
   try {
@@ -662,6 +665,7 @@ Tell the user they need to sign in to explore remote global sources, or index a 
       question,
       history,
       catalogText,
+      requestContext,
     });
 
     logVerbose("Explore router decided", "ExploreQuery", {
@@ -671,7 +675,7 @@ Tell the user they need to sign in to explore remote global sources, or index a 
       sourceCount: loaded.sources.length,
       personalCount: loaded.sources.filter((s) => s.scope === "personal").length,
       platformError: loaded.platformError,
-      modelId: primaryAuxiliaryModelId(),
+      modelId: primaryAuxiliaryModelId(requestContext),
     });
 
     if (routed.intent === "chat") {
@@ -719,6 +723,7 @@ ${catalogText}${platformNote}`,
       question,
       history,
       sources: loaded.sources,
+      requestContext,
     });
     const picked = pickedSlugs
       .map((slug) =>
@@ -755,7 +760,7 @@ ${catalogText}${platformNote}`,
                 queries: [question],
                 topicScope: "single" as const,
                 method: "cascade" as const,
-                rewriteModelId: primaryAuxiliaryModelId(),
+                rewriteModelId: primaryAuxiliaryModelId(requestContext),
               },
               chunks,
               insufficient: chunks.length === 0,
@@ -829,7 +834,8 @@ ${catalogText}${platformNote}`,
       (entry) => entry.rewrite.topicScope === "multi",
     );
     const rewriteModelId =
-      perSource[0]?.rewrite.rewriteModelId ?? primaryAuxiliaryModelId();
+      perSource[0]?.rewrite.rewriteModelId ??
+      primaryAuxiliaryModelId(requestContext);
 
     const rerankRuntime = describeRerankRuntimeMeta({ cascadePassUsed });
 

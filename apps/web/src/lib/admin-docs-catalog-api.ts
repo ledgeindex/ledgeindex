@@ -1,9 +1,38 @@
 import type { DocsPathEntry, TypescriptDocsCatalogEntry } from "@/lib/typescript-docs-catalog";
 
 const ENDPOINT = "/api/admin/typescript-docs-catalog";
+const PREVIEW_ENDPOINT = "/api/admin/typescript-docs-catalog/preview-crawl";
 
 export type CatalogPathDraft = DocsPathEntry & {
   confidence?: number;
+};
+
+export type PathPreviewCrawlResult = {
+  startUrl: string;
+  mode: "sitemap";
+  sitemapTotal: number;
+  underPathCount: number;
+  excludedCount: number;
+  count: number;
+  urls: string[];
+  truncated: boolean;
+};
+
+export type PathOverlapReport = {
+  mode: "sitemap-overlaps";
+  sitemapTotal: number;
+  pathCount: number;
+  nested: Array<{ parent: string; child: string }>;
+  shared: Array<{ url: string; paths: string[] }>;
+  sharedCount: number;
+  sharedTruncated: boolean;
+  paths: Array<{
+    startUrl: string;
+    count: number;
+    exclusiveCount: number;
+    truncated: boolean;
+    nestedUnder: string[];
+  }>;
 };
 
 async function parseJson(response: Response) {
@@ -15,6 +44,59 @@ async function parseJson(response: Response) {
   };
   if (!response.ok) {
     throw new Error(data.error || `Request failed (${response.status})`);
+  }
+  return data;
+}
+
+export async function previewCatalogPathCrawl(input: {
+  url: string;
+  excludePatterns?: string[];
+  patternsAreRegex?: boolean;
+  maxUrls?: number;
+}): Promise<PathPreviewCrawlResult> {
+  const response = await fetch(PREVIEW_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      url: input.url,
+      excludePatterns: input.excludePatterns,
+      patternsAreRegex: input.patternsAreRegex,
+      maxUrls: input.maxUrls,
+    }),
+  });
+  const data = (await response.json().catch(() => ({}))) as PathPreviewCrawlResult & {
+    error?: string;
+    ok?: boolean;
+  };
+  if (!response.ok) {
+    throw new Error(data.error || `Preview failed (${response.status})`);
+  }
+  return data;
+}
+
+export async function previewCatalogPathOverlaps(input: {
+  urls: string[];
+  excludePatterns?: string[];
+  patternsAreRegex?: boolean;
+  maxUrls?: number;
+}): Promise<PathOverlapReport> {
+  const response = await fetch(PREVIEW_ENDPOINT, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      mode: "overlaps",
+      urls: input.urls,
+      excludePatterns: input.excludePatterns,
+      patternsAreRegex: input.patternsAreRegex,
+      maxUrls: input.maxUrls,
+    }),
+  });
+  const data = (await response.json().catch(() => ({}))) as PathOverlapReport & {
+    error?: string;
+    ok?: boolean;
+  };
+  if (!response.ok) {
+    throw new Error(data.error || `Overlap check failed (${response.status})`);
   }
   return data;
 }

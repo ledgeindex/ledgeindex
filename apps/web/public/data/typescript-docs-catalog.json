@@ -1,8 +1,59 @@
 {
-  "generatedAt": "2026-08-09T21:06:27.511Z",
+  "generatedAt": "2026-08-10T22:40:06.775Z",
   "source": "top-typescript-docs.json",
-  "excludeSources": [],
-  "count": 296,
+  "excludeSources": [
+    "docs-exclude-ai.patterns.json",
+    "docs-exclude-angular__core.patterns.json",
+    "docs-exclude-apollo__client.patterns.json",
+    "docs-exclude-astro.patterns.json",
+    "docs-exclude-axios.patterns.json",
+    "docs-exclude-bun.patterns.json",
+    "docs-exclude-cypress.patterns.json",
+    "docs-exclude-dayjs.patterns.json",
+    "docs-exclude-deno.patterns.json",
+    "docs-exclude-drizzle-orm.patterns.json",
+    "docs-exclude-esbuild.patterns.json",
+    "docs-exclude-eslint.patterns.json",
+    "docs-exclude-express.patterns.json",
+    "docs-exclude-fastify.patterns.json",
+    "docs-exclude-graphql.patterns.json",
+    "docs-exclude-hono.patterns.json",
+    "docs-exclude-jest.patterns.json",
+    "docs-exclude-jotai.patterns.json",
+    "docs-exclude-kysely.patterns.json",
+    "docs-exclude-lodash.patterns.json",
+    "docs-exclude-lucide-react.patterns.json",
+    "docs-exclude-mui__material.patterns.json",
+    "docs-exclude-nestjs__core.patterns.json",
+    "docs-exclude-next.patterns.json",
+    "docs-exclude-node.patterns.json",
+    "docs-exclude-octokit__rest.patterns.json",
+    "docs-exclude-openai.patterns.json",
+    "docs-exclude-playwright.patterns.json",
+    "docs-exclude-prettier.patterns.json",
+    "docs-exclude-prisma.patterns.json",
+    "docs-exclude-react-hook-form.patterns.json",
+    "docs-exclude-react.patterns.json",
+    "docs-exclude-reduxjs__toolkit.patterns.json",
+    "docs-exclude-shadcn.patterns.json",
+    "docs-exclude-storybook.patterns.json",
+    "docs-exclude-supabase__supabase-js.patterns.json",
+    "docs-exclude-svelte.patterns.json",
+    "docs-exclude-tailwindcss.patterns.json",
+    "docs-exclude-tanstack__react-query.patterns.json",
+    "docs-exclude-trpc__server.patterns.json",
+    "docs-exclude-tsx.patterns.json",
+    "docs-exclude-turbo.patterns.json",
+    "docs-exclude-typeorm.patterns.json",
+    "docs-exclude-typescript.patterns.json",
+    "docs-exclude-valibot.patterns.json",
+    "docs-exclude-vite.patterns.json",
+    "docs-exclude-vitest.patterns.json",
+    "docs-exclude-vue.patterns.json",
+    "docs-exclude-zod.patterns.json",
+    "docs-exclude-zustand.patterns.json"
+  ],
+  "count": 303,
   "entries": [
     {
       "package": "esbuild",
@@ -53,40 +104,16 @@
       ],
       "paths": [
         {
-          "kind": "other",
-          "url": "https://www.typescriptlang.org/download",
-          "label": "Download"
-        },
-        {
           "kind": "guides",
           "url": "https://www.typescriptlang.org/docs",
           "label": "Docs"
-        },
-        {
-          "kind": "other",
-          "url": "https://www.typescriptlang.org/community",
-          "label": "Community"
-        },
-        {
-          "kind": "other",
-          "url": "https://www.typescriptlang.org/play",
-          "label": "Playground"
-        },
-        {
-          "kind": "other",
-          "url": "https://www.typescriptlang.org/tools",
-          "label": "Tools"
         }
       ],
       "startUrls": [
-        "https://www.typescriptlang.org/download",
-        "https://www.typescriptlang.org/docs",
-        "https://www.typescriptlang.org/community",
-        "https://www.typescriptlang.org/play",
-        "https://www.typescriptlang.org/tools"
+        "https://www.typescriptlang.org/docs"
       ],
       "pathsStatus": "discovered",
-      "pathsReason": "observe() primary-nav section siblings (5)",
+      "pathsReason": "Approved in Source updater (manual path review)",
       "excludePatterns": [],
       "patternsAreRegex": false,
       "versions": [
@@ -502,7 +529,9 @@
       ],
       "pathsStatus": "uncertain",
       "pathsReason": "Not a top-navbar sibling case: The top navigation bar contains site-wide marketing and project links (Team, Blog, Docs, Store, Playground, Code Explorer) rather than peer documentation section tabs. The documentation site navigation itself is structured as a left sidebar TOC.. Kept seed only.",
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/blog/"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -725,7 +754,19 @@
       ],
       "pathsStatus": "uncertain",
       "pathsReason": "Not a top-navbar sibling case: The navigation is positioned on the left vertical sidebar (containing Docs, API, Resources, Blog, Support), not as a horizontal top header navbar with section tabs.. Kept seed only.",
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/de/",
+        "/es/",
+        "/fr/",
+        "/it/",
+        "/ja/",
+        "/ko/",
+        "/pt-br/",
+        "/zh-cn/",
+        "/zh-tw/",
+        "/3x/",
+        "/4x/"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -765,7 +806,10 @@
       ],
       "pathsStatus": "uncertain",
       "pathsReason": "Not a top-navbar sibling case: The top navigation bar contains utility/marketing links (Playground, Docs, Blog, Donate, GitHub) rather than peer site-section tabs across different documentation areas. The actual docs navigation is handled entirely by the left sidebar (TOC).. Kept seed only.",
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/docs/next",
+        "/blog"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -1283,7 +1327,9 @@
       ],
       "pathsStatus": "discovered",
       "pathsReason": "observe() primary-nav section siblings (3)",
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/docs/next"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -1517,7 +1563,10 @@
       "startUrls": [],
       "pathsStatus": null,
       "pathsReason": null,
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/router/",
+        "/start/"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -1958,8 +2007,12 @@
       ],
       "pathsStatus": "uncertain",
       "pathsReason": "Not a top-navbar sibling case: The top header contains top-level marketing/site links (Showcase, Docs, Blog, Templates, Enterprise, Learn), while the actual documentation navigation is entirely handled by the left sidebar TOC and router/version selectors. There is no multi-tab horizontal section navbar specific to the documentation structure.. Kept seed only.",
-      "excludePatterns": [],
-      "patternsAreRegex": false,
+      "excludePatterns": [
+        "^https://nextjs\\.org/learn(/|$)",
+        "^https://nextjs\\.org/blog(/|$)",
+        "^https://nextjs\\.org/conf(/|$)"
+      ],
+      "patternsAreRegex": true,
       "versions": [
         "latest"
       ],
@@ -2428,7 +2481,11 @@
       ],
       "pathsStatus": "discovered",
       "pathsReason": "observe() primary-nav section siblings (3)",
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/docs/next",
+        "/docs/30.0",
+        "/docs/29.7"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -2510,7 +2567,11 @@
       ],
       "pathsStatus": "discovered",
       "pathsReason": "observe() primary-nav section siblings (3)",
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/docs/next",
+        "/docs/30.0",
+        "/docs/29.7"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -3126,7 +3187,12 @@
       "startUrls": [],
       "pathsStatus": null,
       "pathsReason": null,
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/api/reference/resources/beta",
+        "/api/reference/resources/fine_tuning/subresources/alpha",
+        "/cookbook/archive",
+        "/commerce/specs/file-upload/legacy"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -3681,7 +3747,10 @@
       ],
       "pathsStatus": "discovered",
       "pathsReason": "observe() primary-nav section siblings (2)",
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/docs/reference/javascript/v1",
+        "/docs/reference/dart/v1"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -4764,7 +4833,13 @@
       ],
       "pathsStatus": "uncertain",
       "pathsReason": "observe found only one section root (no cross-section siblings); kept seed",
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/docs/next",
+        "/docs/orm/next",
+        "/docs/orm/v6",
+        "/docs/cli/next",
+        "/docs/guides/next"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -7027,7 +7102,18 @@
       ],
       "pathsStatus": "uncertain",
       "pathsReason": "observe found only one section root (no cross-section siblings); kept seed",
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/docs/react/v2",
+        "/docs/ios/v1",
+        "/docs/ios/v0-legacy",
+        "/docs/kotlin/v2",
+        "/docs/kotlin/v3",
+        "/docs/kotlin/v4",
+        "/docs/apollo-server/v2",
+        "/docs/apollo-server/v3",
+        "/docs/federation/v1",
+        "/events"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -9116,7 +9202,10 @@
       ],
       "pathsStatus": "uncertain",
       "pathsReason": "observe found only one section root (no cross-section siblings); kept seed",
-      "excludePatterns": [],
+      "excludePatterns": [
+        "/docs/v9",
+        "/docs/v10"
+      ],
       "patternsAreRegex": false,
       "versions": [
         "latest"
@@ -11888,6 +11977,383 @@
       "openPageRankGlobalRank": null,
       "referringDomains": null,
       "oprRank": 296
+    },
+    {
+      "package": "node",
+      "category": "apis-services",
+      "docs": "https://nodejs.org/docs/latest/api",
+      "apiReferenceUrls": [
+        "https://nodejs.org/docs/latest/api/"
+      ],
+      "paths": [
+        {
+          "kind": "guides",
+          "url": "https://nodejs.org/docs/latest/api",
+          "label": "docs"
+        }
+      ],
+      "startUrls": [
+        "https://nodejs.org/docs/latest/api"
+      ],
+      "pathsStatus": "discovered",
+      "pathsReason": "Approved seed (sidebar docs site — not top-nav siblings)",
+      "excludePatterns": [
+        "/en",
+        "/learn"
+      ],
+      "patternsAreRegex": false,
+      "versions": [
+        "latest"
+      ],
+      "selectedVersion": "latest",
+      "docsStatus": "verified",
+      "isRedirect": false,
+      "finalDocsUrl": "https://nodejs.org/docs/latest/api/",
+      "redirectUncrawlable": false,
+      "description": "Node.js JavaScript runtime documentation.",
+      "homepage": "https://nodejs.org",
+      "github": "nodejs/node",
+      "downloadsLastMonth": null,
+      "rank": 297,
+      "docsDomain": "nodejs.org",
+      "openPageRank": null,
+      "openPageRankGlobalRank": null,
+      "referringDomains": null,
+      "oprRank": null
+    },
+    {
+      "package": "astro",
+      "category": "frameworks",
+      "docs": "https://docs.astro.build/en/getting-started",
+      "apiReferenceUrls": [
+        "https://docs.astro.build/en/reference/api-reference"
+      ],
+      "paths": [
+        {
+          "kind": "guides",
+          "url": "https://docs.astro.build/en/getting-started",
+          "label": "getting started"
+        },
+        {
+          "kind": "guides",
+          "url": "https://docs.astro.build/en/guides",
+          "label": "guides"
+        },
+        {
+          "kind": "reference",
+          "url": "https://docs.astro.build/en/reference/errors/error-reference",
+          "label": "reference"
+        }
+      ],
+      "startUrls": [
+        "https://docs.astro.build/en/getting-started",
+        "https://docs.astro.build/en/guides",
+        "https://docs.astro.build/en/reference/errors/error-reference"
+      ],
+      "pathsStatus": "discovered",
+      "pathsReason": "Approved seed (sidebar docs site — not top-nav siblings)",
+      "excludePatterns": [
+        "docs.astro.build/ar/",
+        "docs.astro.build/de/",
+        "docs.astro.build/es/",
+        "docs.astro.build/fr/"
+      ],
+      "patternsAreRegex": false,
+      "versions": [
+        "latest"
+      ],
+      "selectedVersion": "latest",
+      "docsStatus": "verified",
+      "isRedirect": false,
+      "finalDocsUrl": "https://docs.astro.build/en/getting-started",
+      "redirectUncrawlable": false,
+      "description": "The web framework for content-driven websites.",
+      "homepage": "https://astro.build",
+      "github": "withastro/astro",
+      "downloadsLastMonth": null,
+      "rank": 298,
+      "docsDomain": "docs.astro.build",
+      "openPageRank": null,
+      "openPageRankGlobalRank": null,
+      "referringDomains": null,
+      "oprRank": null
+    },
+    {
+      "package": "bun",
+      "category": "tooling",
+      "docs": "https://bun.com/docs",
+      "apiReferenceUrls": [
+        "https://bun.com/reference"
+      ],
+      "paths": [
+        {
+          "kind": "guides",
+          "url": "https://bun.com/docs/guides",
+          "label": "Guides"
+        },
+        {
+          "kind": "reference",
+          "url": "https://bun.com/reference",
+          "label": "Reference"
+        },
+        {
+          "kind": "other",
+          "url": "https://bun.com/blog",
+          "label": "Blog"
+        }
+      ],
+      "startUrls": [
+        "https://bun.com/docs/guides",
+        "https://bun.com/reference",
+        "https://bun.com/blog"
+      ],
+      "pathsStatus": "discovered",
+      "pathsReason": "observe() primary-nav section siblings (3)",
+      "excludePatterns": [],
+      "patternsAreRegex": false,
+      "versions": [
+        "latest"
+      ],
+      "selectedVersion": "latest",
+      "docsStatus": "verified",
+      "isRedirect": false,
+      "finalDocsUrl": "https://bun.com/docs",
+      "redirectUncrawlable": false,
+      "description": "Incredibly fast JavaScript runtime, bundler, test runner, and package manager.",
+      "homepage": "https://bun.com",
+      "github": "oven-sh/bun",
+      "downloadsLastMonth": null,
+      "rank": 299,
+      "docsDomain": "bun.com",
+      "openPageRank": null,
+      "openPageRankGlobalRank": null,
+      "referringDomains": null,
+      "oprRank": null
+    },
+    {
+      "package": "deno",
+      "category": "tooling",
+      "docs": "https://docs.deno.com/runtime",
+      "apiReferenceUrls": [
+        "https://docs.deno.com/api/deno",
+        "https://docs.deno.com/api/node"
+      ],
+      "paths": [
+        {
+          "kind": "guides",
+          "url": "https://docs.deno.com/runtime",
+          "label": "Runtime"
+        },
+        {
+          "kind": "api",
+          "url": "https://docs.deno.com/api",
+          "label": "API reference"
+        },
+        {
+          "kind": "examples",
+          "url": "https://docs.deno.com/examples",
+          "label": "Examples"
+        },
+        {
+          "kind": "guides",
+          "url": "https://docs.deno.com/deploy",
+          "label": "Deno Deploy"
+        }
+      ],
+      "startUrls": [
+        "https://docs.deno.com/runtime",
+        "https://docs.deno.com/api",
+        "https://docs.deno.com/examples",
+        "https://docs.deno.com/deploy"
+      ],
+      "pathsStatus": "discovered",
+      "pathsReason": "observe() primary-nav section siblings (4)",
+      "excludePatterns": [],
+      "patternsAreRegex": false,
+      "versions": [
+        "latest"
+      ],
+      "selectedVersion": "latest",
+      "docsStatus": "verified",
+      "isRedirect": false,
+      "finalDocsUrl": "https://docs.deno.com",
+      "redirectUncrawlable": false,
+      "description": "Deno — a modern runtime for JavaScript and TypeScript.",
+      "homepage": "https://deno.com",
+      "github": "denoland/deno",
+      "downloadsLastMonth": null,
+      "rank": 300,
+      "docsDomain": "docs.deno.com",
+      "openPageRank": null,
+      "openPageRankGlobalRank": null,
+      "referringDomains": null,
+      "oprRank": null
+    },
+    {
+      "package": "storybook",
+      "category": "tooling",
+      "docs": "https://storybook.js.org/docs",
+      "apiReferenceUrls": [
+        "https://storybook.js.org/docs/api"
+      ],
+      "paths": [
+        {
+          "kind": "guides",
+          "url": "https://storybook.js.org/docs",
+          "label": "Docs"
+        },
+        {
+          "kind": "other",
+          "url": "https://storybook.js.org/ai",
+          "label": "AI"
+        },
+        {
+          "kind": "other",
+          "url": "https://storybook.js.org/addons",
+          "label": "Addons"
+        },
+        {
+          "kind": "other",
+          "url": "https://storybook.js.org/showcase",
+          "label": "Showcase"
+        },
+        {
+          "kind": "other",
+          "url": "https://storybook.js.org/blog",
+          "label": "Blog"
+        }
+      ],
+      "startUrls": [
+        "https://storybook.js.org/docs",
+        "https://storybook.js.org/ai",
+        "https://storybook.js.org/addons",
+        "https://storybook.js.org/showcase",
+        "https://storybook.js.org/blog"
+      ],
+      "pathsStatus": "discovered",
+      "pathsReason": "observe() primary-nav section siblings (5)",
+      "excludePatterns": [
+        "/addons"
+      ],
+      "patternsAreRegex": false,
+      "versions": [
+        "latest"
+      ],
+      "selectedVersion": "latest",
+      "docsStatus": "verified",
+      "isRedirect": false,
+      "finalDocsUrl": "https://storybook.js.org/docs",
+      "redirectUncrawlable": false,
+      "description": "Frontend workshop for building UI components and pages in isolation.",
+      "homepage": "https://storybook.js.org",
+      "github": "storybookjs/storybook",
+      "downloadsLastMonth": null,
+      "rank": 301,
+      "docsDomain": "storybook.js.org",
+      "openPageRank": null,
+      "openPageRankGlobalRank": null,
+      "referringDomains": null,
+      "oprRank": null
+    },
+    {
+      "package": "shadcn",
+      "category": "libraries",
+      "docs": "https://ui.shadcn.com/docs",
+      "apiReferenceUrls": [],
+      "paths": [
+        {
+          "kind": "guides",
+          "url": "https://ui.shadcn.com/docs/installation",
+          "label": "Docs"
+        },
+        {
+          "kind": "other",
+          "url": "https://ui.shadcn.com/blocks",
+          "label": "Blocks"
+        },
+        {
+          "kind": "other",
+          "url": "https://ui.shadcn.com/charts/area",
+          "label": "Charts"
+        },
+        {
+          "kind": "other",
+          "url": "https://ui.shadcn.com/typeset",
+          "label": "Typeset"
+        },
+        {
+          "kind": "other",
+          "url": "https://ui.shadcn.com/create",
+          "label": "Create"
+        }
+      ],
+      "startUrls": [
+        "https://ui.shadcn.com/docs/installation",
+        "https://ui.shadcn.com/blocks",
+        "https://ui.shadcn.com/charts/area",
+        "https://ui.shadcn.com/typeset",
+        "https://ui.shadcn.com/create"
+      ],
+      "pathsStatus": "discovered",
+      "pathsReason": "observe() primary-nav section siblings (5)",
+      "excludePatterns": [],
+      "patternsAreRegex": false,
+      "versions": [
+        "latest"
+      ],
+      "selectedVersion": "latest",
+      "docsStatus": "verified",
+      "isRedirect": false,
+      "finalDocsUrl": "https://ui.shadcn.com/docs",
+      "redirectUncrawlable": false,
+      "description": "Beautifully designed components built with Radix UI and Tailwind CSS.",
+      "homepage": "https://ui.shadcn.com",
+      "github": "shadcn-ui/ui",
+      "downloadsLastMonth": null,
+      "rank": 302,
+      "docsDomain": "ui.shadcn.com",
+      "openPageRank": null,
+      "openPageRankGlobalRank": null,
+      "referringDomains": null,
+      "oprRank": null
+    },
+    {
+      "package": "tailwindcss",
+      "category": "libraries",
+      "docs": "https://tailwindcss.com/docs/installation",
+      "apiReferenceUrls": [],
+      "paths": [
+        {
+          "kind": "guides",
+          "url": "https://tailwindcss.com/docs/installation",
+          "label": "docs"
+        }
+      ],
+      "startUrls": [
+        "https://tailwindcss.com/docs/installation"
+      ],
+      "pathsStatus": "discovered",
+      "pathsReason": "Approved seed (sidebar docs site — not top-nav siblings)",
+      "excludePatterns": [],
+      "patternsAreRegex": false,
+      "versions": [
+        "latest"
+      ],
+      "selectedVersion": "latest",
+      "docsStatus": "verified",
+      "isRedirect": false,
+      "finalDocsUrl": "https://tailwindcss.com/docs/installation",
+      "redirectUncrawlable": false,
+      "description": "A utility-first CSS framework for rapid UI development.",
+      "homepage": "https://tailwindcss.com",
+      "github": "tailwindlabs/tailwindcss",
+      "downloadsLastMonth": null,
+      "rank": 303,
+      "docsDomain": "tailwindcss.com",
+      "openPageRank": null,
+      "openPageRankGlobalRank": null,
+      "referringDomains": null,
+      "oprRank": null
     }
   ]
 }

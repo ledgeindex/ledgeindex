@@ -63,10 +63,25 @@ function resolveEnvOverrideModel(raw: string): MastraLanguageModel {
   return raw;
 }
 
+function readRequestModelId(
+  requestContext?: { get?: (key: string) => unknown },
+): string | undefined {
+  const raw = requestContext?.get?.("model_id");
+  if (typeof raw !== "string") return undefined;
+  const trimmed = raw.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 /** Primary model id for retrieval meta (rewrite / coverage labels). */
-export function primaryAuxiliaryModelId(): string {
+export function primaryAuxiliaryModelId(
+  requestContext?: { get?: (key: string) => unknown },
+): string {
   const override = process.env.LEDGEINDEX_REWRITE_MODEL?.trim();
   if (override) return override;
+
+  const selected = readRequestModelId(requestContext);
+  if (selected) return selected;
+
   return resolveDefaultProfileModelIdSync();
 }
 
@@ -110,14 +125,23 @@ export async function resolveDefaultProfileModelId(): Promise<string> {
 }
 
 /**
- * Fast auxiliary steps (query rewrite, coverage grader).
- * Gemini 3.5 Flash Lite when Google key is set; OpenAI / DeepSeek when configured.
+ * Query rewrite + coverage grader.
+ * Prefer the chat UI's selected model_id; env LEDGEINDEX_REWRITE_MODEL still wins.
  */
-export function resolveRewriteModelConfig():
-  | MastraLanguageModel
-  | MastraModelWithRetries[] {
+export function resolveRewriteModelConfig(
+  requestContext?: { get?: (key: string) => unknown },
+): MastraLanguageModel | MastraModelWithRetries[] {
   const override = process.env.LEDGEINDEX_REWRITE_MODEL?.trim();
   if (override) return resolveEnvOverrideModel(override);
+
+  const selected = readRequestModelId(requestContext);
+  if (selected) {
+    return resolveChatModelConfig(
+      selected,
+      requestContext?.get?.("lm_studio_model_id"),
+    );
+  }
+
   return buildModelStrategy(buildKeyAwareChatModelStrategy());
 }
 

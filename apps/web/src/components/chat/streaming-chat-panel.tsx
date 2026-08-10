@@ -612,6 +612,9 @@ export function StreamingChatPanel({
                     <CloudLocalToggle
                       value={retrievalPath}
                       disabled={busy}
+                      ariaLabel="Retrieval path"
+                      localTitle="Local retrieval — MiniLM rerank on this machine"
+                      cloudTitle="Cloud retrieval — Cohere rerank (answer model still from picker)"
                       onChange={(next) => {
                         const backend =
                           next === "cloud"

@@ -1,11 +1,50 @@
 import type {
   IngestPipelineNode,
+  IngestPipelineSnapshot,
   RefreshRunSnapshot,
 } from "@/lib/ledgeindex-api";
 import { IDLE_INGEST_PIPELINE } from "@/lib/ingest-pipeline";
 
 function cloneIdle(): IngestPipelineNode[] {
   return IDLE_INGEST_PIPELINE.map((node) => ({ ...node }));
+}
+
+/** Map catalog ingest (or live crawl progress) onto the shared strip. */
+export function pipelineFromCatalogIngest(input: {
+  snapshot: IngestPipelineSnapshot | null;
+  crawlPages?: number | null;
+  maxPages?: number;
+}): IngestPipelineNode[] {
+  const { snapshot, crawlPages = null, maxPages = 1000 } = input;
+  const pipeline =
+    snapshot?.pipeline && snapshot.pipeline.length > 0
+      ? snapshot.pipeline.map((node) => ({ ...node }))
+      : cloneIdle();
+
+  const crawl = pipeline.find((node) => node.id === "crawl");
+  if (!crawl) return pipeline;
+
+  const crawling =
+    !snapshot ||
+    crawl.status === "pending" ||
+    crawl.status === "running" ||
+    (snapshot.status === "running" && !snapshot.suspendedStep);
+
+  if (crawling && crawl.status !== "done" && crawl.status !== "error") {
+    crawl.status = "running";
+    if (typeof crawlPages === "number" && crawlPages >= 0) {
+      crawl.detail = `Discovered ${crawlPages} pages…`;
+      crawl.progress = {
+        current: crawlPages,
+        total: Math.max(maxPages, crawlPages, 1),
+        phase: crawl.progress?.phase,
+      };
+    } else if (!crawl.detail || crawl.detail === "Waiting") {
+      crawl.detail = "Discovering…";
+    }
+  }
+
+  return pipeline;
 }
 
 /** Map a source-refresh run onto the shared crawl → extract → index → store strip. */

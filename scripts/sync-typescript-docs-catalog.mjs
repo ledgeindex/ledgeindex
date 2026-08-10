@@ -70,23 +70,29 @@ function matchExcludeGlob(excludesGlob) {
     .map((name) => path.join(root, name));
 }
 
-function loadExcludesByStartUrl(files) {
-  const map = new Map();
+function loadExcludesMaps(files) {
+  const byStartUrl = new Map();
+  const byPackage = new Map();
   for (const file of files) {
     try {
       const data = readJson(file);
-      const startUrl = String(data.startUrl || "").replace(/\/+$/, "");
-      if (!startUrl) continue;
-      map.set(startUrl, {
+      const hit = {
         excludePatterns: asArray(data.excludePatterns),
         patternsAreRegex: Boolean(data.patternsAreRegex),
         versions: normalizeVersions(data.versions),
-      });
+      };
+      const startUrl = String(data.startUrl || data.crawlUrl || "").replace(
+        /\/+$/,
+        "",
+      );
+      if (startUrl) byStartUrl.set(startUrl, hit);
+      const pkg = String(data.package || "").trim().toLowerCase();
+      if (pkg) byPackage.set(pkg, hit);
     } catch (err) {
       console.warn(`skip exclude file ${file}:`, err.message);
     }
   }
-  return map;
+  return { byStartUrl, byPackage };
 }
 
 function normalizeDocsUrl(url) {
@@ -111,7 +117,8 @@ const sourceEntries = Array.isArray(source)
   ? source
   : asArray(source.entries);
 const excludeFiles = matchExcludeGlob(args.excludesGlob);
-const excludesByStart = loadExcludesByStartUrl(excludeFiles);
+const { byStartUrl: excludesByStart, byPackage: excludesByPackage } =
+  loadExcludesMaps(excludeFiles);
 
 const entries = sourceEntries.map((raw, index) => {
   const pkg = packageKey(raw) || `unknown-${index}`;
@@ -129,7 +136,11 @@ const entries = sourceEntries.map((raw, index) => {
     .filter(Boolean);
   const startUrls = asArray(raw.startUrls).filter(Boolean);
   const docsKey = normalizeDocsUrl(docs);
-  const excludeHit = docsKey ? excludesByStart.get(docsKey) : null;
+  const finalKey = normalizeDocsUrl(raw.finalDocsUrl);
+  const excludeHit =
+    excludesByPackage.get(pkg.toLowerCase()) ||
+    (docsKey ? excludesByStart.get(docsKey) : null) ||
+    (finalKey ? excludesByStart.get(finalKey) : null);
 
   const versions = normalizeVersions(
     excludeHit?.versions ?? raw.versions ?? ["latest"],

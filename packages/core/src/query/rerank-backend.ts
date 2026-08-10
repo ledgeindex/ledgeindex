@@ -73,7 +73,7 @@ const KNOWN_BACKENDS = new Set<string>([
 ]);
 
 export function resolveRerankBackend(): RerankBackend {
-  // Cloud/global sources: fixed fast path — Cohere Auto + Gemini embeds.
+  // Cloud-hosted indexes: fixed fast path — Cohere Auto + Gemini embeds.
   if (preferCloudRetrieval()) return "cohere-auto";
 
   const requestOverride = getRequestRerankBackend();
@@ -84,7 +84,8 @@ export function resolveRerankBackend(): RerankBackend {
     return explicit as RerankBackend;
   }
 
-  if (hasCohereKey()) return "cohere-auto";
+  // Local indexes: never silently escalate to Cohere just because a key exists.
+  // The UI Local/Cloud toggle must opt into cloud rerank via request override.
   return "local-auto";
 }
 

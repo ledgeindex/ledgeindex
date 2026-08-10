@@ -75,8 +75,8 @@ async function runCoverageGrader(input: {
 
   if (previews.length === 0) return null;
 
-  const model = resolveRewriteModelConfig();
-  const coverageModelId = primaryAuxiliaryModelId();
+  const model = resolveRewriteModelConfig(input.requestContext);
+  const coverageModelId = primaryAuxiliaryModelId(input.requestContext);
 
   const agent = new Agent({
     id: "coverage-grader-agent",
