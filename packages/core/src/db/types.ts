@@ -58,6 +58,8 @@ export type Source = {
   versionNumber?: number;
   versionLabel?: string | null;
   categories?: string[];
+  /** Admin catalog order (lower first). Null = unsorted fallback. */
+  displayOrder?: number | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -91,11 +93,17 @@ export type SourceSummary = {
   versionNumber: number;
   versionLabel: string;
   categories: string[];
+  /** Admin catalog order (lower first). Null = unsorted fallback. */
+  displayOrder: number | null;
   versions: SourceVersionSummary[];
   /** Crawl URL exclude patterns saved on the source (applied on refresh). */
   excludePatterns: string[];
   /** Crawl URL include patterns saved on the source. */
   includePatterns: string[];
+  /** True when a multi-lens site profile is saved on the source. */
+  hasSiteProfile: boolean;
+  /** Lens count on the saved site profile (0 when none). */
+  siteProfileLensCount: number;
 };
 
 export type SourceSet = {
@@ -186,6 +194,7 @@ export interface Store {
       versionNumber?: number;
       versionLabel?: string | null;
       categories?: string[];
+      displayOrder?: number | null;
     },
   ): Promise<Source | null>;
 

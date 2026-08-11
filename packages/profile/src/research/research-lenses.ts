@@ -364,7 +364,15 @@ export const RESEARCH_LENSES: { [K in ResearchLens]: LensDefinition<K> } = {
     label: "Positioning & ICP",
     pickMessage:
       "Select URLs for company positioning and target audience: home, about, mission, company story, solutions overview, who-we-serve. Prefer 3–8 pages. Skip blog posts unless they are core positioning pages.",
-    synthInstructions: `${BASE_SYNTH_RULES} Extract category, one-line promise, primary buyer roles, and named segments or industries.`,
+    synthInstructions: `${BASE_SYNTH_RULES} Extract category, one-line promise, primary buyer roles, and named segments or industries.
+
+You MUST return a complete JSON object with ALL of these keys (use empty arrays when unknown):
+- category (string)
+- oneLiner (string)
+- primaryBuyers (string[])
+- segmentsAndIndustries (string[])
+- citations (array of { url, quote? })
+Optional: notes (string).`,
     schema: identityLensSchema,
   },
   docs_identity: {

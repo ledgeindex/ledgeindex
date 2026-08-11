@@ -6,14 +6,29 @@ export function isCanonicalDuplicateSkip(reason: string): boolean {
 
 export function partitionSkippedUrls(skipped: readonly { reason: string }[]): {
   canonicalAliasCount: number;
+  httpStatusCount: number;
   otherSkippedCount: number;
 } {
   let canonicalAliasCount = 0;
+  let httpStatusCount = 0;
   for (const item of skipped) {
-    if (isCanonicalDuplicateSkip(item.reason)) canonicalAliasCount += 1;
+    if (isCanonicalDuplicateSkip(item.reason)) {
+      canonicalAliasCount += 1;
+    } else if (isHttpStatusSkipReason(item.reason)) {
+      httpStatusCount += 1;
+    }
   }
   return {
     canonicalAliasCount,
-    otherSkippedCount: skipped.length - canonicalAliasCount,
+    httpStatusCount,
+    otherSkippedCount: skipped.length - canonicalAliasCount - httpStatusCount,
   };
+}
+
+export function isHttpStatusSkipReason(reason: string): boolean {
+  return (
+    reason.startsWith("HTTP ") ||
+    reason.startsWith("Request failed") ||
+    reason.startsWith("Network error")
+  );
 }

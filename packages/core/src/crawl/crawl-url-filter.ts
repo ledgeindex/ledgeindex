@@ -60,6 +60,12 @@ Interpret the user's intent:
 
 Use URL paths (\`p\`), slugs, titles, and common site patterns (api, docs, reference, guides, blog, changelog, pricing, legal, etc.).
 Prefer precision over recall when the user names a topic.
+
+Error / missing pages:
+- Titles are included when available. Treat clearly broken pages as noise: titles that indicate the page is missing or an error (for example "Page not found", "404", "GitHub Pages" not-found pages, "does not exist").
+- Unless the user explicitly asks to keep error/missing pages, never leave those indexes selected. When applying any filter, start from the user's intent and also drop those broken pages from the result.
+- If the user only asks to remove not-found/error pages, deselect those and keep everything else that was selected.
+
 The UI shows 1-based row numbers for humans, but you must output 0-based indexes matching the \`i\` field in the URL list.
 If nothing matches, return an empty selectedIndexes array and explain why in summary.`;
 
@@ -107,6 +113,158 @@ function resolveFilterModel(input: {
 
   const modelId = input.modelId?.trim() || GEMINI_3_5_FLASH_LITE_CATALOG_ID;
   return { model: resolveChatModelConfig(modelId), modelId };
+}
+
+const crawlUrlRemovalsOutputSchema = z.object({
+  /** 0-based indexes to drop from the crawl list / selection. */
+  removeIndexes: z.array(z.number().int().min(0)),
+  /** Path exclude patterns to persist (version trees, blog, …). */
+  excludePatterns: z.array(z.string()).default([]),
+  summary: z.string(),
+});
+
+export type CrawlUrlRemovalsResult = {
+  removeIndexes: number[];
+  excludePatterns: string[];
+  selectedIndexes: number[];
+  summary: string;
+  modelId: string;
+  truncated?: boolean;
+  totalUrls?: number;
+};
+
+const REMOVALS_INSTRUCTIONS = `You clean a crawled docs URL list before indexing.
+
+You receive a compact catalog of entries: index (i), path (p), and title (t when present).
+Return ONLY what should be removed — not the full keep list.
+
+Output:
+- removeIndexes: 0-based indexes to drop (broken/missing pages, one-off junk)
+- excludePatterns: short path substrings to exclude going forward (version trees, blog, changelog, locales, …)
+- summary: one short sentence
+
+Rules:
+1. Prefer excludePatterns for whole trees (e.g. /blog/, /v1/, /changelog/).
+2. Prefer removeIndexes for individual broken pages — especially titles that clearly mean the page is missing/error (Page not found, 404, GitHub Pages not-found, does not exist).
+3. Do not remove the primary/current docs tree that matches the start URL scope.
+4. If nothing should be removed, return empty arrays and say so in summary.
+5. Indexes must match the \`i\` field in the catalog.`;
+
+function compactRemovalCatalog(urls: CrawlUrlFilterEntry[]): string {
+  return urls
+    .map((entry) => {
+      let path = entry.url;
+      try {
+        const parsed = new URL(entry.url);
+        path = `${parsed.pathname}${parsed.search}`;
+      } catch {
+        // keep full url
+      }
+      const title = entry.title?.trim();
+      return title
+        ? `${entry.index}|${path}|${title}`
+        : `${entry.index}|${path}`;
+    })
+    .join("\n");
+}
+
+/**
+ * Filter-versions style pass: AI returns removals + exclude patterns
+ * (compact index|path|title catalog — not a full keep-list).
+ */
+export async function proposeCrawlFilterRemovals(input: {
+  urls: CrawlUrlFilterEntry[];
+  startUrls?: string[];
+  modelId?: string;
+  model?: CrawlUrlFilterModelSelection | null;
+}): Promise<CrawlUrlRemovalsResult> {
+  const totalUrls = input.urls.length;
+  const urls = input.urls.slice(0, CRAWL_URL_FILTER_LLM_URLS);
+  const truncated = totalUrls > urls.length;
+  const maxIndex = Math.max(0, totalUrls - 1);
+  const { model, modelId } = resolveFilterModel(input);
+
+  const agent = new Agent({
+    id: "crawl-url-removals-agent",
+    name: "Crawl URL Removals",
+    instructions: REMOVALS_INSTRUCTIONS,
+    model,
+  });
+
+  const prompt = [
+    `Start URLs: ${(input.startUrls ?? []).join(", ") || "(none)"}`,
+    `Catalog size: ${totalUrls} (listed ${urls.length}). Index range 0..${maxIndex}.`,
+    truncated
+      ? `Only the first ${urls.length} rows are listed — still use global indexes when removing.`
+      : null,
+    "",
+    "Catalog format: index|path|title",
+    compactRemovalCatalog(urls),
+    "",
+    "Return removeIndexes + excludePatterns for version/noise trees and broken/not-found pages.",
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join("\n");
+
+  try {
+    const result = await agent.generate(prompt, {
+      maxSteps: 1,
+      structuredOutput: {
+        schema: crawlUrlRemovalsOutputSchema,
+      },
+    });
+
+    const removeIndexes = [
+      ...new Set(
+        (result.object?.removeIndexes ?? []).filter(
+          (index) => Number.isInteger(index) && index >= 0 && index <= maxIndex,
+        ),
+      ),
+    ].sort((a, b) => a - b);
+
+    const removeSet = new Set(removeIndexes);
+    const selectedIndexes = Array.from({ length: totalUrls }, (_, index) => index).filter(
+      (index) => !removeSet.has(index),
+    );
+
+    const excludePatterns = [
+      ...new Set(
+        (result.object?.excludePatterns ?? [])
+          .map((pattern) => pattern.trim())
+          .filter(Boolean),
+      ),
+    ];
+
+    let summary =
+      result.object?.summary?.trim() ||
+      `Removed ${removeIndexes.length} URL(s); ${excludePatterns.length} exclude pattern(s).`;
+
+    if (truncated) {
+      summary = `${summary} (AI only saw the first ${urls.length} of ${totalUrls} URLs.)`;
+    }
+
+    logVerbose("Crawl URL removals finished", "CrawlUrlFilter", {
+      urlCount: urls.length,
+      removeCount: removeIndexes.length,
+      excludePatternCount: excludePatterns.length,
+      modelId,
+    });
+
+    return {
+      removeIndexes,
+      excludePatterns,
+      selectedIndexes,
+      summary,
+      modelId,
+      ...(truncated ? { truncated: true, totalUrls } : {}),
+    };
+  } catch (error) {
+    logWarn(
+      error instanceof Error ? error.message : "Crawl URL removals failed",
+      "CrawlUrlFilter",
+    );
+    throw error;
+  }
 }
 
 export async function filterCrawlUrls(input: {

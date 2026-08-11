@@ -4,6 +4,7 @@ import type {
   DocsIdentityPath,
   DocsIdentityKind,
   DocsIdentityLanguage,
+  SiteProfile,
 } from "./source-metadata";
 
 type ApiUrlEnv = {
@@ -50,6 +51,7 @@ export type {
   DocsIdentityPath,
   DocsIdentityKind,
   DocsIdentityLanguage,
+  SiteProfile,
 };
 
 export type WebCrawlConfig = {
@@ -98,6 +100,8 @@ export type Source = {
   versionNumber?: number;
   versionLabel?: string | null;
   categories?: string[];
+  /** Admin catalog order (lower first). Null = unsorted fallback. */
+  displayOrder?: number | null;
 };
 
 export type SourceCategoryOption = {
@@ -136,10 +140,16 @@ export type SourceSummary = {
   versionLabel: string;
   versions: SourceVersionSummary[];
   categories: string[];
+  /** Admin catalog order (lower first). Null = unsorted fallback. */
+  displayOrder?: number | null;
   /** Crawl URL exclude patterns saved on the source (applied on refresh). */
   excludePatterns?: string[];
   /** Crawl URL include patterns saved on the source. */
   includePatterns?: string[];
+  /** True when a multi-lens site profile is saved on the source. */
+  hasSiteProfile?: boolean;
+  /** Lens count on the saved site profile (0 when none). */
+  siteProfileLensCount?: number;
 };
 
 export type SourceDuplicateMatch = {
@@ -220,7 +230,7 @@ export type PipelineNodeStatus =
   | "error";
 
 export type IngestPipelineNode = {
-  id: "crawl" | "extract" | "embed" | "store" | "profile";
+  id: "crawl" | "filter" | "extract" | "embed" | "store" | "profile";
   label: string;
   status: PipelineNodeStatus;
   detail?: string;
@@ -556,6 +566,82 @@ export async function filterCrawlUrls(input: {
   return result.filter;
 }
 
+/** Filter: AI returns indexes/patterns to remove (compact catalog).
+ * Uses existing `/api/crawl/url-filter` with mode=removals when the server
+ * supports it; falls back to keep-list filtering on older/cloud APIs. */
+export async function proposeCrawlFilterRemovals(input: {
+  urls: Array<{ index: number; url: string; title?: string }>;
+  startUrls?: string[];
+  modelId?: string;
+  model?: {
+    backend?: string;
+    modelId?: string;
+    baseUrl?: string;
+    googleModelId?: string;
+  };
+  backend?: string;
+  baseUrl?: string;
+  googleModelId?: string;
+}) {
+  const allIndexes = input.urls.map((entry) => entry.index);
+  const REMOVALS_MESSAGE = [
+    "Clean this crawl for indexing.",
+    "Deselect (remove from selection):",
+    "1) Not-found / error pages (titles like Page not found, 404, GitHub Pages not-found, does not exist)",
+    "2) Next/previous/legacy version trees when a primary current docs tree exists (v1, v2 alt, beta, canary, next, preview, old)",
+    "3) Parallel noise: blog, changelog, news, release-notes, authors, tags, archives",
+    "Keep the primary current documentation tree.",
+    "Return the cleaned selectedIndexes (0-based) for URLs to KEEP.",
+  ].join("\n");
+
+  // Prefer dedicated removals route when deployed (local / new cloud).
+  try {
+    const result = await api<{
+      removals: {
+        removeIndexes: number[];
+        excludePatterns: string[];
+        selectedIndexes: number[];
+        summary: string;
+        modelId: string;
+        truncated?: boolean;
+        totalUrls?: number;
+      };
+    }>("/api/crawl/url-removals", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+    return result.removals;
+  } catch (err) {
+    if (!(err instanceof KnowledgeIndexApiError) || err.status !== 404) {
+      throw err;
+    }
+  }
+
+  // Cloud / older API: existing url-filter endpoint (keep-list → derive removals).
+  const filter = await filterCrawlUrls({
+    message: REMOVALS_MESSAGE,
+    urls: input.urls,
+    selectedIndexes: allIndexes,
+    modelId: input.modelId,
+    model: input.model,
+    backend: input.backend,
+    baseUrl: input.baseUrl,
+    googleModelId: input.googleModelId,
+  });
+
+  const keep = new Set(filter.selectedIndexes);
+  const removeIndexes = allIndexes.filter((index) => !keep.has(index));
+
+  return {
+    removeIndexes,
+    excludePatterns: [] as string[],
+    selectedIndexes: filter.selectedIndexes,
+    summary: filter.summary,
+    modelId: filter.modelId,
+    ...(filter.truncated ? { truncated: true, totalUrls: filter.totalUrls } : {}),
+  };
+}
+
 export async function createProject(name: string) {
   return api<{ project: { id: string; name: string } }>("/api/projects", {
     method: "POST",
@@ -611,11 +697,21 @@ export async function updateSource(
     faviconUrl?: string | null;
     sourceMetadata?: SourceMetadata | null;
     categories?: string[];
+    displayOrder?: number | null;
   },
 ) {
   return api<{ source: SourceSummary }>(`/api/sources/${id}`, {
     method: "PUT",
     body: JSON.stringify(input),
+  });
+}
+
+export async function reorderSources(
+  items: Array<{ id: string; displayOrder: number }>,
+) {
+  return api<{ updated: number }>(`/api/sources/reorder`, {
+    method: "PUT",
+    body: JSON.stringify({ items }),
   });
 }
 
@@ -634,6 +730,110 @@ export async function updateSourceDocsIdentity(
       body: JSON.stringify(docsIdentity),
     },
   );
+}
+
+export async function updateSourceSiteProfile(
+  id: string,
+  siteProfile: SiteProfile,
+) {
+  const MAX_LENS_SOURCE_URLS = 80;
+  const sanitized: SiteProfile = {
+    ...siteProfile,
+    lensSources: siteProfile.lensSources
+      ? Object.fromEntries(
+          Object.entries(siteProfile.lensSources).map(([lensId, entry]) => [
+            lensId,
+            {
+              urls: (entry.urls ?? []).slice(0, MAX_LENS_SOURCE_URLS),
+              titles: (entry.titles ?? []).slice(0, MAX_LENS_SOURCE_URLS),
+              ...(entry.pickSummary?.trim()
+                ? { pickSummary: entry.pickSummary.trim().slice(0, 4000) }
+                : {}),
+            },
+          ]),
+        )
+      : undefined,
+  };
+
+  try {
+    return await api<{ source: Source; siteProfile: SiteProfile }>(
+      `/api/sources/${id}/site-profile`,
+      {
+        method: "PUT",
+        body: JSON.stringify(sanitized),
+      },
+    );
+  } catch (err) {
+    // Older API builds may not have the dedicated route yet — merge via updateSource.
+    if (
+      !(err instanceof KnowledgeIndexApiError) ||
+      err.status !== 404
+    ) {
+      throw err;
+    }
+
+    const { source } = await getSource(id);
+    const prev = source.sourceMetadata;
+    const now = new Date().toISOString();
+    const nextMetadata: SourceMetadata = {
+      sourceType: prev?.sourceType ?? "documentation",
+      sourceTypeConfidence: prev?.sourceTypeConfidence ?? 0.5,
+      origin: prev?.origin ?? "external",
+      version: prev?.version ?? null,
+      versionSource: prev?.versionSource ?? null,
+      detectedSignals: prev?.detectedSignals ?? [],
+      llmsTxt: prev?.llmsTxt ?? null,
+      ...prev,
+      siteProfile: {
+        ...sanitized,
+        updatedAt: now,
+        generatedAt: sanitized.generatedAt ?? now,
+      },
+    };
+
+    const { source: updated } = await updateSource(id, {
+      sourceMetadata: nextMetadata,
+    });
+    return {
+      source: updated as unknown as Source,
+      siteProfile: nextMetadata.siteProfile!,
+    };
+  }
+}
+
+export async function deleteSourceSiteProfile(id: string) {
+  try {
+    return await api<{ source: Source; deleted: boolean }>(
+      `/api/sources/${id}/site-profile`,
+      { method: "DELETE" },
+    );
+  } catch (err) {
+    if (
+      !(err instanceof KnowledgeIndexApiError) ||
+      err.status !== 404
+    ) {
+      throw err;
+    }
+
+    const { source } = await getSource(id);
+    const prev = source.sourceMetadata;
+    const nextMetadata: SourceMetadata = {
+      sourceType: prev?.sourceType ?? "documentation",
+      sourceTypeConfidence: prev?.sourceTypeConfidence ?? 0.5,
+      origin: prev?.origin ?? "external",
+      version: prev?.version ?? null,
+      versionSource: prev?.versionSource ?? null,
+      detectedSignals: prev?.detectedSignals ?? [],
+      llmsTxt: prev?.llmsTxt ?? null,
+      ...prev,
+    };
+    delete nextMetadata.siteProfile;
+
+    const { source: updated } = await updateSource(id, {
+      sourceMetadata: nextMetadata,
+    });
+    return { source: updated as unknown as Source, deleted: true };
+  }
 }
 
 export async function deleteSource(id: string) {
@@ -979,8 +1179,12 @@ export const cancelIngest = cancelIngestCrawl;
 export type CrawlProgress = {
   active: boolean;
   status?: "running" | "done";
+  phase?: "discovering" | "validating";
   pagesDiscovered: number;
   maxPages: number;
+  validatedCount?: number;
+  validationTotal?: number;
+  httpErrorCount?: number;
 };
 
 export async function getCrawlProgress(sourceId: string) {

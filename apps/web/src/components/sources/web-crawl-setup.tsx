@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Copy, Plus, Trash2 } from "lucide-react";
+import { Copy, Info, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { IngestPipelineFlow } from "@/components/sources/ingest-pipeline-flow";
@@ -35,7 +35,7 @@ import {
   SOURCE_CONTENT_TYPE_LABELS,
   type SourceMetadata,
 } from "@/lib/source-metadata";
-import { partitionSkippedUrls } from "@/lib/canonical-dedupe";
+import { partitionSkippedUrls, isHttpStatusSkipReason } from "@/lib/canonical-dedupe";
 import {
   SourceVersionResolutionModal,
   type VersionResolutionChoice,
@@ -60,6 +60,7 @@ import {
   runParsePreview,
   startIngestWorkflow,
   updateSource,
+  proposeCrawlFilterRemovals,
   UNSUPPORTED_PDF_START_URL_MESSAGE,
   isPdfUrl,
   type CrawlRun,
@@ -76,6 +77,11 @@ import {
   getPathSegmentSelectionState,
   groupDiscoveredUrlsByPath,
 } from "@/lib/crawl-url-breakdown";
+import {
+  discoverExcludePatternsFromUrls,
+  filterUrlsByExcludePatterns,
+  mergeExcludePatterns,
+} from "@/lib/discover-exclude-patterns";
 import {
   pathSegmentLabelForUrl,
   sourcePathLabelForUrl,
@@ -455,6 +461,18 @@ export function WebCrawlSetup() {
   const { isAdmin } = useAuth();
   const hostingCaps = useHostingCapabilities();
   const initialUrl = normalizeStartUrl(searchParams.get("url") ?? "");
+  const initialExcludesParam = searchParams.get("excludes") ?? "";
+  const initialExcludePatterns = useMemo(
+    () =>
+      initialExcludesParam
+        .split(/\r?\n/)
+        .map((line) => line.trim())
+        .filter(Boolean),
+    [initialExcludesParam],
+  );
+  const initialPatternsAreRegex =
+    searchParams.get("patternsAreRegex") === "1" ||
+    searchParams.get("patternsAreRegex") === "true";
   const sourceScope: KnowledgeSetScope =
     searchParams.get("scope") === "global" ? "global" : "personal";
   const [sourceHosting, setSourceHosting] = useState<SourceHosting>("local");
@@ -510,7 +528,10 @@ export function WebCrawlSetup() {
     }
   }, [searchParams, initialUrl]);
   const shouldRestoreSession = useRef(
-    searchParams.get("fresh") !== "1" && !isRefreshSelect && !isPathScopedMode,
+    searchParams.get("fresh") !== "1" &&
+      !searchParams.get("url") &&
+      !isRefreshSelect &&
+      !isPathScopedMode,
   );
 
   function handleScopeChange(next: KnowledgeSetScope) {
@@ -543,6 +564,21 @@ export function WebCrawlSetup() {
   const [step, setStep] = useState<1 | 2>(1);
   const [primaryStartUrl, setPrimaryStartUrl] = useState(initialUrl);
   const [additionalStartUrls, setAdditionalStartUrls] = useState<string[]>([]);
+
+  // Keep input in sync when landing with ?url= (e.g. catalog → Add source).
+  useEffect(() => {
+    if (!initialUrl) return;
+    setPrimaryStartUrl(initialUrl);
+  }, [initialUrl]);
+
+  useEffect(() => {
+    if (initialExcludePatterns.length === 0) return;
+    setExcludePatternsText(initialExcludePatterns.join("\n"));
+  }, [initialExcludePatterns]);
+
+  useEffect(() => {
+    setPatternsAreRegex(initialPatternsAreRegex);
+  }, [initialPatternsAreRegex]);
   const [sourceName, setSourceName] = useState("");
   const [preflightOgImage, setPreflightOgImage] = useState<string | null>(null);
   const [preflightFaviconUrl, setPreflightFaviconUrl] = useState<string | null>(
@@ -562,8 +598,40 @@ export function WebCrawlSetup() {
   const preflightAbortRef = useRef<AbortController | null>(null);
   const crawlAbortRef = useRef<AbortController | null>(null);
   const [includePatternsText, setIncludePatternsText] = useState("");
-  const [excludePatternsText, setExcludePatternsText] = useState("");
-  const [patternsAreRegex, setPatternsAreRegex] = useState(false);
+  const [excludePatternsText, setExcludePatternsText] = useState(
+    () => initialExcludePatterns.join("\n"),
+  );
+  const [autoDiscoverExcludes, setAutoDiscoverExcludes] = useState(true);
+  const autoDiscoverExcludesRef = useRef(true);
+  const excludePatternsTextRef = useRef(excludePatternsText);
+  const patternsAreRegexRef = useRef(initialPatternsAreRegex);
+  const autoDiscoverAppliedForRunRef = useRef<string | null>(null);
+  const [autoExcludePhase, setAutoExcludePhase] = useState<
+    "idle" | "analysing" | "done"
+  >("idle");
+  const [autoExcludeResult, setAutoExcludeResult] = useState<{
+    scanned: number;
+    added: number;
+    dropped: number;
+    summary?: string;
+  } | null>(null);
+  const [httpCleanupPhase, setHttpCleanupPhase] = useState<
+    "idle" | "cleaning" | "done"
+  >("idle");
+  const [httpCleanupResult, setHttpCleanupResult] = useState<{
+    filtered: number;
+  } | null>(null);
+  const [liveCrawlPhase, setLiveCrawlPhase] = useState<
+    "discovering" | "validating"
+  >("discovering");
+  const [liveValidation, setLiveValidation] = useState<{
+    done: number;
+    total: number;
+    errors: number;
+  } | null>(null);
+  const [patternsAreRegex, setPatternsAreRegex] = useState(
+    initialPatternsAreRegex,
+  );
   const [enableSitemap, setEnableSitemap] = useState(true);
   const [sitemapOnly, setSitemapOnly] = useState(false);
   const [sitemapUrlsText, setSitemapUrlsText] = useState("");
@@ -690,7 +758,7 @@ export function WebCrawlSetup() {
 
   const discoveredUrls = crawlRun?.result?.urls ?? [];
   const skippedUrls = crawlRun?.result?.skipped ?? [];
-  const { canonicalAliasCount, otherSkippedCount } = useMemo(
+  const { canonicalAliasCount, httpStatusCount, otherSkippedCount } = useMemo(
     () => partitionSkippedUrls(skippedUrls),
     [skippedUrls],
   );
@@ -727,6 +795,17 @@ export function WebCrawlSetup() {
         const progress = await getCrawlProgress(sourceId);
         if (!cancelled) {
           setLiveCrawlCount(progress.pagesDiscovered);
+          if (progress.phase === "validating" || progress.phase === "discovering") {
+            setLiveCrawlPhase(progress.phase);
+          }
+          if (progress.phase === "validating") {
+            setLiveValidation({
+              done: progress.validatedCount ?? 0,
+              total: progress.validationTotal ?? 0,
+              errors: progress.httpErrorCount ?? 0,
+            });
+            setHttpCleanupPhase("cleaning");
+          }
         }
       } catch {
         // Ignore transient poll errors while crawl is running.
@@ -741,6 +820,40 @@ export function WebCrawlSetup() {
     };
   }, [crawlCardPhase, sourceId]);
 
+  const filterPipelinePhase = (():
+    | "idle"
+    | "discovering"
+    | "http"
+    | "auto-exclude"
+    | "done" => {
+    if (autoExcludePhase === "analysing") return "auto-exclude";
+    if (
+      httpCleanupPhase === "cleaning" ||
+      (crawlCardPhase === "crawling" && liveCrawlPhase === "validating")
+    ) {
+      return "http";
+    }
+    if (
+      httpCleanupPhase === "done" ||
+      autoExcludePhase === "done"
+    ) {
+      return "done";
+    }
+    if (crawlCardPhase === "crawling") return "discovering";
+    return "idle";
+  })();
+
+  const filterPipelineDetail =
+    filterPipelinePhase === "auto-exclude"
+      ? "Filter (AI)…"
+      : filterPipelinePhase === "http"
+        ? liveValidation && liveValidation.total > 0
+          ? `Checking HTTP ${liveValidation.done}/${liveValidation.total}…`
+          : "Dropping non-2xx pages…"
+        : filterPipelinePhase === "done" && httpCleanupResult
+          ? `Removed ${httpCleanupResult.filtered} error page${httpCleanupResult.filtered === 1 ? "" : "s"}`
+          : undefined;
+
   const { pipeline: displayPipeline } = useMemo(
     () =>
       resolveDisplayPipeline({
@@ -751,6 +864,9 @@ export function WebCrawlSetup() {
         selectedCount: selectedPreviewUrls.length,
         extractedCount: parsePages.length,
         chunkCount: ingestSnapshot?.result?.chunkCount,
+        filterPhase: filterPipelinePhase,
+        filterDetail: filterPipelineDetail,
+        httpErrorCount: httpCleanupResult?.filtered,
       }),
     [
       ingestSnapshot?.pipeline,
@@ -760,12 +876,30 @@ export function WebCrawlSetup() {
       config.maxPages,
       selectedPreviewUrls.length,
       parsePages.length,
+      filterPipelinePhase,
+      filterPipelineDetail,
+      httpCleanupResult?.filtered,
     ],
   );
 
-  const pipelineAnimating = Boolean(busy);
+  const pipelineAnimating =
+    Boolean(busy) ||
+    filterPipelinePhase === "http" ||
+    filterPipelinePhase === "auto-exclude";
   const toolbarLocked = Boolean(busy);
   const didInitialPreflight = useRef(false);
+
+  useEffect(() => {
+    autoDiscoverExcludesRef.current = autoDiscoverExcludes;
+  }, [autoDiscoverExcludes]);
+
+  useEffect(() => {
+    excludePatternsTextRef.current = excludePatternsText;
+  }, [excludePatternsText]);
+
+  useEffect(() => {
+    patternsAreRegexRef.current = patternsAreRegex;
+  }, [patternsAreRegex]);
 
   useEffect(() => {
     setRecentStartUrls(loadRecentStartUrls());
@@ -1497,6 +1631,12 @@ export function WebCrawlSetup() {
     setError(null);
     setBusy(null);
     setCrawlCardPhase("idle");
+    setAutoExcludePhase("idle");
+    setAutoExcludeResult(null);
+    setHttpCleanupPhase("idle");
+    setHttpCleanupResult(null);
+    setLiveCrawlPhase("discovering");
+    setLiveValidation(null);
     setReviewTab("urls");
     setStep2EnterKey((key) => key + 1);
   }
@@ -1518,9 +1658,11 @@ export function WebCrawlSetup() {
         urls?: { url: string; title?: string }[];
         skipped?: { url: string; reason: string }[];
         pagesDiscovered?: number;
+        httpStatusFiltered?: number;
       };
 
       const urls = payload.urls ?? [];
+      const skipped = payload.skipped ?? [];
       setCrawlRun({
         id: snapshot.runId,
         sourceId: id,
@@ -1529,24 +1671,35 @@ export function WebCrawlSetup() {
         pagesDiscovered: payload.pagesDiscovered ?? urls.length,
         result: {
           urls,
-          skipped: payload.skipped ?? [],
+          skipped,
         },
       });
 
       if (urls.length > 0) {
-        setSelectedPreviewUrls((current) =>
-          reconcilePreviewSelection(
+        setSelectedPreviewUrls((current) => {
+          const reconciled = reconcilePreviewSelection(
             urls,
             isRefreshSelect && catalogSelectionRef.current.length > 0
               ? catalogSelectionRef.current
               : current,
-          ),
-        );
+          );
+          const existing = linesToList(excludePatternsTextRef.current);
+          if (existing.length === 0) return reconciled;
+          return filterUrlsByExcludePatterns(
+            reconciled,
+            existing,
+            patternsAreRegexRef.current,
+          );
+        });
+        setCrawlCardPhase("complete");
+        await announceHttpStatusCleanup(skipped, payload.httpStatusFiltered);
+        await applyAutoDiscoveredExcludes(urls, snapshot.runId);
       } else {
         setSelectedPreviewUrls([]);
+        setCrawlCardPhase("complete");
+        await announceHttpStatusCleanup(skipped, payload.httpStatusFiltered);
       }
 
-      setCrawlCardPhase("complete");
       scheduleStep2Transition();
     }
 
@@ -1626,6 +1779,203 @@ export function WebCrawlSetup() {
       ),
     );
     setIndexEstimate(null);
+  }
+
+  function handleExcludePatternsTextChange(value: string) {
+    setExcludePatternsText(value);
+    const patterns = linesToList(value);
+    if (patterns.length === 0) {
+      setIndexEstimate(null);
+      return;
+    }
+    setSelectedPreviewUrls((current) =>
+      current.filter(
+        (url) => !urlMatchesAnyPattern(url, patterns, patternsAreRegex),
+      ),
+    );
+    setIndexEstimate(null);
+  }
+
+  function suggestExcludePatternsFromDiscovered() {
+    const urls = discoveredUrls.map((item) => item.url);
+    if (urls.length === 0) return;
+    const suggested = discoverExcludePatternsFromUrls(urls, {
+      startUrls: config.startUrls,
+      existing: linesToList(excludePatternsText),
+    });
+    if (suggested.length === 0) return;
+    applyExcludePatterns(
+      mergeExcludePatterns(linesToList(excludePatternsText), suggested),
+    );
+  }
+
+  async function announceHttpStatusCleanup(
+    skipped: Array<{ url: string; reason: string }>,
+    httpStatusFiltered?: number,
+  ) {
+    const fromSkipped = skipped.filter((item) =>
+      isHttpStatusSkipReason(item.reason),
+    ).length;
+    const filtered = Math.max(httpStatusFiltered ?? 0, fromSkipped);
+
+    setHttpCleanupPhase("cleaning");
+    setHttpCleanupResult({ filtered });
+    setLiveCrawlPhase("validating");
+
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, filtered > 0 ? 850 : 450);
+    });
+
+    setHttpCleanupPhase("done");
+    setLiveValidation(null);
+  }
+
+  async function applyAutoDiscoveredExcludes(
+    urls: Array<{ url: string; title?: string }>,
+    runId: string,
+  ) {
+    if (!autoDiscoverExcludesRef.current) return;
+    if (autoDiscoverAppliedForRunRef.current === runId) return;
+    autoDiscoverAppliedForRunRef.current = runId;
+
+    const urlList = urls.map((item) => item.url);
+    setAutoExcludePhase("analysing");
+    setAutoExcludeResult({
+      scanned: urlList.length,
+      added: 0,
+      dropped: 0,
+      summary: "AI filtering versions and broken pages…",
+    });
+
+    await new Promise<void>((resolve) => {
+      window.setTimeout(resolve, 80);
+    });
+
+    const existing = linesToList(excludePatternsTextRef.current);
+    const suggested = discoverExcludePatternsFromUrls(urlList, {
+      startUrls: config.startUrls,
+      existing,
+    });
+    let patternsToApply =
+      suggested.length > 0
+        ? mergeExcludePatterns(existing, suggested)
+        : existing;
+    let aiPatternCount = 0;
+
+    if (suggested.length > 0) {
+      setExcludePatternsText(patternsToApply.join("\n"));
+      setIndexEstimate(null);
+    }
+
+    let nextSelected = filterUrlsByExcludePatterns(
+      urlList,
+      patternsToApply,
+      patternsAreRegexRef.current,
+    );
+    let summary =
+      suggested.length > 0
+        ? `Added ${suggested.length} version/noise exclude pattern${suggested.length === 1 ? "" : "s"}.`
+        : "No new path excludes from heuristics.";
+
+    try {
+      setAutoExcludeResult({
+        scanned: urlList.length,
+        added: suggested.length,
+        dropped: 0,
+        summary: "AI proposing removals (indexes + exclude patterns)…",
+      });
+
+      // One pass: compact index|path|title; AI returns only what to remove.
+      const ai = await proposeCrawlFilterRemovals({
+        startUrls: config.startUrls,
+        urls: urls.map((item, index) => ({
+          index,
+          url: item.url,
+          ...(item.title?.trim() ? { title: item.title.trim() } : {}),
+        })),
+      });
+
+      const removeSet = new Set(ai.removeIndexes);
+
+      if (ai.excludePatterns.length > 0) {
+        const before = patternsToApply.length;
+        patternsToApply = mergeExcludePatterns(
+          patternsToApply,
+          ai.excludePatterns,
+        );
+        aiPatternCount = Math.max(0, patternsToApply.length - before);
+        setExcludePatternsText(patternsToApply.join("\n"));
+        setIndexEstimate(null);
+      }
+
+      const allowedByPattern = new Set(
+        filterUrlsByExcludePatterns(
+          urlList,
+          patternsToApply,
+          patternsAreRegexRef.current,
+        ),
+      );
+      nextSelected = urls
+        .filter(
+          (item, index) =>
+            !removeSet.has(index) && allowedByPattern.has(item.url),
+        )
+        .map((item) => item.url);
+
+      summary = ai.summary?.trim()
+        ? `${summary} AI: ${ai.summary.trim()}`
+        : `${summary} AI removed ${ai.removeIndexes.length} URL(s)` +
+          (aiPatternCount
+            ? `, +${aiPatternCount} exclude pattern(s).`
+            : ".");
+    } catch (err) {
+      const message =
+        err instanceof KnowledgeIndexApiError
+          ? err.message
+          : err instanceof Error
+            ? err.message
+            : "AI filter failed";
+      summary = `${summary} AI skipped (${message}).`;
+      setError(`Filter AI failed: ${message}`);
+    }
+
+    const dropped = Math.max(0, urlList.length - nextSelected.length);
+    const keptSet = new Set(nextSelected);
+    const removed = urls.filter((item) => !keptSet.has(item.url));
+    const patternsAdded = suggested.length + aiPatternCount;
+
+    // Drop filtered URLs from the review list (not just uncheck) so Filtering is visible.
+    if (removed.length > 0) {
+      setCrawlRun((current) => {
+        if (!current?.result || current.id !== runId) return current;
+        return {
+          ...current,
+          pagesDiscovered: nextSelected.length,
+          result: {
+            urls: urls.filter((item) => keptSet.has(item.url)),
+            skipped: [
+              ...(current.result.skipped ?? []),
+              ...removed.map((item) => ({
+                url: item.url,
+                reason: "Filter",
+              })),
+            ],
+          },
+        };
+      });
+    }
+
+    setSelectedPreviewUrls(nextSelected);
+    setAutoExcludeResult({
+      scanned: urlList.length,
+      added: patternsAdded,
+      dropped,
+      summary:
+        dropped > 0
+          ? `${summary} Dropped ${dropped} URL(s).`
+          : summary,
+    });
+    setAutoExcludePhase("done");
   }
 
   function excludePathSegment(segment: string) {
@@ -1728,6 +2078,13 @@ export function WebCrawlSetup() {
     setCrawlCardPhase("crawling");
     setLiveCrawlCount(0);
     setSelectedPreviewUrls([]);
+    setAutoExcludePhase("idle");
+    setAutoExcludeResult(null);
+    autoDiscoverAppliedForRunRef.current = null;
+    setHttpCleanupPhase("idle");
+    setHttpCleanupResult(null);
+    setLiveCrawlPhase("discovering");
+    setLiveValidation(null);
     setReviewTab("urls");
     setRecentStartUrls(rememberStartUrls(config.startUrls));
 
@@ -2040,6 +2397,8 @@ export function WebCrawlSetup() {
     }
   }
 
+  const excludePatternCount = linesToList(excludePatternsText).length;
+
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col overflow-hidden">
       {isPathScopedMode ? (
@@ -2090,12 +2449,113 @@ export function WebCrawlSetup() {
             <ConfigPill
               label="Scope"
               icon={<ScopeIcon />}
-              compactSummary={`${maxPages}`}
-              summary={`${maxPages} pages${patternsAreRegex ? " · regex" : ""}`}
+              emphasized={
+                httpCleanupPhase === "cleaning" ||
+                autoExcludePhase === "analysing" ||
+                (crawlCardPhase === "crawling" && liveCrawlPhase === "validating")
+              }
+              compactSummary={
+                httpCleanupPhase === "cleaning" ||
+                (crawlCardPhase === "crawling" && liveCrawlPhase === "validating")
+                  ? "HTTP"
+                  : autoExcludePhase === "analysing"
+                    ? "…"
+                    : autoExcludePhase === "done" && autoExcludeResult
+                      ? `+${autoExcludeResult.added}`
+                      : httpCleanupPhase === "done" && httpCleanupResult
+                        ? `−${httpCleanupResult.filtered}`
+                        : `${maxPages}`
+              }
+              summary={
+                httpCleanupPhase === "cleaning" ||
+                (crawlCardPhase === "crawling" && liveCrawlPhase === "validating") ? (
+                  <span className="inline-flex items-center gap-1.5 text-accent">
+                    <Spinner className="size-3" />
+                    {liveValidation && liveValidation.total > 0
+                      ? `Checking HTTP ${liveValidation.done}/${liveValidation.total}…`
+                      : "Dropping error pages…"}
+                  </span>
+                ) : autoExcludePhase === "analysing" ? (
+                  <span className="inline-flex items-center gap-1.5 text-accent">
+                    <Spinner className="size-3" />
+                    Filter (AI)…
+                  </span>
+                ) : autoExcludePhase === "done" && autoExcludeResult ? (
+                  `−${autoExcludeResult.dropped} urls · +${autoExcludeResult.added} patterns`
+                ) : httpCleanupPhase === "done" && httpCleanupResult ? (
+                  `−${httpCleanupResult.filtered} error pages`
+                ) : (
+                  `${maxPages} pages${
+                    excludePatternCount > 0
+                      ? ` · ${excludePatternCount} excludes`
+                      : ""
+                  }${patternsAreRegex ? " · regex" : ""}`
+                )
+              }
               description="Crawls only pages at or below your start URL path, plus optional filters."
-              disabled={toolbarLocked}
+              disabled={
+                toolbarLocked &&
+                autoExcludePhase !== "analysing" &&
+                httpCleanupPhase !== "cleaning"
+              }
             >
               <div className={cn(configPanelInsetClass, "space-y-4")}>
+                {httpCleanupPhase === "cleaning" ||
+                (crawlCardPhase === "crawling" &&
+                  liveCrawlPhase === "validating") ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-accent/25 bg-accent/8 px-2.5 py-2">
+                    <Spinner className="mt-0.5 size-3.5 shrink-0 text-accent" />
+                    <div className="min-w-0">
+                      <p className="font-mono text-[0.5625rem] font-semibold tracking-[0.08em] text-accent uppercase">
+                        Error pages
+                      </p>
+                      <p className="mt-0.5 text-[0.6875rem] leading-snug text-muted">
+                        Always on · only HTTP 2xx stays; 404, 429, 5xx, and
+                        network failures are dropped before pattern excludes.
+                        {liveValidation && liveValidation.total > 0
+                          ? ` ${liveValidation.done}/${liveValidation.total} checked.`
+                          : null}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+                {httpCleanupPhase === "done" && httpCleanupResult ? (
+                  <div className="rounded-lg border border-border bg-surface-raised px-2.5 py-2">
+                    <p className="font-mono text-[0.5625rem] font-semibold tracking-[0.08em] text-muted uppercase">
+                      Error pages
+                    </p>
+                    <p className="mt-0.5 text-[0.6875rem] leading-snug text-foreground">
+                      Removed {httpCleanupResult.filtered} URL
+                      {httpCleanupResult.filtered === 1 ? "" : "s"} that were not
+                      HTTP 2xx (always · no AI).
+                    </p>
+                  </div>
+                ) : null}
+                {autoExcludePhase === "analysing" ? (
+                  <div className="flex items-start gap-2 rounded-lg border border-accent/25 bg-accent/8 px-2.5 py-2">
+                    <Spinner className="mt-0.5 size-3.5 shrink-0 text-accent" />
+                    <div className="min-w-0">
+                      <p className="font-mono text-[0.5625rem] font-semibold tracking-[0.08em] text-accent uppercase">
+                        Filter
+                      </p>
+                      <p className="mt-0.5 text-[0.6875rem] leading-snug text-muted">
+                        AI is cleaning the selection: not-found pages and
+                        next/previous version trees.
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+                {autoExcludePhase === "done" && autoExcludeResult ? (
+                  <div className="rounded-lg border border-border bg-surface-raised px-2.5 py-2">
+                    <p className="font-mono text-[0.5625rem] font-semibold tracking-[0.08em] text-muted uppercase">
+                      Filter
+                    </p>
+                    <p className="mt-0.5 text-[0.6875rem] leading-snug text-foreground">
+                      {autoExcludeResult.summary ??
+                        `Scanned ${autoExcludeResult.scanned} · −${autoExcludeResult.dropped} urls · +${autoExcludeResult.added} patterns`}
+                    </p>
+                  </div>
+                ) : null}
                 <div>
                   <label className={configFieldLabelClass}>Max pages</label>
                   <input
@@ -2140,12 +2600,35 @@ export function WebCrawlSetup() {
                   <label className={configFieldLabelClass}>Exclude URLs</label>
                   <textarea
                     value={excludePatternsText}
-                    onChange={(e) => setExcludePatternsText(e.target.value)}
+                    onChange={(e) =>
+                      handleExcludePatternsTextChange(e.target.value)
+                    }
                     rows={2}
                     spellCheck={false}
                     className="field-input w-full font-mono text-xs leading-5"
                     placeholder="/changelog/"
                   />
+                  <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
+                    <p className="font-mono text-[0.5rem] text-muted">
+                      Saved with the set · used on refresh
+                    </p>
+                    <button
+                      type="button"
+                      disabled={
+                        toolbarLocked || discoveredUrls.length === 0
+                      }
+                      onClick={suggestExcludePatternsFromDiscovered}
+                      className={cn(
+                        "font-mono text-[0.5rem] font-semibold tracking-[0.08em] uppercase transition-colors",
+                        toolbarLocked || discoveredUrls.length === 0
+                          ? "cursor-not-allowed text-muted/50"
+                          : "text-muted hover:text-foreground",
+                      )}
+                      title="Suggest excludes from version trees, blog, changelog, and similar noise paths in the discovered URL list"
+                    >
+                      Suggest from URLs
+                    </button>
+                  </div>
                 </div>
               </div>
             </ConfigPill>
@@ -2345,6 +2828,14 @@ export function WebCrawlSetup() {
                 ? liveCrawlCount
                 : discoveredUrls.length
             }
+            autoDiscoverExcludes={autoDiscoverExcludes}
+            onAutoDiscoverExcludesChange={setAutoDiscoverExcludes}
+            autoExcludePhase={autoExcludePhase}
+            autoExcludeResult={autoExcludeResult}
+            httpCleanupPhase={httpCleanupPhase}
+            httpCleanupResult={httpCleanupResult}
+            liveCrawlPhase={liveCrawlPhase}
+            liveValidation={liveValidation}
             onSubmit={handleCrawlPreview}
             onAbortCrawl={abortCrawl}
           />
@@ -2458,6 +2949,9 @@ export function WebCrawlSetup() {
                       {selectedPreviewUrls.length > 0
                         ? ` · ${selectedPreviewUrls.length} selected`
                         : ""}
+                      {httpStatusCount > 0
+                        ? ` · ${httpStatusCount} filtered (404/errors)`
+                        : ""}
                       {otherSkippedCount > 0
                         ? ` · ${otherSkippedCount} skipped`
                         : ""}
@@ -2529,6 +3023,32 @@ export function WebCrawlSetup() {
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
               {reviewTab === "urls" ? (
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+              {httpStatusCount > 0 ||
+              (httpCleanupResult?.filtered ?? 0) > 0 ||
+              (autoExcludeResult?.dropped ?? 0) > 0 ? (
+                <div className="mb-2 shrink-0 rounded-lg border border-red-500/25 bg-red-500/8 px-3 py-2">
+                  <p className="font-mono text-[0.5625rem] font-semibold tracking-[0.08em] text-red-700 uppercase dark:text-red-300">
+                    Filtered{" "}
+                    {Math.max(
+                      httpStatusCount,
+                      httpCleanupResult?.filtered ?? 0,
+                      autoExcludeResult?.dropped ?? 0,
+                    )}{" "}
+                    page
+                    {Math.max(
+                      httpStatusCount,
+                      httpCleanupResult?.filtered ?? 0,
+                      autoExcludeResult?.dropped ?? 0,
+                    ) === 1
+                      ? ""
+                      : "s"}
+                  </p>
+                  <p className="mt-0.5 text-[0.6875rem] leading-snug text-muted">
+                    {autoExcludeResult?.summary ??
+                      "Non-2xx HTTP responses and Filter removals. See skipped list below."}
+                  </p>
+                </div>
+              ) : null}
               {urlPathBreakdown.length > 1 ? (
                 <div className="mb-2 flex flex-wrap gap-1.5">
                   {urlPathBreakdown.map((group) => {
@@ -2593,48 +3113,6 @@ export function WebCrawlSetup() {
                   })}
                 </div>
               ) : null}
-
-              <div className="mb-2 shrink-0 rounded-lg border border-border bg-surface-raised/50 px-2.5 py-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <label
-                    htmlFor="crawl-review-exclude-urls"
-                    className="font-mono text-[0.5rem] font-semibold tracking-[0.1em] text-muted uppercase"
-                  >
-                    Exclude URLs
-                  </label>
-                  <span className="font-mono text-[0.5rem] text-muted">
-                    Saved with the set · used on refresh
-                  </span>
-                </div>
-                <textarea
-                  id="crawl-review-exclude-urls"
-                  value={excludePatternsText}
-                  onChange={(event) => {
-                    const value = event.target.value;
-                    setExcludePatternsText(value);
-                    const patterns = linesToList(value);
-                    if (patterns.length === 0) {
-                      setIndexEstimate(null);
-                      return;
-                    }
-                    setSelectedPreviewUrls((current) =>
-                      current.filter(
-                        (url) =>
-                          !urlMatchesAnyPattern(
-                            url,
-                            patterns,
-                            patternsAreRegex,
-                          ),
-                      ),
-                    );
-                    setIndexEstimate(null);
-                  }}
-                  rows={2}
-                  spellCheck={false}
-                  placeholder="One pattern per line — e.g. /next/ or /changelog/"
-                  className="field-input mt-1.5 w-full font-mono text-[0.6875rem] leading-5"
-                />
-              </div>
 
               <ul className="min-h-0 flex-1 divide-y divide-border overflow-y-auto rounded-xl border border-border bg-background">
                 {discoveredUrls.length === 0 ? (
@@ -2852,7 +3330,12 @@ export function WebCrawlSetup() {
               </ul>
 
               {skippedUrls.length > 0 ? (
-                <details className="group mt-3" open={discoveredUrls.length === 0}>
+                <details
+                  className="group mt-3"
+                  open={
+                    discoveredUrls.length === 0 || httpStatusCount > 0
+                  }
+                >
                   <summary className="flex cursor-pointer list-none items-center gap-2 text-[0.6875rem] text-muted transition-colors hover:text-foreground [&::-webkit-details-marker]:hidden">
                     <span
                       aria-hidden
@@ -2861,8 +3344,11 @@ export function WebCrawlSetup() {
                       ▸
                     </span>
                     {skippedUrls.length} URLs skipped
+                    {httpStatusCount > 0
+                      ? ` · ${httpStatusCount} filtered errors`
+                      : ""}
                     {canonicalAliasCount > 0
-                      ? ` (${canonicalAliasCount} canonical aliases)`
+                      ? ` · ${canonicalAliasCount} aliases`
                       : ""}
                   </summary>
                   <ul className="mt-2 max-h-40 space-y-1 overflow-y-auto rounded-xl border border-border bg-background p-2">
@@ -2871,12 +3357,25 @@ export function WebCrawlSetup() {
                         key={`${index}-${item.url}-${item.reason}`}
                         className="flex items-baseline gap-2 text-[0.6875rem]"
                       >
-                        <span className="shrink-0 rounded-md border border-border bg-surface-raised px-1.5 py-0.5 font-mono text-[0.5rem] text-muted uppercase">
+                        <span
+                          className={cn(
+                            "shrink-0 rounded-md border px-1.5 py-0.5 font-mono text-[0.5rem] uppercase",
+                            isHttpStatusSkipReason(item.reason)
+                              ? "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300"
+                              : "border-border bg-surface-raised text-muted",
+                          )}
+                        >
                           {item.reason}
                         </span>
-                        <span className="truncate font-mono text-muted">
+                        <a
+                          href={item.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="min-w-0 truncate font-mono text-muted underline-offset-2 hover:text-foreground hover:underline"
+                          title={item.url}
+                        >
                           {item.url}
-                        </span>
+                        </a>
                       </li>
                     ))}
                   </ul>
@@ -2965,7 +3464,14 @@ export function WebCrawlSetup() {
             bannerSize="strip"
             className="border-0 bg-transparent shadow-none"
             animate={pipelineAnimating}
-            activeStepId={step === 1 ? "crawl" : "extract"}
+            activeStepId={
+              filterPipelinePhase === "http" ||
+              filterPipelinePhase === "auto-exclude"
+                ? "filter"
+                : step === 1
+                  ? "crawl"
+                  : "extract"
+            }
             onStepClick={(id) => {
               if (id === "crawl") handleCancelCrawlReview();
               if (id === "extract" && crawlRun) setStep(2);
@@ -3378,6 +3884,14 @@ function StartUrlCard({
   busy,
   crawlCardPhase,
   pagesDiscovered,
+  autoDiscoverExcludes,
+  onAutoDiscoverExcludesChange,
+  autoExcludePhase,
+  autoExcludeResult,
+  httpCleanupPhase,
+  httpCleanupResult,
+  liveCrawlPhase,
+  liveValidation,
   onSubmit,
   onAbortCrawl,
 }: {
@@ -3401,6 +3915,19 @@ function StartUrlCard({
   busy: string | null;
   crawlCardPhase: CrawlCardPhase;
   pagesDiscovered: number;
+  autoDiscoverExcludes: boolean;
+  onAutoDiscoverExcludesChange: (value: boolean) => void;
+  autoExcludePhase: "idle" | "analysing" | "done";
+  autoExcludeResult: {
+    scanned: number;
+    added: number;
+    dropped: number;
+    summary?: string;
+  } | null;
+  httpCleanupPhase: "idle" | "cleaning" | "done";
+  httpCleanupResult: { filtered: number } | null;
+  liveCrawlPhase: "discovering" | "validating";
+  liveValidation: { done: number; total: number; errors: number } | null;
   onSubmit: () => void;
   onAbortCrawl?: () => void;
 }) {
@@ -3457,9 +3984,13 @@ function StartUrlCard({
           ? "loading"
           : "idle";
   const widgetLabel = isCrawling
-    ? pagesDiscovered > 0
-      ? `Finding pages · ${pagesDiscovered} / ${maxPages}`
-      : "Finding pages in your docs"
+    ? liveCrawlPhase === "validating"
+      ? liveValidation && liveValidation.total > 0
+        ? `Checking HTTP · ${liveValidation.done} / ${liveValidation.total}`
+        : "Dropping error pages…"
+      : pagesDiscovered > 0
+        ? `Finding pages · ${pagesDiscovered} / ${maxPages}`
+        : "Finding pages in your docs"
     : isCrawlComplete
       ? `${pagesDiscovered} page${pagesDiscovered === 1 ? "" : "s"} ready`
       : preflightState === "loading"
@@ -3495,8 +4026,73 @@ function StartUrlCard({
         status={widgetStatus}
         label={widgetLabel}
         aside={
-          <>
-            {busy === "crawl" ? (
+          <div className="flex items-center gap-2">
+            {crawlCardPhase === "idle" ? (
+              <div
+                className={cn(
+                  "inline-flex max-w-[9.5rem] items-center gap-1.5 sm:max-w-none",
+                  Boolean(busy) && "opacity-50",
+                )}
+              >
+                <Switch
+                  checked={autoDiscoverExcludes}
+                  onChange={onAutoDiscoverExcludesChange}
+                  label="Filter"
+                  disabled={Boolean(busy)}
+                />
+                <button
+                  type="button"
+                  disabled={Boolean(busy)}
+                  onClick={() =>
+                    onAutoDiscoverExcludesChange(!autoDiscoverExcludes)
+                  }
+                  className="truncate font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-muted uppercase hover:text-foreground disabled:cursor-not-allowed"
+                >
+                  Filter
+                </button>
+                <span
+                  className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted"
+                  title="After crawl: drops not-found pages and next/previous (legacy, beta, canary…) version trees"
+                >
+                  <Info className="size-3" aria-hidden />
+                  <span className="sr-only">
+                    Drops not-found pages and next/previous version trees
+                  </span>
+                </span>
+              </div>
+            ) : null}
+            {httpCleanupPhase === "cleaning" ||
+            (isCrawling && liveCrawlPhase === "validating") ? (
+              <span className="inline-flex max-w-[11rem] items-center gap-1.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-accent uppercase sm:max-w-none">
+                <Spinner className="size-3" />
+                Dropping error pages…
+              </span>
+            ) : null}
+            {httpCleanupPhase === "done" &&
+            httpCleanupResult &&
+            autoExcludePhase === "idle" ? (
+              <span className="hidden max-w-[11rem] truncate font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-emerald-700 uppercase sm:inline dark:text-emerald-400">
+                −{httpCleanupResult.filtered} error pages
+              </span>
+            ) : null}
+            {autoExcludePhase === "analysing" ? (
+              <span className="inline-flex max-w-[10rem] items-center gap-1.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-accent uppercase sm:max-w-none">
+                <Spinner className="size-3" />
+                Filtering…
+              </span>
+            ) : null}
+            {autoExcludePhase === "done" && autoExcludeResult ? (
+              <span
+                className="hidden max-w-[12rem] truncate font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-emerald-700 uppercase sm:inline dark:text-emerald-400"
+                title={`Scanned ${autoExcludeResult.scanned} links`}
+              >
+                +{autoExcludeResult.added} filters · −{autoExcludeResult.dropped} urls
+              </span>
+            ) : null}
+            {busy === "crawl" &&
+            autoExcludePhase === "idle" &&
+            httpCleanupPhase === "idle" &&
+            liveCrawlPhase !== "validating" ? (
               <button
                 type="button"
                 onClick={onAbortCrawl}
@@ -3504,7 +4100,7 @@ function StartUrlCard({
               >
                 Stop
               </button>
-            ) : (
+            ) : crawlCardPhase === "idle" ? (
               <button
                 type="button"
                 onClick={onSubmit}
@@ -3513,8 +4109,8 @@ function StartUrlCard({
               >
                 Crawl{crawlStartUrlCount > 1 ? ` ${crawlStartUrlCount}` : ""}
               </button>
-            )}
-          </>
+            ) : null}
+          </div>
         }
       />
 
@@ -3582,7 +4178,9 @@ function StartUrlCard({
                 />
               </div>
 
-              {isCrawling ? (
+              {isCrawling ||
+              httpCleanupPhase === "cleaning" ||
+              autoExcludePhase === "analysing" ? (
                 <div
                   className="animate-crawl-panel-enter flex min-h-[14rem] flex-col justify-center p-4 sm:p-5"
                   aria-live="polite"
@@ -3595,11 +4193,23 @@ function StartUrlCard({
                     enableSitemap={enableSitemap}
                     robotsFound={discoverySignals?.robots.found}
                     sitemapFound={discoverySignals?.sitemap.found}
+                    phase={
+                      autoExcludePhase === "analysing"
+                        ? "auto-exclude"
+                        : liveCrawlPhase === "validating" ||
+                            httpCleanupPhase === "cleaning"
+                          ? "validating"
+                          : "discovering"
+                    }
+                    validation={liveValidation}
+                    httpCleanupResult={httpCleanupResult}
                   />
                 </div>
               ) : null}
 
-              {isCrawlComplete ? (
+              {isCrawlComplete &&
+              httpCleanupPhase !== "cleaning" &&
+              autoExcludePhase !== "analysing" ? (
                 <div
                   className="animate-crawl-panel-enter flex min-h-[14rem] flex-col justify-center p-4 sm:p-5"
                   aria-live="polite"
@@ -3635,7 +4245,9 @@ function StartUrlCard({
             aria-live="polite"
             aria-busy={isCrawling}
           >
-            {isCrawling ? (
+            {isCrawling ||
+            httpCleanupPhase === "cleaning" ||
+            autoExcludePhase === "analysing" ? (
               <CrawlInProgressPanel
                 displayUrl={displayUrl}
                 maxPages={maxPages}
@@ -3643,6 +4255,16 @@ function StartUrlCard({
                 enableSitemap={enableSitemap}
                 robotsFound={discoverySignals?.robots.found}
                 sitemapFound={discoverySignals?.sitemap.found}
+                phase={
+                  autoExcludePhase === "analysing"
+                    ? "auto-exclude"
+                    : liveCrawlPhase === "validating" ||
+                        httpCleanupPhase === "cleaning"
+                      ? "validating"
+                      : "discovering"
+                }
+                validation={liveValidation}
+                httpCleanupResult={httpCleanupResult}
               />
             ) : (
               <CrawlCompletePanel
@@ -3745,6 +4367,9 @@ function CrawlInProgressPanel({
   enableSitemap,
   robotsFound,
   sitemapFound,
+  phase = "discovering",
+  validation = null,
+  httpCleanupResult = null,
 }: {
   displayUrl: string;
   maxPages: number;
@@ -3752,19 +4377,43 @@ function CrawlInProgressPanel({
   enableSitemap: boolean;
   robotsFound?: boolean;
   sitemapFound?: boolean;
+  phase?: "discovering" | "validating" | "auto-exclude";
+  validation?: { done: number; total: number; errors: number } | null;
+  httpCleanupResult?: { filtered: number } | null;
 }) {
-  const steps = [
-    pagesDiscovered > 0
-      ? `${pagesDiscovered} / ${maxPages} pages discovered on ${displayUrl}`
-      : `Discovering pages on ${displayUrl}`,
-    `Up to ${maxPages} pages`,
-    enableSitemap
-      ? sitemapFound
-        ? "Sitemap + links"
-        : "HTML links (no sitemap)"
-      : "HTML links only",
-    robotsFound ? "Respecting robots.txt" : "No robots.txt",
-  ];
+  const isFiltering = phase === "validating" || phase === "auto-exclude";
+
+  const steps =
+    phase === "auto-exclude"
+      ? [
+          "HTTP error cleanup finished",
+          "Scanning remaining URLs for version trees",
+          "Suggesting excludes for versions, blog, changelog…",
+          httpCleanupResult
+            ? `Removed ${httpCleanupResult.filtered} non-2xx page${httpCleanupResult.filtered === 1 ? "" : "s"}`
+            : "Keeping only successful pages",
+        ]
+      : phase === "validating"
+        ? [
+            `${pagesDiscovered} pages discovered on ${displayUrl}`,
+            validation && validation.total > 0
+              ? `Checking HTTP status ${validation.done} / ${validation.total}`
+              : "Probing page status (only 2xx stays)",
+            "Dropping 404, 429, 5xx, and network failures",
+            "Then Filter (AI) runs if that toggle is on",
+          ]
+        : [
+            pagesDiscovered > 0
+              ? `${pagesDiscovered} / ${maxPages} pages discovered on ${displayUrl}`
+              : `Discovering pages on ${displayUrl}`,
+            `Up to ${maxPages} pages`,
+            enableSitemap
+              ? sitemapFound
+                ? "Sitemap + links"
+                : "HTML links (no sitemap)"
+              : "HTML links only",
+            robotsFound ? "Respecting robots.txt" : "No robots.txt",
+          ];
 
   return (
     <div className="w-full text-left">
@@ -3774,12 +4423,22 @@ function CrawlInProgressPanel({
         </span>
         <div className="min-w-0">
           <p className="font-mono text-[0.5625rem] font-semibold tracking-[0.12em] text-accent uppercase">
-            Crawl in progress
+            {phase === "auto-exclude"
+              ? "Filter (AI)"
+              : phase === "validating"
+                ? "Filtering error pages"
+                : "Crawl in progress"}
           </p>
           <p className="mt-0.5 text-[0.6875rem] leading-5 text-muted">
-            {pagesDiscovered > 0
-              ? `${pagesDiscovered} / ${maxPages} pages discovered…`
-              : "Finding pages to index…"}
+            {phase === "auto-exclude"
+              ? "AI dropping not-found pages and next/previous version trees…"
+              : phase === "validating"
+                ? validation && validation.total > 0
+                  ? `Checking HTTP ${validation.done} / ${validation.total}…`
+                  : "Dropping non-2xx pages…"
+                : pagesDiscovered > 0
+                  ? `${pagesDiscovered} / ${maxPages} pages discovered…`
+                  : "Finding pages to index…"}
           </p>
         </div>
       </div>
@@ -3792,7 +4451,10 @@ function CrawlInProgressPanel({
           >
             <span
               aria-hidden
-              className="size-1 shrink-0 animate-pulse rounded-full bg-accent"
+              className={cn(
+                "size-1 shrink-0 rounded-full",
+                isFiltering ? "animate-pulse bg-accent" : "animate-pulse bg-accent",
+              )}
             />
             <span className="truncate">{step}</span>
           </li>
@@ -4019,6 +4681,7 @@ function ConfigPill({
   icon,
   children,
   disabled = false,
+  emphasized = false,
 }: {
   label: string;
   summary: ReactNode;
@@ -4027,12 +4690,14 @@ function ConfigPill({
   icon?: ReactNode;
   children: ReactNode;
   disabled?: boolean;
+  emphasized?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [panelRect, setPanelRect] = useState<{
     top: number;
     left: number;
     width: number;
+    maxHeight: number;
   } | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -4048,11 +4713,14 @@ function ConfigPill({
       Math.max(12, rect.left),
       window.innerWidth - width - 12,
     );
+    const top = rect.bottom + 8;
+    const maxHeight = Math.max(160, window.innerHeight - top - 12);
 
     setPanelRect({
-      top: rect.bottom + 8,
+      top,
       left,
       width,
+      maxHeight,
     });
   }, []);
 
@@ -4105,14 +4773,15 @@ function ConfigPill({
               top: panelRect.top,
               left: panelRect.left,
               width: panelRect.width,
+              maxHeight: panelRect.maxHeight,
               zIndex: 200,
             }}
             className={cn(
-              "animate-crawl-panel-enter",
+              "animate-crawl-panel-enter flex flex-col",
               configPanelShellClass,
             )}
           >
-            <div className="flex items-start gap-2.5 border-b border-border bg-surface-raised px-3 py-2.5 sm:px-4">
+            <div className="flex shrink-0 items-start gap-2.5 border-b border-border bg-surface-raised px-3 py-2.5 sm:px-4">
               {icon ? (
                 <span
                   className="inline-flex size-7 shrink-0 items-center justify-center rounded-lg border border-border/70 bg-card-solid text-muted"
@@ -4134,7 +4803,9 @@ function ConfigPill({
                 ) : null}
               </div>
             </div>
-            <div className="p-3 sm:p-4">{children}</div>
+            <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4">
+              {children}
+            </div>
           </div>,
           document.body,
         )
@@ -4163,9 +4834,14 @@ function ConfigPill({
         className={cn(
           "inline-flex max-w-full shrink-0 items-center gap-1 rounded-lg border border-transparent px-2 py-1.5 text-left transition-[background,border-color,box-shadow,color] sm:gap-1.5 sm:px-2.5",
           disabled && "pointer-events-none cursor-not-allowed opacity-50",
+          emphasized &&
+            !open &&
+            "border-accent/35 bg-accent/10 text-foreground shadow-card animate-pulse",
           open
             ? "border-border bg-card-solid text-foreground shadow-card"
-            : "text-muted-strong hover:border-border/60 hover:bg-card-solid/80 hover:text-foreground",
+            : !emphasized &&
+                "text-muted-strong hover:border-border/60 hover:bg-card-solid/80 hover:text-foreground",
+          emphasized && open && "border-accent/40 bg-card-solid text-foreground shadow-card",
         )}
       >
         {icon ? (

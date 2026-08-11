@@ -3,16 +3,36 @@
 import Link from "next/link";
 import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
+import {
+  DndContext,
+  DragOverlay,
+  PointerSensor,
+  closestCenter,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+  type DragStartEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
 import { Search } from "lucide-react";
 import { SourceBannerCard } from "@/components/sources/source-banner-card";
 import { SourceCategoryFilterBar } from "@/components/sources/source-category-filter";
-import { SourceListRow } from "@/components/sources/source-list-row";
+import {
+  SourceListRow,
+  SourceListRowDragPreview,
+  sourceListRowId,
+} from "@/components/sources/source-list-row";
 import { useDashboardToolbar } from "@/contexts/dashboard-toolbar-context";
 import { useIndexedFlash } from "@/contexts/indexed-flash-context";
 import { useAuth } from "@/lib/auth-context";
 import {
   deleteSource,
   listSources,
+  reorderSources,
   type SourceCategoryOption,
   type SourceSummary,
 } from "@/lib/ledgeindex-api";
@@ -25,6 +45,14 @@ import { cn } from "@/lib/utils";
 
 function sortSources(sources: SourceSummary[]) {
   return [...sources].sort((a, b) => {
+    const aOrder = typeof a.displayOrder === "number" ? a.displayOrder : null;
+    const bOrder = typeof b.displayOrder === "number" ? b.displayOrder : null;
+    if (aOrder != null && bOrder != null && aOrder !== bOrder) {
+      return aOrder - bOrder;
+    }
+    if ((aOrder != null) !== (bOrder != null)) {
+      return aOrder != null ? -1 : 1;
+    }
     if (a.chunkCount !== b.chunkCount) {
       return b.chunkCount - a.chunkCount;
     }
@@ -92,7 +120,12 @@ function DashboardContent() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [activeDragId, setActiveDragId] = useState<string | null>(null);
+  const [reordering, setReordering] = useState(false);
   const fetchSeqRef = useRef(0);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+  );
 
   useEffect(() => {
     if (authLoading || !user || !toolbarReady) return;
@@ -137,7 +170,13 @@ function DashboardContent() {
     setError(null);
     try {
       await deleteSource(sourceId);
-      setSources((current) => current.filter((source) => source.id !== sourceId));
+      setSources((current) =>
+        current.filter(
+          (source) =>
+            source.id !== sourceId &&
+            !source.versions.some((version) => version.id === sourceId),
+        ),
+      );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete set");
     } finally {
@@ -183,6 +222,27 @@ function DashboardContent() {
     );
   }
 
+  function handleSiteProfileUpdated(
+    sourceId: string,
+    payload: { hasSiteProfile: boolean; siteProfileLensCount: number },
+  ) {
+    setSources((current) =>
+      current.map((source) => {
+        if (
+          source.id === sourceId ||
+          source.versions.some((version) => version.id === sourceId)
+        ) {
+          return {
+            ...source,
+            hasSiteProfile: payload.hasSiteProfile,
+            siteProfileLensCount: payload.siteProfileLensCount,
+          };
+        }
+        return source;
+      }),
+    );
+  }
+
   function handleRefreshApplied() {
     void listSources(scope)
       .then(({ sources: next }) => setSources(groupSourcesByFamily(next)))
@@ -191,10 +251,67 @@ function DashboardContent() {
       });
   }
 
+  async function persistSourceOrder(ordered: SourceSummary[]) {
+    const withOrder = ordered.map((source, index) => ({
+      ...source,
+      displayOrder: index,
+    }));
+    setSources(withOrder);
+    setReordering(true);
+    setError(null);
+    try {
+      await reorderSources(
+        withOrder.map((source) => ({
+          id: source.id,
+          displayOrder: source.displayOrder ?? 0,
+        })),
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to save order");
+      try {
+        const { sources: next } = await listSources(scope);
+        setSources(groupSourcesByFamily(next));
+      } catch {
+        // keep optimistic order if reload also fails
+      }
+    } finally {
+      setReordering(false);
+    }
+  }
+
+  function handleDragStart(event: DragStartEvent) {
+    setActiveDragId(String(event.active.id));
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    setActiveDragId(null);
+    if (!over || active.id === over.id || reordering) return;
+
+    const from = sources.findIndex(
+      (source) => sourceListRowId(source) === String(active.id),
+    );
+    const to = sources.findIndex(
+      (source) => sourceListRowId(source) === String(over.id),
+    );
+    if (from < 0 || to < 0 || from === to) return;
+    void persistSourceOrder(arrayMove(sources, from, to));
+  }
+
+  function handleDragCancel() {
+    setActiveDragId(null);
+  }
+
   const canCreateInScope =
     scope === "personal" || (scope === "global" && isAdmin);
   /** Dashboard management (context menu, shelves, delete) — admins only. */
   const canAdminManage = isAdmin;
+  const canReorderList =
+    canAdminManage &&
+    viewMode === "list" &&
+    !searchQuery.trim() &&
+    selectedCategory === null &&
+    !reordering;
   const newCrawlHref =
     scope === "global" && isAdmin
       ? "/sources/web-crawl?scope=global&fresh=1"
@@ -271,17 +388,43 @@ function DashboardContent() {
     );
   }, [filteredSources, selectedCategory]);
 
+  const catalogRankById = useMemo(() => {
+    const ranks = new Map<string, number>();
+    sources.forEach((source, index) => {
+      ranks.set(sourceListRowId(source), index + 1);
+    });
+    return ranks;
+  }, [sources]);
+
+  const sortableIds = useMemo(
+    () => listSourcesVisible.map((source) => sourceListRowId(source)),
+    [listSourcesVisible],
+  );
+
+  const activeDragSource = useMemo(() => {
+    if (!activeDragId) return null;
+    return (
+      sources.find((source) => sourceListRowId(source) === activeDragId) ?? null
+    );
+  }, [activeDragId, sources]);
+
   const emptyAfterFilter =
     listSourcesVisible.length === 0 &&
     (Boolean(searchQuery.trim()) || selectedCategory !== null);
 
   return (
-    <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 sm:py-8">
+    <div
+      className={cn(
+        "mx-auto w-full flex-1 px-4 py-6 sm:px-6 sm:py-8",
+        viewMode === "list" ? "max-w-3xl" : "max-w-6xl",
+      )}
+    >
       {showLoading ? (
         <p className="text-sm text-muted">Loading sets…</p>
-      ) : error ? (
-        <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
       ) : sources.length === 0 ? (
+        error ? (
+          <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
+        ) : (
         <div className="rounded-xl border border-dashed border-border bg-card-solid/60 px-6 py-12 text-center">
           <p className="text-sm text-muted">
             {scope === "global"
@@ -299,17 +442,29 @@ function DashboardContent() {
             </Link>
           ) : null}
         </div>
+        )
       ) : (
         <div className="space-y-5">
+          {error ? (
+            <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
+          ) : null}
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
               <div>
                 <p className="font-mono text-[0.5625rem] font-semibold tracking-[0.12em] text-muted uppercase">
-                  Bookshelf
+                  {viewMode === "list" ? "Catalog" : "Bookshelf"}
                 </p>
                 <p className="mt-1 text-sm text-muted">
                   Click a set to chat
-                  {canAdminManage ? " · right-click for admin actions" : ""}.
+                  {canAdminManage ? " · right-click for admin actions" : ""}
+                  {canReorderList ? " · drag to reorder" : ""}
+                  {canAdminManage &&
+                  viewMode === "list" &&
+                  !canReorderList &&
+                  (Boolean(searchQuery.trim()) || selectedCategory !== null)
+                    ? " · clear search/filter to reorder"
+                    : ""}
+                  .
                 </p>
               </div>
               <SourceCategoryFilterBar
@@ -349,30 +504,59 @@ function DashboardContent() {
             <>
               <div
                 className={cn(
-                  "flex flex-col gap-1.5",
+                  "flex flex-col gap-1",
                   viewMode !== "list" && "hidden",
                 )}
                 aria-hidden={viewMode !== "list"}
               >
-                {listSourcesVisible.map((source) => (
-                  <SourceListRow
-                    key={source.sourceFamilyId || source.id}
-                    source={source}
-                    highlighted={source.id === indexedFlashId}
-                    onDelete={
-                      canAdminManage ? handleDeleteSource : undefined
-                    }
-                    deleting={deletingId === source.id}
-                    canEditSlug={canAdminManage}
-                    canEditName={canAdminManage}
-                    canEditCategories={canAdminManage}
-                    showActionsMenu={canAdminManage}
-                    onSlugUpdated={handleSlugUpdated}
-                    onNameUpdated={handleNameUpdated}
-                    onCategoriesUpdated={handleCategoriesUpdated}
-                    onRefreshApplied={handleRefreshApplied}
-                  />
-                ))}
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={closestCenter}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onDragCancel={handleDragCancel}
+                >
+                  <SortableContext
+                    items={sortableIds}
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {listSourcesVisible.map((source) => {
+                      const rowId = sourceListRowId(source);
+                      return (
+                        <SourceListRow
+                          key={rowId}
+                          source={source}
+                          rank={catalogRankById.get(rowId)}
+                          highlighted={source.id === indexedFlashId}
+                          onDelete={
+                            canAdminManage ? handleDeleteSource : undefined
+                          }
+                          deleting={deletingId === source.id}
+                          canEditSlug={canAdminManage}
+                          canEditName={canAdminManage}
+                          canEditCategories={canAdminManage}
+                          canReorder={canReorderList}
+                          showActionsMenu={canAdminManage}
+                          onSlugUpdated={handleSlugUpdated}
+                          onNameUpdated={handleNameUpdated}
+                          onCategoriesUpdated={handleCategoriesUpdated}
+                          onRefreshApplied={handleRefreshApplied}
+                          onSiteProfileUpdated={handleSiteProfileUpdated}
+                        />
+                      );
+                    })}
+                  </SortableContext>
+                  <DragOverlay dropAnimation={{ duration: 180, easing: "ease-out" }}>
+                    {activeDragSource ? (
+                      <SourceListRowDragPreview
+                        source={activeDragSource}
+                        rank={catalogRankById.get(
+                          sourceListRowId(activeDragSource),
+                        )}
+                      />
+                    ) : null}
+                  </DragOverlay>
+                </DndContext>
               </div>
 
               <div
@@ -409,6 +593,7 @@ function DashboardContent() {
                           onNameUpdated={handleNameUpdated}
                           onSlugUpdated={handleSlugUpdated}
                           onRefreshApplied={handleRefreshApplied}
+                          onSiteProfileUpdated={handleSiteProfileUpdated}
                         />
                       ))}
                     </div>
@@ -442,6 +627,7 @@ function DashboardContent() {
                           onNameUpdated={handleNameUpdated}
                           onSlugUpdated={handleSlugUpdated}
                           onRefreshApplied={handleRefreshApplied}
+                          onSiteProfileUpdated={handleSiteProfileUpdated}
                         />
                       ))}
                     </div>

@@ -47,6 +47,22 @@ export type DocsIdentity = {
   paths: DocsIdentityPath[];
 };
 
+export type SiteProfileLensSource = {
+  urls: string[];
+  titles: string[];
+  pickSummary?: string;
+};
+
+export type SiteProfile = {
+  rootUrl: string;
+  lenses: string[];
+  profile: Record<string, unknown>;
+  lensSources?: Record<string, SiteProfileLensSource>;
+  generatedAt?: string;
+  updatedAt?: string;
+  runId?: string;
+};
+
 export type SourceMetadata = {
   sourceType: SourceContentType;
   sourceTypeConfidence: number;
@@ -56,6 +72,7 @@ export type SourceMetadata = {
   detectedSignals: string[];
   llmsTxt?: LlmsTxtCapture | null;
   docsIdentity?: DocsIdentity;
+  siteProfile?: SiteProfile;
 };
 
 export const DOCS_IDENTITY_KIND_LABELS: Record<DocsIdentityKind, string> = {

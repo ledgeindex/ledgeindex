@@ -125,6 +125,7 @@ export class MemoryStore implements Store {
       versionNumber: input.versionNumber ?? 1,
       versionLabel: input.versionLabel ?? null,
       categories: input.categories ?? [],
+      displayOrder: null,
       createdAt: timestamp,
       updatedAt: timestamp,
     };
@@ -240,6 +241,7 @@ export class MemoryStore implements Store {
       versionNumber?: number;
       versionLabel?: string | null;
       categories?: string[];
+      displayOrder?: number | null;
     },
   ): Promise<Source | null> {
     const existing = this.sources.get(id);
@@ -291,6 +293,10 @@ export class MemoryStore implements Store {
         input.versionLabel !== undefined ? input.versionLabel : existing.versionLabel,
       categories:
         input.categories !== undefined ? input.categories : (existing.categories ?? []),
+      displayOrder:
+        input.displayOrder !== undefined
+          ? input.displayOrder
+          : (existing.displayOrder ?? null),
       updatedAt: now(),
     };
     this.sources.set(id, updated);

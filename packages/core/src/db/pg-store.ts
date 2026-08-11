@@ -60,6 +60,14 @@ function mapSource(row: pg.QueryResultRow): Source {
     versionNumber: row.version_number ?? 1,
     versionLabel: row.version_label ?? null,
     categories: Array.isArray(row.categories) ? row.categories : [],
+    displayOrder: (() => {
+      if (typeof row.display_order === "number" && Number.isFinite(row.display_order)) {
+        return row.display_order;
+      }
+      if (row.display_order == null) return null;
+      const parsed = Number(row.display_order);
+      return Number.isFinite(parsed) ? parsed : null;
+    })(),
     createdAt: row.created_at.toISOString(),
     updatedAt: row.updated_at.toISOString(),
   };
@@ -95,8 +103,11 @@ function mapSourceSet(row: pg.QueryResultRow): SourceSet {
 }
 
 export class PgStore implements Store {
-  private sourceColumns: { categories: boolean; hosting: boolean } | null =
-    null;
+  private sourceColumns: {
+    categories: boolean;
+    hosting: boolean;
+    displayOrder: boolean;
+  } | null = null;
 
   constructor(private pool: pg.Pool) {}
 
@@ -104,6 +115,7 @@ export class PgStore implements Store {
   private async loadSourceColumns(): Promise<{
     categories: boolean;
     hosting: boolean;
+    displayOrder: boolean;
   }> {
     if (this.sourceColumns) return this.sourceColumns;
 
@@ -113,7 +125,7 @@ export class PgStore implements Store {
        WHERE table_schema = 'public'
          AND table_name = 'sources'
          AND column_name = ANY($1::text[])`,
-      [["categories", "hosting"]],
+      [["categories", "hosting", "display_order"]],
     );
 
     const names = new Set(rows.map((row) => row.column_name));
@@ -129,10 +141,17 @@ export class PgStore implements Store {
       );
       names.add("categories");
     }
+    if (!names.has("display_order")) {
+      await this.pool.query(
+        `ALTER TABLE sources ADD COLUMN IF NOT EXISTS display_order integer`,
+      );
+      names.add("display_order");
+    }
 
     this.sourceColumns = {
       categories: names.has("categories"),
       hosting: names.has("hosting"),
+      displayOrder: names.has("display_order"),
     };
     return this.sourceColumns;
   }
@@ -339,6 +358,7 @@ export class PgStore implements Store {
       versionNumber?: number;
       versionLabel?: string | null;
       categories?: string[];
+      displayOrder?: number | null;
     },
   ): Promise<Source | null> {
     const existing = await this.getSource(id);
@@ -358,7 +378,7 @@ export class PgStore implements Store {
     }
 
     const columns = await this.loadSourceColumns();
-    const values = [
+    const values: unknown[] = [
       id,
       input.name ?? existing.name,
       slug,
@@ -379,18 +399,28 @@ export class PgStore implements Store {
       input.sourceFamilyId !== undefined ? input.sourceFamilyId : existing.sourceFamilyId,
       input.versionNumber !== undefined ? input.versionNumber : existing.versionNumber,
       input.versionLabel !== undefined ? input.versionLabel : existing.versionLabel,
-    ] as const;
+    ];
 
-    const categoriesClause = columns.categories
-      ? `, categories = $15::text[]`
-      : "";
-    const categoriesValue = columns.categories
-      ? [
-          input.categories !== undefined
-            ? input.categories
-            : (existing.categories ?? []),
-        ]
-      : [];
+    let extraClauses = "";
+    let nextParam = 15;
+    if (columns.categories) {
+      extraClauses += `, categories = $${nextParam}::text[]`;
+      values.push(
+        input.categories !== undefined
+          ? input.categories
+          : (existing.categories ?? []),
+      );
+      nextParam += 1;
+    }
+    if (columns.displayOrder) {
+      extraClauses += `, display_order = $${nextParam}`;
+      values.push(
+        input.displayOrder !== undefined
+          ? input.displayOrder
+          : (existing.displayOrder ?? null),
+      );
+      nextParam += 1;
+    }
 
     const { rows } = await this.pool.query(
       `UPDATE sources
@@ -406,11 +436,11 @@ export class PgStore implements Store {
            canonical_url = $11,
            source_family_id = $12,
            version_number = $13,
-           version_label = $14${categoriesClause},
+           version_label = $14${extraClauses},
            updated_at = now()
        WHERE id = $1
        RETURNING *`,
-      [...values, ...categoriesValue],
+      values,
     );
     return rows[0] ? mapSource(rows[0]) : null;
   }

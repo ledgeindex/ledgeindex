@@ -21,9 +21,11 @@ import {
 } from "../schemas/source-config.js";
 import {
   docsIdentitySchema,
+  siteProfileSchema,
   sourceMetadataSchema,
+  type DocsIdentity,
+  type SourceMetadata,
 } from "../schemas/source-metadata.js";
-import type { SourceMetadata } from "../db/types.js";
 import {
   getProjectForUser,
   getRequestUserRole,
@@ -152,6 +154,61 @@ export async function sourceRoutes(fastify: FastifyInstance) {
     }
 
     return { categories: collectSourceCategoryOptions(sources) };
+  });
+
+  fastify.put("/api/sources/reorder", async (request, reply) => {
+    const userId = await requireUser(request, reply);
+    if (!userId) return;
+
+    if (isApiAuthRequired() && !(await requireAdmin(request, reply))) {
+      return;
+    }
+
+    const body = z
+      .object({
+        items: z
+          .array(
+            z.object({
+              id: z.string().min(1),
+              displayOrder: z.number().int().min(0).max(100_000),
+            }),
+          )
+          .min(1)
+          .max(500),
+      })
+      .safeParse(request.body);
+
+    if (!body.success) {
+      return reply.status(400).send({ error: body.error.flatten() });
+    }
+
+    const role = await getRequestUserRole(request);
+    let updated = 0;
+
+    for (const item of body.data.items) {
+      const existing = await getSourceForWrite(item.id, userId, role);
+      if (!existing) {
+        return reply.status(404).send({
+          error: `Source not found: ${item.id}`,
+        });
+      }
+
+      const familyId = existing.sourceFamilyId ?? existing.id;
+      const familySources = await getStore().listSourcesByFamilyId(familyId);
+      const targetIds = [
+        ...new Set([item.id, ...familySources.map((entry) => entry.id)]),
+      ];
+
+      for (const targetId of targetIds) {
+        const next = await getStore().updateSource(targetId, {
+          displayOrder: item.displayOrder,
+          ...(!existing.sourceFamilyId ? { sourceFamilyId: familyId } : {}),
+        });
+        if (next) updated += 1;
+      }
+    }
+
+    return { updated };
   });
 
   fastify.post("/api/sources", async (request, reply) => {
@@ -350,6 +407,114 @@ export async function sourceRoutes(fastify: FastifyInstance) {
     return { source, docsIdentity: nextMetadata.docsIdentity };
   });
 
+  fastify.put("/api/sources/:id/site-profile", async (request, reply) => {
+    const userId = await requireUser(request, reply);
+    if (!userId) return;
+
+    if (isApiAuthRequired() && !(await requireAdmin(request, reply))) {
+      return;
+    }
+
+    const role = await getRequestUserRole(request);
+    const { id } = request.params as { id: string };
+    const existing = await getSourceForWrite(id, userId, role);
+    if (!existing) {
+      return reply.status(404).send({ error: "Source not found" });
+    }
+
+    const body = siteProfileSchema.safeParse(request.body);
+    if (!body.success) {
+      return reply.status(400).send({ error: body.error.flatten() });
+    }
+
+    const prev = existing.sourceMetadata;
+    const now = new Date().toISOString();
+    const nextSiteProfile = {
+      ...body.data,
+      updatedAt: now,
+      generatedAt: body.data.generatedAt ?? now,
+    };
+
+    const docsIdentityFromLens = (() => {
+      const raw = nextSiteProfile.profile?.docs_identity;
+      if (!raw || typeof raw !== "object") return prev?.docsIdentity;
+      const lens = raw as {
+        overallSummary?: string;
+        kind?: DocsIdentity["kind"];
+        language?: DocsIdentity["language"];
+      };
+      if (!lens.overallSummary?.trim() && !lens.kind && !lens.language) {
+        return prev?.docsIdentity;
+      }
+      return {
+        overallSummary: lens.overallSummary?.trim() || prev?.docsIdentity?.overallSummary,
+        kind: lens.kind ?? prev?.docsIdentity?.kind,
+        language: lens.language ?? prev?.docsIdentity?.language,
+        paths: prev?.docsIdentity?.paths ?? [],
+        generatedAt: now,
+        updatedAt: now,
+      };
+    })();
+
+    const nextMetadata: SourceMetadata = {
+      sourceType: prev?.sourceType ?? "documentation",
+      sourceTypeConfidence: prev?.sourceTypeConfidence ?? 0.5,
+      origin: prev?.origin ?? "external",
+      version: prev?.version ?? null,
+      versionSource: prev?.versionSource ?? null,
+      detectedSignals: prev?.detectedSignals ?? [],
+      llmsTxt: prev?.llmsTxt ?? null,
+      ...prev,
+      siteProfile: nextSiteProfile,
+      ...(docsIdentityFromLens ? { docsIdentity: docsIdentityFromLens } : {}),
+    };
+
+    const source = await getStore().updateSource(id, {
+      sourceMetadata: nextMetadata,
+    });
+    if (!source) {
+      return reply.status(404).send({ error: "Source not found" });
+    }
+    return { source, siteProfile: nextMetadata.siteProfile };
+  });
+
+  fastify.delete("/api/sources/:id/site-profile", async (request, reply) => {
+    const userId = await requireUser(request, reply);
+    if (!userId) return;
+
+    if (isApiAuthRequired() && !(await requireAdmin(request, reply))) {
+      return;
+    }
+
+    const role = await getRequestUserRole(request);
+    const { id } = request.params as { id: string };
+    const existing = await getSourceForWrite(id, userId, role);
+    if (!existing) {
+      return reply.status(404).send({ error: "Source not found" });
+    }
+
+    const prev = existing.sourceMetadata;
+    const nextMetadata: SourceMetadata = {
+      sourceType: prev?.sourceType ?? "documentation",
+      sourceTypeConfidence: prev?.sourceTypeConfidence ?? 0.5,
+      origin: prev?.origin ?? "external",
+      version: prev?.version ?? null,
+      versionSource: prev?.versionSource ?? null,
+      detectedSignals: prev?.detectedSignals ?? [],
+      llmsTxt: prev?.llmsTxt ?? null,
+      ...prev,
+    };
+    delete nextMetadata.siteProfile;
+
+    const source = await getStore().updateSource(id, {
+      sourceMetadata: nextMetadata,
+    });
+    if (!source) {
+      return reply.status(404).send({ error: "Source not found" });
+    }
+    return { source, deleted: true };
+  });
+
   fastify.put("/api/sources/:id", async (request, reply) => {
     const userId = await requireUser(request, reply);
     if (!userId) return;
@@ -370,6 +535,7 @@ export async function sourceRoutes(fastify: FastifyInstance) {
         faviconUrl: z.string().url().nullable().optional(),
         sourceMetadata: sourceMetadataSchema.nullable().optional(),
         categories: z.array(z.string().min(1).max(48)).max(12).optional(),
+        displayOrder: z.number().int().min(0).max(100_000).nullable().optional(),
       })
       .safeParse(request.body);
 
@@ -398,7 +564,8 @@ export async function sourceRoutes(fastify: FastifyInstance) {
         : undefined;
 
     if (
-      normalizedCategories !== undefined &&
+      (normalizedCategories !== undefined ||
+        body.data.displayOrder !== undefined) &&
       isApiAuthRequired() &&
       !(await requireAdmin(request, reply))
     ) {
@@ -409,15 +576,16 @@ export async function sourceRoutes(fastify: FastifyInstance) {
     const familySources = await getStore().listSourcesByFamilyId(familyId);
     // Always include the current source. Older rows may have null source_family_id,
     // so the family query can return [] even though `existing` was found.
-    const targetIds =
-      normalizedCategories !== undefined
-        ? [
-            ...new Set([
-              id,
-              ...familySources.map((entry) => entry.id),
-            ]),
-          ]
-        : [id];
+    const familyWide =
+      normalizedCategories !== undefined || body.data.displayOrder !== undefined;
+    const targetIds = familyWide
+      ? [
+          ...new Set([
+            id,
+            ...familySources.map((entry) => entry.id),
+          ]),
+        ]
+      : [id];
 
     let source = null;
     for (const targetId of targetIds) {
@@ -428,7 +596,7 @@ export async function sourceRoutes(fastify: FastifyInstance) {
           : {}),
         slugOwnerKey,
         // Backfill family id so later shelf edits hit the whole family.
-        ...(normalizedCategories !== undefined && !existing.sourceFamilyId
+        ...(familyWide && !existing.sourceFamilyId
           ? { sourceFamilyId: familyId }
           : {}),
       });

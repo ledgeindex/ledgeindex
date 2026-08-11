@@ -158,6 +158,8 @@ export class FileStore implements Store {
       sourceFamilyId?: string | null;
       versionNumber?: number;
       versionLabel?: string | null;
+      categories?: string[];
+      displayOrder?: number | null;
     },
   ): Promise<Source | null> {
     const source = await this.memory.updateSource(id, input);

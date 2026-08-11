@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/docs",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "LedgeIndex docs profile — sources, ingest, chat, MCP",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
@@ -32,8 +32,8 @@
   "dependencies": {
     "@ai-sdk/google": "2.0.86",
     "@ai-sdk/openai": "^2.0.114",
-    "@ledgeindex/core": "^0.1.8",
-    "@ledgeindex/repo": "^0.1.8",
+    "@ledgeindex/core": "^0.1.9",
+    "@ledgeindex/repo": "^0.1.9",
     "@mastra/ai-sdk": "^1.6.2",
     "@mastra/core": "^1.51.0",
     "@mastra/fastembed": "^1.2.0",

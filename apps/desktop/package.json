@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/desktop",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "LedgeIndex desktop (Electron) — standalone Vite UI; sidecar = @ledgeindex/desktop-server",
   "main": "./out/main/index.js",
@@ -27,7 +27,7 @@
     "@electron-toolkit/utils": "^4.0.0",
     "@fontsource-variable/jetbrains-mono": "^5.3.0",
     "@fontsource/ibm-plex-sans": "^5.3.0",
-    "@ledgeindex/client": "^0.1.8",
+    "@ledgeindex/client": "^0.1.9",
     "clsx": "^2.1.1",
     "electron-updater": "6.8.9",
     "firebase": "^12.17.1",

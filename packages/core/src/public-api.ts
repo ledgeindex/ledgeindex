@@ -140,6 +140,20 @@ export {
 } from "./enrich/index.js";
 
 export { discoverUrls, cancelDiscoverCrawl, getCrawlProgress } from "./crawl/discover.js";
+export {
+  filterUrlsByHttpStatus,
+  probePageStatus,
+  isHttpStatusSkip,
+  httpStatusSkipReason,
+  HTTP_STATUS_SKIP_PREFIX,
+} from "./crawl/validate-page-statuses.js";
+export type {
+  ProbePageStatusResult,
+  FilterUrlsByHttpStatusOptions,
+} from "./crawl/validate-page-statuses.js";
+export {
+  isNonSuccessHttpStatus,
+} from "./crawl/not-found-page.js";
 
 export { preflightStartUrl } from "./crawl/preflight.js";
 
@@ -156,12 +170,16 @@ export {
   isPdfUrl,
 } from "./lib/unsupported-start-url.js";
 
-export { filterCrawlUrls } from "./crawl/crawl-url-filter.js";
+export {
+  filterCrawlUrls,
+  proposeCrawlFilterRemovals,
+} from "./crawl/crawl-url-filter.js";
 export type {
   CrawlUrlFilterEntry,
   CrawlUrlFilterMessage,
   CrawlUrlFilterResult,
   CrawlUrlFilterModelSelection,
+  CrawlUrlRemovalsResult,
 } from "./crawl/crawl-url-filter.js";
 
 export { dedupeUrlsByCanonical } from "./crawl/canonical-dedupe.js";

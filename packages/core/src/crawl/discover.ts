@@ -14,6 +14,11 @@ import {
   assertHtmlStartUrl,
   isPdfUrl,
 } from "../lib/unsupported-start-url.js";
+import { filterUrlsByHttpStatus } from "./validate-page-statuses.js";
+import {
+  isNonSuccessHttpStatus,
+  httpStatusSkipReason,
+} from "./not-found-page.js";
 
 export type DiscoveredUrl = {
   url: string;
@@ -28,6 +33,8 @@ export type SkippedUrl = {
 export type DiscoverResult = {
   urls: DiscoveredUrl[];
   skipped: SkippedUrl[];
+  /** URLs dropped by the always-on HTTP status cleaner (4xx/5xx/network). */
+  httpStatusFiltered?: number;
 };
 
 export type DiscoverOptions = {
@@ -37,8 +44,13 @@ export type DiscoverOptions = {
 
 export type CrawlProgress = {
   status: "running" | "done";
+  /** discovering = sitemap/link crawl; validating = HTTP status cleaner */
+  phase?: "discovering" | "validating";
   pagesDiscovered: number;
   maxPages: number;
+  validatedCount?: number;
+  validationTotal?: number;
+  httpErrorCount?: number;
 };
 
 const activeCrawls = new Map<string, () => Promise<void>>();
@@ -53,8 +65,25 @@ function updateCrawlProgress(
   maxPages: number,
   pagesDiscovered: number,
   status: CrawlProgress["status"],
+  extra?: Partial<
+    Pick<
+      CrawlProgress,
+      | "phase"
+      | "validatedCount"
+      | "validationTotal"
+      | "httpErrorCount"
+    >
+  >,
 ) {
-  crawlProgress.set(sourceId, { status, pagesDiscovered, maxPages });
+  crawlProgress.set(sourceId, {
+    status,
+    pagesDiscovered,
+    maxPages,
+    phase: extra?.phase ?? "discovering",
+    validatedCount: extra?.validatedCount,
+    validationTotal: extra?.validationTotal,
+    httpErrorCount: extra?.httpErrorCount,
+  });
 }
 
 function clearCrawlProgress(sourceId: string) {
@@ -63,6 +92,101 @@ function clearCrawlProgress(sourceId: string) {
 
 /** Cap enqueued links per page so huge doc sidebars don't blow the handler budget. */
 const MAX_LINKS_PER_PAGE = 500;
+
+async function validateDiscoveredHttpStatuses(args: {
+  urls: DiscoveredUrl[];
+  skipped: SkippedUrl[];
+  config: WebCrawlSourceConfig;
+  sourceId?: string;
+  signal?: AbortSignal;
+  cancelled: () => boolean;
+}): Promise<{
+  result: DiscoverResult;
+  httpStatusFiltered: number;
+  validationTotal: number;
+}> {
+  const {
+    urls,
+    skipped,
+    config,
+    sourceId,
+    signal,
+    cancelled,
+  } = args;
+
+  const capped = urls.slice(0, config.maxPages);
+  const working = capped;
+  // Always re-check every URL with HEAD/GET. Crawlee delivers 404 HTML to
+  // requestHandler as a "successful" request, so in-crawl confirmedOk is not enough.
+  const toValidate = working;
+
+  if (toValidate.length === 0 || cancelled()) {
+    return {
+      result: {
+        urls: working,
+        skipped,
+        httpStatusFiltered: 0,
+      },
+      httpStatusFiltered: 0,
+      validationTotal: 0,
+    };
+  }
+
+  if (sourceId) {
+    updateCrawlProgress(sourceId, config.maxPages, working.length, "running", {
+      phase: "validating",
+      validatedCount: 0,
+      validationTotal: toValidate.length,
+      httpErrorCount: 0,
+    });
+  }
+
+  try {
+    const filtered = await filterUrlsByHttpStatus(working, {
+      userAgent: config.userAgent,
+      signal,
+      concurrency: 12,
+      onProgress: (done, total) => {
+        if (!sourceId || cancelled()) return;
+        updateCrawlProgress(sourceId, config.maxPages, working.length, "running", {
+          phase: "validating",
+          validatedCount: done,
+          validationTotal: total,
+        });
+      },
+    });
+
+    urls.length = 0;
+    urls.push(...filtered.urls);
+    skipped.push(...filtered.skipped);
+
+    return {
+      result: {
+        urls: filtered.urls,
+        skipped,
+        httpStatusFiltered: filtered.httpStatusFiltered,
+      },
+      httpStatusFiltered: filtered.httpStatusFiltered,
+      validationTotal: toValidate.length,
+    };
+  } catch (error) {
+    if (
+      cancelled() ||
+      (error instanceof Error && error.name === "AbortError")
+    ) {
+      return {
+        result: {
+          urls: working,
+          skipped,
+          httpStatusFiltered: 0,
+        },
+        httpStatusFiltered: 0,
+        validationTotal: toValidate.length,
+      };
+    }
+    throw error;
+  }
+}
 
 /**
  * Start URLs plus parent scopes (`/docs/intro` → also `/docs`,
@@ -179,16 +303,33 @@ export async function discoverUrls(
   const urls: DiscoveredUrl[] = [];
   const skipped: SkippedUrl[] = [];
   const registry = new CanonicalUrlRegistry(urls, skipped, config.maxPages);
+  const failedFetchUrls = new Set<string>();
   let cancelled = false;
   const sourceId = options?.sourceId;
 
-  const syncProgress = (status: CrawlProgress["status"] = "running") => {
+  const syncProgress = (
+    status: CrawlProgress["status"] = "running",
+    extra?: Partial<
+      Pick<
+        CrawlProgress,
+        | "phase"
+        | "validatedCount"
+        | "validationTotal"
+        | "httpErrorCount"
+      >
+    >,
+  ) => {
     if (!sourceId) return;
-    updateCrawlProgress(sourceId, config.maxPages, urls.length, status);
+    updateCrawlProgress(sourceId, config.maxPages, urls.length, status, {
+      phase: "discovering",
+      ...extra,
+    });
   };
 
   if (sourceId) {
-    updateCrawlProgress(sourceId, config.maxPages, 0, "running");
+    updateCrawlProgress(sourceId, config.maxPages, 0, "running", {
+      phase: "discovering",
+    });
   }
 
   const scopeStartUrls = crawlScopeStartUrls(config.startUrls);
@@ -235,13 +376,24 @@ export async function discoverUrls(
   syncProgress();
 
   if (config.sitemapOnly && config.enableSitemap && sitemapFound) {
-    if (sourceId) {
-      syncProgress("done");
-    }
-    return {
-      urls: urls.slice(0, config.maxPages),
+    const validated = await validateDiscoveredHttpStatuses({
+      urls,
       skipped,
-    };
+      config,
+      sourceId,
+      signal: options?.signal,
+      cancelled: () => cancelled || Boolean(options?.signal?.aborted),
+    });
+    if (sourceId) {
+      syncProgress("done", {
+        phase: "validating",
+        httpErrorCount: validated.httpStatusFiltered,
+        validatedCount: validated.validationTotal,
+        validationTotal: validated.validationTotal,
+      });
+      setTimeout(() => clearCrawlProgress(sourceId), 60_000);
+    }
+    return validated.result;
   }
 
   const linkGlobs = buildLinkEnqueueGlobs(scopeStartUrls);
@@ -274,7 +426,14 @@ export async function discoverUrls(
           };
         },
       ],
-      async requestHandler({ request, $, enqueueLinks, contentType, body }) {
+      async requestHandler({
+        request,
+        response,
+        $,
+        enqueueLinks,
+        contentType,
+        body,
+      }) {
         if (cancelled || urls.length >= config.maxPages) {
           return;
         }
@@ -287,7 +446,28 @@ export async function discoverUrls(
           return;
         }
 
+        // Crawlee treats many 4xx HTML responses as finished requests (not
+        // failedRequestHandler). Check HTTP status before recording the URL.
+        const statusCode =
+          typeof response?.statusCode === "number" ? response.statusCode : null;
+
+        if (isNonSuccessHttpStatus(statusCode)) {
+          failedFetchUrls.add(request.url);
+          if (request.loadedUrl) failedFetchUrls.add(request.loadedUrl);
+          skipped.push({
+            url: request.url,
+            reason: httpStatusSkipReason(statusCode!),
+          });
+          syncProgress();
+          return;
+        }
+
         const bodyText = typeof body === "string" ? body : "";
+        const canParseHtml = typeof $ === "function";
+        const title = canParseHtml
+          ? $("title").first().text().trim() || undefined
+          : undefined;
+
         const isMarkdown = isMarkdownResponse(contentType, bodyText);
 
         const linkEnqueueOptions = {
@@ -298,8 +478,8 @@ export async function discoverUrls(
         } as const;
 
         if (isMarkdown) {
-          const title = extractFirstMarkdownHeading(bodyText) || undefined;
-          recordUrl(request.url, title);
+          const mdTitle = extractFirstMarkdownHeading(bodyText) || undefined;
+          recordUrl(request.url, mdTitle);
 
           if (urls.length >= config.maxPages) {
             return;
@@ -315,11 +495,6 @@ export async function discoverUrls(
           return;
         }
 
-        const canParseHtml = typeof $ === "function";
-
-        const title = canParseHtml
-          ? $("title").first().text().trim() || undefined
-          : undefined;
         recordUrl(request.url, title);
 
         if (urls.length >= config.maxPages || !canParseHtml) {
@@ -329,10 +504,18 @@ export async function discoverUrls(
         await enqueueLinks(linkEnqueueOptions);
       },
       failedRequestHandler({ request }, error) {
+        const message =
+          error instanceof Error ? error.message : "Request failed";
+        failedFetchUrls.add(request.url);
+        if (request.loadedUrl) failedFetchUrls.add(request.loadedUrl);
+        const statusMatch = message.match(/\b([45]\d\d)\b/);
         skipped.push({
           url: request.url,
-          reason: error instanceof Error ? error.message : "Request failed",
+          reason: statusMatch
+            ? `HTTP ${statusMatch[1]}`
+            : `Request failed: ${message}`,
         });
+        syncProgress();
       },
     },
     crawlConfig,
@@ -366,14 +549,50 @@ export async function discoverUrls(
   } finally {
     options?.signal?.removeEventListener("abort", onAbort);
     if (sourceId) {
-      syncProgress("done");
       activeCrawls.delete(sourceId);
-      setTimeout(() => clearCrawlProgress(sourceId), 60_000);
     }
   }
 
-  return {
-    urls: urls.slice(0, config.maxPages),
+  if (cancelled || options?.signal?.aborted) {
+    if (sourceId) {
+      syncProgress("done");
+      setTimeout(() => clearCrawlProgress(sourceId), 60_000);
+    }
+    return {
+      urls: urls
+        .filter((item) => !failedFetchUrls.has(item.url))
+        .slice(0, config.maxPages),
+      skipped,
+      httpStatusFiltered: 0,
+    };
+  }
+
+  // Drop URLs that failed during link-following (kept in the list until now
+  // so the canonical registry index stayed stable mid-crawl).
+  if (failedFetchUrls.size > 0) {
+    const kept = urls.filter((item) => !failedFetchUrls.has(item.url));
+    urls.length = 0;
+    urls.push(...kept);
+  }
+
+  const validated = await validateDiscoveredHttpStatuses({
+    urls,
     skipped,
-  };
+    config,
+    sourceId,
+    signal: options?.signal,
+    cancelled: () => cancelled || Boolean(options?.signal?.aborted),
+  });
+
+  if (sourceId) {
+    syncProgress("done", {
+      phase: "validating",
+      httpErrorCount: validated.httpStatusFiltered,
+      validatedCount: validated.validationTotal,
+      validationTotal: validated.validationTotal,
+    });
+    setTimeout(() => clearCrawlProgress(sourceId), 60_000);
+  }
+
+  return validated.result;
 }

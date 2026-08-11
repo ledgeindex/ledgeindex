@@ -19,6 +19,7 @@ export const crawlReviewStep = createStep({
       urls: z.array(discoveredUrlSchema),
       skipped: z.array(skippedUrlSchema),
       pagesDiscovered: z.number(),
+      httpStatusFiltered: z.number().optional(),
     }),
   ),
   resumeSchema: mastraWorkflowSchema(
@@ -57,6 +58,7 @@ export const crawlReviewStep = createStep({
         urls: result.urls,
         skipped: result.skipped,
         pagesDiscovered: result.urls.length,
+        httpStatusFiltered: result.httpStatusFiltered ?? 0,
       });
     }
 

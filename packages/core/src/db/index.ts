@@ -21,7 +21,7 @@ let store: Store | null = null;
  * Local FileStore for personal data + cloud Postgres read-through for global
  * sources when LEDGEINDEX_CLOUD_POSTGRES_URI is set.
  *
- * - Public/global: IDs + categories from cloud (read-only)
+ * - Public/global: read + admin writes (categories, displayOrder, delete) via cloud
  * - Personal: FileStore only (including categories)
  */
 class LocalWithCloudGlobalStore implements Store {
@@ -143,6 +143,7 @@ class LocalWithCloudGlobalStore implements Store {
       versionNumber?: number;
       versionLabel?: string | null;
       categories?: string[];
+      displayOrder?: number | null;
     },
   ): Promise<Source | null> {
     // Cloud-owned global sources: persist metadata (incl. categories) to cloud
@@ -153,7 +154,12 @@ class LocalWithCloudGlobalStore implements Store {
     }
     return this.local.updateSource(id, input);
   }
-  deleteSource(id: string): Promise<boolean> {
+  async deleteSource(id: string): Promise<boolean> {
+    // Cloud-owned global sources must be deleted from cloud (same as updateSource).
+    const cloudSource = await this.cloud.getSource(id);
+    if (cloudSource) {
+      return this.cloud.deleteSource(id);
+    }
     return this.local.deleteSource(id);
   }
   createCrawlRun(input: {

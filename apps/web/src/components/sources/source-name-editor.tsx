@@ -124,20 +124,26 @@ export function SourceNameEditor({
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
+              event.stopPropagation();
               void saveName();
             }
             if (event.key === "Escape") {
               event.preventDefault();
+              event.stopPropagation();
               cancelEditing();
             }
           }}
+          onClick={(event) => event.stopPropagation()}
           className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 text-sm font-semibold text-foreground outline-none ring-accent focus:ring-1"
           aria-label="Source title"
         />
         <button
           type="button"
           disabled={saving}
-          onClick={() => void saveName()}
+          onClick={(event) => {
+            event.stopPropagation();
+            void saveName();
+          }}
           className="shrink-0 rounded-md border border-border px-2 py-1 font-mono text-[0.625rem] font-semibold text-foreground hover:bg-surface-raised disabled:opacity-50"
         >
           {saving ? "…" : "Save"}
@@ -145,7 +151,10 @@ export function SourceNameEditor({
         <button
           type="button"
           disabled={saving}
-          onClick={cancelEditing}
+          onClick={(event) => {
+            event.stopPropagation();
+            cancelEditing();
+          }}
           className="shrink-0 rounded-md px-1.5 py-1 font-mono text-[0.625rem] text-muted hover:text-foreground disabled:opacity-50"
         >
           Cancel

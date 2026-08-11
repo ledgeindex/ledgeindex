@@ -9,6 +9,7 @@ import { SourceCategoriesDialog } from "@/components/sources/source-categories-d
 import { SourceRefreshDialog } from "@/components/sources/source-refresh-dialog";
 import { SourceAddStartUrlDialog } from "@/components/sources/source-add-start-url-dialog";
 import { SourceUpdateStartUrlDialog } from "@/components/sources/source-update-start-url-dialog";
+import { SourceSiteProfileDialog } from "@/components/sources/source-site-profile-dialog";
 import {
   SourceRenameDialog,
   type SourceRenameField,
@@ -40,6 +41,7 @@ export function SourceActionsMenu({
   onSlugUpdated,
   onRefreshApplied,
   onStartUrlsUpdated,
+  onSiteProfileUpdated,
   className,
   align = "right",
   /** Hide the ⋮ button — open via `contextPoint` (right-click). */
@@ -56,6 +58,10 @@ export function SourceActionsMenu({
   onSlugUpdated?: (slug: string) => void;
   onRefreshApplied?: () => void;
   onStartUrlsUpdated?: (startUrls: string[]) => void;
+  onSiteProfileUpdated?: (payload: {
+    hasSiteProfile: boolean;
+    siteProfileLensCount: number;
+  }) => void;
   className?: string;
   align?: "left" | "right";
   hideTrigger?: boolean;
@@ -68,6 +74,10 @@ export function SourceActionsMenu({
   const [addStartUrlOpen, setAddStartUrlOpen] = useState(false);
   const [updateStartUrlOpen, setUpdateStartUrlOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileMode, setProfileMode] = useState<"configure" | "view">(
+    "configure",
+  );
   const [renameField, setRenameField] = useState<SourceRenameField | null>(
     null,
   );
@@ -89,7 +99,7 @@ export function SourceActionsMenu({
     (source.scope ?? "personal") === "global" ? "&scope=global" : ""
   }&mode=refresh-select&sourceId=${encodeURIComponent(source.id)}`;
 
-  const open = hideTrigger ? Boolean(contextPoint) : buttonOpen;
+  const open = buttonOpen || Boolean(contextPoint);
   const currentKind = splitSourceCategories(source.categories ?? []).kind;
 
   const closeMenu = useCallback(() => {
@@ -101,6 +111,7 @@ export function SourceActionsMenu({
   const estimateMenuHeight = useCallback(() => {
     return (
       88 +
+      32 +
       (source.chunkCount > 0 && canEditCategories ? 64 : 0) +
       (canEditCategories ? 32 + 64 + 32 + 32 : 0) +
       (onDelete ? 32 : 0)
@@ -237,6 +248,19 @@ export function SourceActionsMenu({
               className="flex w-full items-center px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-50"
             >
               Catalog
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              disabled={!source.startUrl}
+              onClick={() => {
+                closeMenu();
+                setProfileMode(source.hasSiteProfile ? "view" : "configure");
+                setProfileOpen(true);
+              }}
+              className="flex w-full items-center px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {source.hasSiteProfile ? "View profile" : "Add profile"}
             </button>
             {canEditCategories && source.chunkCount > 0 ? (
               <button
@@ -458,6 +482,14 @@ export function SourceActionsMenu({
         sourceName={source.name}
         open={catalogOpen}
         onOpenChange={setCatalogOpen}
+      />
+
+      <SourceSiteProfileDialog
+        source={source}
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        initialMode={profileMode}
+        onSaved={onSiteProfileUpdated}
       />
 
       {canEditCategories ? (

@@ -21,6 +21,7 @@ type ChatMessage = {
 };
 
 const SUGGESTIONS = [
+  "Deselect page not found / error pages",
   "Keep only API reference pages",
   "Deselect changelog and blog posts",
   "Select pages about authentication",

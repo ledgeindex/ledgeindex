@@ -18,11 +18,11 @@ export const DASHBOARD_VIEW_STORAGE_KEY = "knowledgeindex:dashboard-view";
 export const DASHBOARD_SCOPE_STORAGE_KEY = "knowledgeindex:dashboard-scope";
 
 function readStoredViewMode(): DashboardViewMode {
-  if (typeof window === "undefined") return "grid";
+  if (typeof window === "undefined") return "list";
   const stored =
     window.localStorage.getItem(DASHBOARD_VIEW_STORAGE_KEY) ??
     window.localStorage.getItem("ledgeindex:dashboard-view");
-  return stored === "list" ? "list" : "grid";
+  return stored === "grid" ? "grid" : "list";
 }
 
 function readStoredScope(): KnowledgeSetScope {
@@ -54,7 +54,7 @@ export function DashboardToolbarProvider({ children }: { children: ReactNode }) 
   const router = useRouter();
   const searchParams = useSearchParams();
   const scopeParam = searchParams.get("scope");
-  const [viewMode, setViewModeState] = useState<DashboardViewMode>("grid");
+  const [viewMode, setViewModeState] = useState<DashboardViewMode>("list");
   const [scope, setScopeState] = useState<KnowledgeSetScope>("personal");
   const [ready, setReady] = useState(false);
 

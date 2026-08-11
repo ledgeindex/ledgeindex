@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-08-10T22:40:06.775Z",
+  "generatedAt": "2026-08-11T17:35:00.010Z",
   "source": "top-typescript-docs.json",
   "excludeSources": [
     "docs-exclude-ai.patterns.json",
@@ -12095,20 +12095,14 @@
           "kind": "reference",
           "url": "https://bun.com/reference",
           "label": "Reference"
-        },
-        {
-          "kind": "other",
-          "url": "https://bun.com/blog",
-          "label": "Blog"
         }
       ],
       "startUrls": [
         "https://bun.com/docs/guides",
-        "https://bun.com/reference",
-        "https://bun.com/blog"
+        "https://bun.com/reference"
       ],
       "pathsStatus": "discovered",
-      "pathsReason": "observe() primary-nav section siblings (3)",
+      "pathsReason": "Approved in Source updater (manual path review)",
       "excludePatterns": [],
       "patternsAreRegex": false,
       "versions": [

@@ -68,9 +68,13 @@ export function toSourceSummary(source: Source): SourceSummary {
     versionNumber,
     versionLabel,
     categories: source.categories ?? [],
+    displayOrder:
+      typeof source.displayOrder === "number" ? source.displayOrder : null,
     versions: [],
     excludePatterns: [...(source.config.excludePatterns ?? [])],
     includePatterns: [...(source.config.includePatterns ?? [])],
+    hasSiteProfile: Boolean(source.sourceMetadata?.siteProfile?.lenses?.length),
+    siteProfileLensCount: source.sourceMetadata?.siteProfile?.lenses?.length ?? 0,
   };
 }
 

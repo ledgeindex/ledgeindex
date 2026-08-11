@@ -5,6 +5,7 @@ import { useMemo, useState } from "react";
 import { CachedRemoteImage } from "@/components/sources/cached-remote-image";
 import { SourceActionsMenu } from "@/components/sources/source-actions-menu";
 import { SourceCategoryBadges } from "@/components/sources/source-category-filter";
+import { SourceProfileBadge } from "@/components/sources/source-profile-badge";
 import { SourceSlugEditor } from "@/components/sources/source-slug-editor";
 import { SourceNameEditor } from "@/components/sources/source-name-editor";
 import {
@@ -16,6 +17,7 @@ import {
   isPersonalCloudSource,
   SourceCloudBadge,
 } from "@/components/sources/source-cloud-badge";
+import { SourceSiteProfileDialog } from "@/components/sources/source-site-profile-dialog";
 import { cn } from "@/lib/utils";
 import type { SourceSummary } from "@/lib/ledgeindex-api";
 
@@ -69,6 +71,7 @@ export function SourceCard({
   onNameUpdated,
   onCategoriesUpdated,
   onRefreshApplied,
+  onSiteProfileUpdated,
 }: {
   source: SourceSummary;
   highlighted?: boolean;
@@ -81,8 +84,13 @@ export function SourceCard({
   onNameUpdated?: (sourceId: string, name: string) => void;
   onCategoriesUpdated?: (sourceId: string, categories: string[]) => void;
   onRefreshApplied?: () => void;
+  onSiteProfileUpdated?: (
+    sourceId: string,
+    payload: { hasSiteProfile: boolean; siteProfileLensCount: number },
+  ) => void;
 }) {
   const [selectedVersionId, setSelectedVersionId] = useState(source.id);
+  const [profileOpen, setProfileOpen] = useState(false);
   const activeSource = useMemo(
     () => resolveSourceVersion(source, selectedVersionId),
     [source, selectedVersionId],
@@ -159,6 +167,12 @@ export function SourceCard({
                 value={activeSource.id}
                 onChange={setSelectedVersionId}
               />
+              {activeSource.hasSiteProfile ? (
+                <SourceProfileBadge
+                  lensCount={activeSource.siteProfileLensCount}
+                  onClick={() => setProfileOpen(true)}
+                />
+              ) : null}
               <p className="truncate font-mono text-[0.625rem] text-muted/80">
                 {label}
               </p>
@@ -198,9 +212,22 @@ export function SourceCard({
             onNameUpdated={(name) => onNameUpdated?.(activeSource.id, name)}
             onSlugUpdated={(slug) => onSlugUpdated?.(activeSource.id, slug)}
             onRefreshApplied={onRefreshApplied}
+            onSiteProfileUpdated={(payload) =>
+              onSiteProfileUpdated?.(activeSource.id, payload)
+            }
           />
         </div>
       </div>
+
+      <SourceSiteProfileDialog
+        source={activeSource}
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        initialMode="view"
+        onSaved={(payload) =>
+          onSiteProfileUpdated?.(activeSource.id, payload)
+        }
+      />
     </article>
   );
 }

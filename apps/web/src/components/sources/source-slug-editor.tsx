@@ -120,13 +120,16 @@ export function SourceSlugEditor({
           onKeyDown={(event) => {
             if (event.key === "Enter") {
               event.preventDefault();
+              event.stopPropagation();
               void saveSlug();
             }
             if (event.key === "Escape") {
               event.preventDefault();
+              event.stopPropagation();
               cancelEditing();
             }
           }}
+          onClick={(event) => event.stopPropagation()}
           className="min-w-0 flex-1 rounded-md border border-border bg-background px-2 py-1 font-mono text-[0.6875rem] text-foreground outline-none ring-accent focus:ring-1"
           aria-label="Source slug"
           spellCheck={false}
@@ -134,7 +137,10 @@ export function SourceSlugEditor({
         <button
           type="button"
           disabled={saving}
-          onClick={() => void saveSlug()}
+          onClick={(event) => {
+            event.stopPropagation();
+            void saveSlug();
+          }}
           className="shrink-0 rounded-md border border-border px-2 py-1 font-mono text-[0.625rem] font-semibold text-foreground hover:bg-surface-raised disabled:opacity-50"
         >
           {saving ? "…" : "Save"}
@@ -142,7 +148,10 @@ export function SourceSlugEditor({
         <button
           type="button"
           disabled={saving}
-          onClick={cancelEditing}
+          onClick={(event) => {
+            event.stopPropagation();
+            cancelEditing();
+          }}
           className="shrink-0 rounded-md px-1.5 py-1 font-mono text-[0.625rem] text-muted hover:text-foreground disabled:opacity-50"
         >
           Cancel

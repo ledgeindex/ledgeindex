@@ -77,6 +77,11 @@ const MIGRATION_CHECKS: Array<{
     columns: ["categories"],
   },
   {
+    id: "013_source_display_order",
+    description: "Admin catalog display order on sources",
+    columns: ["display_order"],
+  },
+  {
     id: "012_source_catalogs",
     description: "Durable metadata catalog per source",
     tables: ["source_catalogs"],

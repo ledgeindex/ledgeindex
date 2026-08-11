@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { RefreshCw, Square } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import type { KnowledgeSetScope } from "@/components/sources/knowledge-set-scope-toggle";
@@ -21,6 +22,7 @@ import {
   syncDesktopApiBaseForScope,
 } from "@/lib/desktop-api-routing";
 import { getDevProjectId, setDevProjectId } from "@/lib/dev-project";
+import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
 import { publicAssetUrl } from "@/lib/public-asset-url";
 import { useHostingCapabilities } from "@/lib/use-hosting-capabilities";
 import { cn } from "@/lib/utils";
@@ -966,6 +968,69 @@ function catalogSourceName(entry: TypescriptDocsCatalogEntry): string {
   return entry.package;
 }
 
+/** Open the normal Add source flow, prefilled with this package's docs URL. */
+function catalogWebCrawlHref(
+  entry: TypescriptDocsCatalogEntry,
+  scope: KnowledgeSetScope,
+): string | null {
+  const docsUrl = effectiveCatalogDocsUrl(entry);
+  if (!docsUrl) return null;
+  const params = new URLSearchParams({
+    url: docsUrl,
+  });
+  if (scope === "global") params.set("scope", "global");
+  if (entry.excludePatterns.length > 0) {
+    params.set("excludes", entry.excludePatterns.join("\n"));
+  }
+  if (entry.patternsAreRegex) {
+    params.set("patternsAreRegex", "1");
+  }
+  return `/sources/web-crawl?${params.toString()}`;
+}
+
+/**
+ * Package name opens Add source (new tab on web, in-app on desktop).
+ * Electron denies target=_blank into a useful window — navigate instead.
+ */
+function CatalogPackageName({
+  name,
+  href,
+  className,
+}: {
+  name: string;
+  href: string | null;
+  className?: string;
+}) {
+  const router = useRouter();
+  const isDesktop = Boolean(getLedgeIndexDesktop());
+
+  if (!href) {
+    return <p className={className}>{name}</p>;
+  }
+
+  return (
+    <a
+      href={href}
+      target={isDesktop ? undefined : "_blank"}
+      rel={isDesktop ? undefined : "noreferrer"}
+      className={cn(className, "hover:text-accent hover:underline")}
+      title={
+        isDesktop
+          ? "Open Add source with this docs URL"
+          : "Open Add source in a new tab with this docs URL"
+      }
+      onClick={(event) => {
+        event.stopPropagation();
+        if (!isDesktop) return;
+        event.preventDefault();
+        router.push(href);
+      }}
+    >
+      {name}
+    </a>
+  );
+}
+
 function catalogCrawlConfig(startUrls: string[], entry: TypescriptDocsCatalogEntry): WebCrawlConfig {
   return {
     startUrls,
@@ -1062,6 +1127,84 @@ function normalizePathKey(url: string): string {
   return url.replace(/\/+$/, "").toLowerCase();
 }
 
+type CatalogIndexState = {
+  sourceId: string | null;
+  /** Normalized catalog path URLs that appear on the matched source's startUrls. */
+  indexedPathKeys: Set<string>;
+  pathTotal: number;
+  pageCount: number;
+  chunkCount: number;
+  indexedAt: string | null;
+};
+
+function sourceStartUrlKeys(source: SourceSummary): string[] {
+  const urls =
+    source.startUrls?.length > 0
+      ? source.startUrls
+      : source.startUrl
+        ? [source.startUrl]
+        : [];
+  return urls.filter(Boolean).map(normalizePathKey);
+}
+
+/** Match existing sources → catalog packages (by name, then startUrl overlap). */
+function buildCatalogIndexByPackage(
+  sources: SourceSummary[],
+  entries: TypescriptDocsCatalogEntry[],
+): Map<string, CatalogIndexState> {
+  const byName = new Map<string, SourceSummary>();
+  for (const source of sources) {
+    const key = source.name.trim().toLowerCase();
+    if (!key) continue;
+    const prev = byName.get(key);
+    // Prefer the one that actually has pages indexed.
+    if (!prev || (source.pageCount ?? 0) > (prev.pageCount ?? 0)) {
+      byName.set(key, source);
+    }
+  }
+
+  const map = new Map<string, CatalogIndexState>();
+  for (const entry of entries) {
+    const badges = catalogPathBadges(entry);
+    const badgeKeys = badges.map((badge) => normalizePathKey(badge.url));
+    const badgeKeySet = new Set(badgeKeys);
+
+    let match = byName.get(entry.package.trim().toLowerCase()) ?? null;
+    if (!match && badgeKeySet.size > 0) {
+      let best: SourceSummary | null = null;
+      let bestScore = 0;
+      for (const source of sources) {
+        let score = 0;
+        for (const key of sourceStartUrlKeys(source)) {
+          if (badgeKeySet.has(key)) score += 1;
+        }
+        if (score > bestScore) {
+          bestScore = score;
+          best = source;
+        }
+      }
+      if (bestScore > 0) match = best;
+    }
+
+    const indexedPathKeys = new Set<string>();
+    if (match) {
+      for (const key of sourceStartUrlKeys(match)) {
+        if (badgeKeySet.has(key)) indexedPathKeys.add(key);
+      }
+    }
+
+    map.set(entry.package, {
+      sourceId: match?.id ?? null,
+      indexedPathKeys,
+      pathTotal: badgeKeys.length,
+      pageCount: match?.pageCount ?? 0,
+      chunkCount: match?.chunkCount ?? 0,
+      indexedAt: match?.indexedAt ?? null,
+    });
+  }
+  return map;
+}
+
 /** Always includes main docs as a badge when present, then discovered paths / API refs. */
 function catalogPathBadges(entry: TypescriptDocsCatalogEntry): CatalogPathBadge[] {
   const out: CatalogPathBadge[] = [];
@@ -1104,6 +1247,7 @@ function CatalogPathBadges({
   selectedUrls,
   onToggleUrl,
   allowDeselectMain = false,
+  indexedUrls,
 }: {
   entry: TypescriptDocsCatalogEntry;
   compact?: boolean;
@@ -1112,10 +1256,21 @@ function CatalogPathBadges({
   onToggleUrl?: (url: string, next: boolean) => void;
   /** When true (paths-only crawl), main docs can be unchecked. */
   allowDeselectMain?: boolean;
+  /** Normalized (or raw) start URLs already on an indexed source. */
+  indexedUrls?: Set<string> | null;
 }) {
   const badges = catalogPathBadges(entry);
   if (badges.length === 0) return null;
   const selectable = Boolean(selectedUrls && onToggleUrl);
+
+  function isIndexed(url: string): boolean {
+    if (!indexedUrls || indexedUrls.size === 0) return false;
+    const key = normalizePathKey(url);
+    if (indexedUrls.has(key)) return true;
+    return [...indexedUrls].some(
+      (value) => normalizePathKey(value) === key,
+    );
+  }
 
   return (
     <div className={cn("flex flex-wrap gap-1", compact ? "mt-1" : "mt-0.5")}>
@@ -1127,6 +1282,7 @@ function CatalogPathBadges({
           : selectedUrls
             ? [...selectedUrls].some((url) => normalizePathKey(url) === key)
             : false;
+        const indexed = isIndexed(badge.url);
 
         if (selectable) {
           return (
@@ -1134,11 +1290,15 @@ function CatalogPathBadges({
               key={`${badge.kind}:${badge.url}`}
               className={cn(
                 "inline-flex max-w-full items-center gap-1.5 truncate rounded-md border px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold transition-colors",
-                badge.primary || checked
-                  ? "border-accent/40 bg-accent/10 text-accent"
-                  : "border-border bg-surface-alt text-muted hover:border-border/80 hover:text-foreground",
+                indexed
+                  ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+                  : badge.primary || checked
+                    ? "border-accent/40 bg-accent/10 text-accent"
+                    : "border-border bg-surface-alt text-muted hover:border-border/80 hover:text-foreground",
                 compact && "gap-1",
               )}
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
             >
               <input
                 type="checkbox"
@@ -1157,21 +1317,13 @@ function CatalogPathBadges({
                     : "Include this path in the update"
                 }
               />
-              <button
-                type="button"
-                className="inline-flex min-w-0 items-center gap-1 truncate text-left hover:underline"
-                disabled={lockedMain}
-                title={
-                  lockedMain
-                    ? "Main docs path is always included"
-                    : checked
-                      ? "Click to exclude from update"
-                      : "Click to include in update"
-                }
-                onClick={() => {
-                  if (lockedMain) return;
-                  onToggleUrl?.(badge.url, !checked);
-                }}
+              <a
+                href={badge.url}
+                target="_blank"
+                rel="noreferrer"
+                title={badge.url}
+                className="inline-flex min-w-0 items-center gap-1 truncate hover:underline"
+                onClick={(event) => event.stopPropagation()}
               >
                 <span className="shrink-0 tracking-[0.06em] uppercase">
                   {badge.kind}
@@ -1182,16 +1334,9 @@ function CatalogPathBadges({
                     ? formatStartPathLabel(badge.url)
                     : badge.label || formatStartPathLabel(badge.url)}
                 </span>
-              </button>
-              <a
-                href={badge.url}
-                target="_blank"
-                rel="noreferrer"
-                title={`Open ${badge.url}`}
-                className="shrink-0 text-muted hover:text-accent"
-                onClick={(event) => event.stopPropagation()}
-              >
-                ↗
+                <span className="shrink-0 opacity-70" aria-hidden>
+                  ↗
+                </span>
               </a>
             </div>
           );
@@ -1203,12 +1348,18 @@ function CatalogPathBadges({
             href={badge.url}
             target="_blank"
             rel="noreferrer"
-            title={badge.url}
+            title={
+              indexed
+                ? `${badge.url} · already indexed`
+                : badge.url
+            }
             className={cn(
               "inline-flex max-w-full items-center gap-1 truncate rounded-md border px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold transition-colors hover:border-accent/50",
-              badge.primary
-                ? "border-accent/40 bg-accent/10 text-accent"
-                : "border-border bg-surface-alt text-muted hover:text-foreground",
+              indexed
+                ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300"
+                : badge.primary
+                  ? "border-accent/40 bg-accent/10 text-accent"
+                  : "border-border bg-surface-alt text-muted hover:text-foreground",
             )}
           >
             <span className="shrink-0 tracking-[0.06em] uppercase">
@@ -1235,6 +1386,8 @@ function CatalogDetailPanel({
   allowDeselectMain = false,
   canPersistPaths,
   onPathsSaved,
+  indexState,
+  scope,
 }: {
   entry: TypescriptDocsCatalogEntry | null;
   rankMode: CatalogRankMode;
@@ -1244,6 +1397,8 @@ function CatalogDetailPanel({
   allowDeselectMain?: boolean;
   canPersistPaths: boolean;
   onPathsSaved: (next: TypescriptDocsCatalogEntry) => void;
+  indexState?: CatalogIndexState;
+  scope: KnowledgeSetScope;
 }) {
   if (!entry) {
     return (
@@ -1265,21 +1420,26 @@ function CatalogDetailPanel({
       (entry.docs ?? "").replace(/\/+$/, "").toLowerCase()
       ? entry.homepage
       : null;
+  const configureHref = catalogWebCrawlHref(entry, scope);
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto overscroll-contain rounded-xl border border-border bg-card-solid p-4">
       <div className="shrink-0">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-semibold text-foreground">
-              {entry.package}
-            </p>
+            <CatalogPackageName
+              name={entry.package}
+              href={configureHref}
+              className="text-sm font-semibold text-foreground"
+            />
             <p className="mt-0.5 text-xs text-muted">
               {categoryLabel(entry.category)}
               {displayRank != null ? ` · #${displayRank}` : ""}
             </p>
           </div>
-          <CatalogMetricChips entry={entry} rankMode={rankMode} layout="stack" />
+          <div className="flex shrink-0 flex-col items-end gap-1.5">
+            <CatalogMetricChips entry={entry} rankMode={rankMode} layout="stack" />
+          </div>
         </div>
         {entry.description ? (
           <p className="mt-2 text-xs leading-5 text-muted-strong">
@@ -1358,6 +1518,7 @@ function CatalogDetailPanel({
             selectedUrls={selectedUrls ?? null}
             onToggleUrl={onToggleUrl}
             allowDeselectMain={allowDeselectMain}
+            indexedUrls={indexState?.indexedPathKeys ?? null}
           />
         ) : (
           <p className="text-xs text-muted">
@@ -1682,6 +1843,11 @@ export default function AdminSourceUpdaterPage() {
     catalogTop50Only,
   ]);
 
+  const catalogIndexByPackage = useMemo(() => {
+    if (!sources || !catalog) return new Map<string, CatalogIndexState>();
+    return buildCatalogIndexByPackage(sources, catalog.entries);
+  }, [sources, catalog]);
+
   const catalogTop50PresentCount = useMemo(() => {
     if (!catalog) return 0;
     return catalog.entries.filter((entry) =>
@@ -1806,25 +1972,18 @@ export default function AdminSourceUpdaterPage() {
         const pkgBit = catalogCrawlPackage
           ? `${catalogCrawlPackage} · ${queueIndex + 1} / ${queueTotal}`
           : `${queueIndex + 1} / ${queueTotal}`;
-        const crawlNode = catalogIngestSnapshot?.pipeline?.find(
-          (node) => node.id === "crawl",
-        );
-        const runningNode = catalogIngestSnapshot?.pipeline?.find(
-          (node) => node.status === "running",
-        );
+        const runningNode = pipeline.find((node) => node.status === "running");
         if (
-          typeof catalogCrawlPages === "number" &&
-          (!catalogIngestSnapshot ||
-            crawlNode?.status === "running" ||
-            crawlNode?.status === "pending")
+          runningNode?.id === "crawl" &&
+          typeof catalogCrawlPages === "number"
         ) {
           return `Updating ${pkgBit} · ${catalogCrawlPages} pages`;
         }
         if (runningNode?.detail) {
           return `${runningNode.label}: ${runningNode.detail} · ${pkgBit}`;
         }
-        if (catalogIngestSnapshot?.suspendedStep) {
-          return `Updating · ${pkgBit}`;
+        if (runningNode) {
+          return `${runningNode.label} · ${pkgBit}`;
         }
         return `Updating ${pkgBit}`;
       }
@@ -1864,8 +2023,8 @@ export default function AdminSourceUpdaterPage() {
     catalogCrawlMode,
     catalogCrawlPackage,
     catalogCrawlPages,
-    catalogIngestSnapshot,
     focusSource,
+    pipeline,
     queueIndex,
     queueTotal,
     running,
@@ -2228,6 +2387,63 @@ export default function AdminSourceUpdaterPage() {
     stopCatalogIngestPolling();
   }
 
+  /**
+   * Resume can hang after store already marked the run success (UI all-green).
+   * Race the resume HTTP call against status polls + Stop so we always unblock.
+   */
+  async function awaitCatalogResume(
+    sourceId: string,
+    resumePromise: Promise<{ snapshot: IngestPipelineSnapshot }>,
+  ): Promise<IngestPipelineSnapshot> {
+    return await new Promise<IngestPipelineSnapshot>((resolve, reject) => {
+      let settled = false;
+      const finish = (fn: () => void) => {
+        if (settled) return;
+        settled = true;
+        window.clearInterval(interval);
+        fn();
+      };
+
+      const interval = window.setInterval(() => {
+        void (async () => {
+          if (abortRef.current) {
+            finish(() => reject(new Error("Cancelled")));
+            return;
+          }
+          const runId = catalogIngestRunIdRef.current;
+          if (!runId) return;
+          try {
+            const { snapshot } = await getIngestWorkflowStatus(sourceId, runId);
+            if (!snapshot) return;
+            setCatalogIngestSnapshot(snapshot);
+            if (snapshot.status === "success") {
+              finish(() => resolve(snapshot));
+              return;
+            }
+            if (snapshot.status === "failed") {
+              finish(() =>
+                reject(new Error(snapshot.error || "Ingest failed")),
+              );
+            }
+          } catch {
+            // ignore transient status errors
+          }
+        })();
+      }, 500);
+
+      void resumePromise.then(
+        ({ snapshot }) => {
+          finish(() => resolve(snapshot));
+        },
+        (error) => {
+          finish(() =>
+            reject(error instanceof Error ? error : new Error(String(error))),
+          );
+        },
+      );
+    });
+  }
+
   function resolveCatalogHosting(): SourceHosting {
     if (scope === "global" || !hostingCaps.localAvailable) return "cloud";
     return hostingCaps.default;
@@ -2414,13 +2630,12 @@ export default function AdminSourceUpdaterPage() {
           if (urls.length === 0) {
             throw new Error("No pages discovered for crawl");
           }
-          const { snapshot: next } = await resumeIngestWorkflow(
+          const next = await awaitCatalogResume(
             sourceId,
-            snap.runId,
-            {
+            resumeIngestWorkflow(sourceId, snap.runId, {
               step: "crawl-review-step",
               resumeData: { selectedUrls: urls, enrichExamples: false },
-            },
+            }),
           );
           snap = next;
           catalogIngestRunIdRef.current = snap.runId;
@@ -2429,13 +2644,12 @@ export default function AdminSourceUpdaterPage() {
         }
 
         if (snap.suspendedStep === "parse-review-step") {
-          const { snapshot: next } = await resumeIngestWorkflow(
+          const next = await awaitCatalogResume(
             sourceId,
-            snap.runId,
-            {
+            resumeIngestWorkflow(sourceId, snap.runId, {
               step: "parse-review-step",
               resumeData: { confirmed: true, enrichExamples: false },
-            },
+            }),
           );
           snap = next;
           catalogIngestRunIdRef.current = snap.runId;
@@ -2444,18 +2658,34 @@ export default function AdminSourceUpdaterPage() {
         }
 
         if (snap.suspendedStep === "enrich-step") {
-          const { snapshot: next } = await resumeIngestWorkflow(
+          const next = await awaitCatalogResume(
             sourceId,
-            snap.runId,
-            {
+            resumeIngestWorkflow(sourceId, snap.runId, {
               step: "enrich-step",
               resumeData: { confirmed: true },
-            },
+            }),
           );
           snap = next;
           catalogIngestRunIdRef.current = snap.runId;
           setCatalogIngestSnapshot(snap);
           continue;
+        }
+
+        // Running but not suspended yet (rare mid-poll) — wait for success/suspend.
+        if (snap.status === "running") {
+          await new Promise((r) => window.setTimeout(r, 400));
+          if (abortRef.current) throw new Error("Cancelled");
+          const runId = catalogIngestRunIdRef.current ?? snap.runId;
+          const { snapshot: live } = await getIngestWorkflowStatus(
+            sourceId,
+            runId,
+          );
+          if (live) {
+            snap = live;
+            catalogIngestRunIdRef.current = snap.runId;
+            setCatalogIngestSnapshot(snap);
+            continue;
+          }
         }
 
         throw new Error(
@@ -3166,6 +3396,12 @@ export default function AdminSourceUpdaterPage() {
                     const crawlStatus = catalogRowStatus[entry.package] ?? "idle";
                     const crawlError = catalogRowError[entry.package];
                     const statusLabel = catalogRowStatusLabel(crawlStatus);
+                    const indexState = catalogIndexByPackage.get(entry.package);
+                    const isActivelyUpdating =
+                      running &&
+                      runningMode === "catalog-crawl" &&
+                      catalogCrawlPackage === entry.package;
+                    const configureHref = catalogWebCrawlHref(entry, scope);
                     const curatedRank = curatedTopDocsRank(entry.package);
                     const rankLabel = String(
                       catalogTop50Only && curatedRank != null
@@ -3181,7 +3417,9 @@ export default function AdminSourceUpdaterPage() {
                         <div
                           className={cn(
                             "flex items-center gap-3 px-3 py-2.5 transition-colors",
-                            focused && "bg-accent/8",
+                            isActivelyUpdating
+                              ? "bg-accent/12 ring-1 ring-inset ring-accent/30"
+                              : focused && "bg-accent/8",
                           )}
                         >
                           <input
@@ -3198,81 +3436,105 @@ export default function AdminSourceUpdaterPage() {
                           >
                             {rankLabel}
                           </span>
-                          <button
-                            type="button"
-                            className="flex min-w-0 flex-1 items-start gap-3 text-left"
-                            onClick={() =>
-                              setFocusCatalogPackage(entry.package)
-                            }
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
-                                <p className="truncate text-sm font-medium text-foreground">
-                                  {entry.package}
-                                </p>
-                                {statusLabel ? (
-                                  <span
-                                    className={cn(
-                                      "rounded-md border px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] uppercase",
-                                      crawlStatus === "updated"
-                                        ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                        : crawlStatus === "error"
-                                          ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
-                                          : crawlStatus === "running"
-                                            ? "border-accent/35 bg-accent/10 text-accent"
-                                            : "border-border bg-surface-alt text-muted",
-                                    )}
-                                    title={crawlError || undefined}
-                                  >
-                                    {statusLabel}
-                                  </span>
-                                ) : null}
-                                <span className="rounded-md border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-muted uppercase">
-                                  {categoryLabel(entry.category)}
-                                </span>
-                                {(() => {
-                                  const bucket = catalogPathsBucket(entry);
-                                  return (
+                          <div className="flex min-w-0 flex-1 flex-col gap-0">
+                            <div
+                              role="button"
+                              tabIndex={0}
+                              className="flex min-w-0 cursor-pointer items-start gap-3 text-left"
+                              onClick={() =>
+                                setFocusCatalogPackage(entry.package)
+                              }
+                              onKeyDown={(event) => {
+                                if (event.key === "Enter" || event.key === " ") {
+                                  event.preventDefault();
+                                  setFocusCatalogPackage(entry.package);
+                                }
+                              }}
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                                  <CatalogPackageName
+                                    name={entry.package}
+                                    href={configureHref}
+                                    className="truncate text-sm font-medium text-foreground"
+                                  />
+                                  {statusLabel ? (
                                     <span
                                       className={cn(
                                         "rounded-md border px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] uppercase",
-                                        bucket === "discovered"
+                                        crawlStatus === "updated"
                                           ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300"
-                                          : bucket === "uncertain"
+                                          : crawlStatus === "error"
+                                            ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
+                                            : crawlStatus === "running"
+                                              ? "border-accent/35 bg-accent/10 text-accent"
+                                              : "border-border bg-surface-alt text-muted",
+                                      )}
+                                      title={crawlError || undefined}
+                                    >
+                                      {statusLabel}
+                                    </span>
+                                  ) : null}
+                                  <span className="rounded-md border border-border bg-surface-alt px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-muted uppercase">
+                                    {categoryLabel(entry.category)}
+                                  </span>
+                                  {(() => {
+                                    // Path pills already show discovery success — only badge problems.
+                                    const bucket = catalogPathsBucket(entry);
+                                    if (bucket === "discovered") return null;
+                                    return (
+                                      <span
+                                        className={cn(
+                                          "rounded-md border px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] uppercase",
+                                          bucket === "uncertain"
                                             ? "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300"
                                             : bucket === "failed"
                                               ? "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300"
                                               : "border-border bg-surface-alt text-muted",
-                                      )}
-                                      title={entry.pathsReason || undefined}
-                                    >
-                                      paths:{bucket}
+                                        )}
+                                        title={entry.pathsReason || undefined}
+                                      >
+                                        paths:{bucket}
+                                      </span>
+                                    );
+                                  })()}
+                                  {!isCatalogEntryCrawlReady(entry) ? (
+                                    <span className="rounded-md border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-amber-800 uppercase dark:text-amber-300">
+                                      docs:{entry.docsStatus || "missing"}
                                     </span>
-                                  );
-                                })()}
-                                {!isCatalogEntryCrawlReady(entry) ? (
-                                  <span className="rounded-md border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-amber-800 uppercase dark:text-amber-300">
-                                    docs:{entry.docsStatus || "missing"}
-                                  </span>
-                                ) : null}
-                                <CatalogExcludeBadge entry={entry} />
-                                <CatalogVersionsBadge entry={entry} />
-                              </div>
-                              <p className="mt-0.5 truncate font-mono text-[0.625rem] text-muted">
-                                {entry.docs
-                                  ? formatUrlLabel(entry.docs)
-                                  : "docs pending"}
-                              </p>
-                              {crawlError ? (
-                                <p className="mt-0.5 truncate text-[0.625rem] text-red-600 dark:text-red-300">
-                                  {crawlError}
+                                  ) : null}
+                                  <CatalogExcludeBadge entry={entry} />
+                                  <CatalogVersionsBadge entry={entry} />
+                                </div>
+                                <p className="mt-0.5 truncate font-mono text-[0.625rem] text-muted">
+                                  {entry.docs
+                                    ? formatUrlLabel(entry.docs)
+                                    : "docs pending"}
                                 </p>
-                              ) : null}
+                                {crawlError ? (
+                                  <p className="mt-0.5 truncate text-[0.625rem] text-red-600 dark:text-red-300">
+                                    {crawlError}
+                                  </p>
+                                ) : null}
+                              </div>
+                              <CatalogMetricChips
+                                entry={entry}
+                                rankMode={catalogRankMode}
+                                layout="stack"
+                              />
+                            </div>
+                            <div
+                              className="min-w-0"
+                              onClick={(event) => event.stopPropagation()}
+                            >
                               <CatalogPathBadges
                                 entry={entry}
                                 compact
                                 allowDeselectMain={
                                   catalogCrawlMode === "paths-only"
+                                }
+                                indexedUrls={
+                                  indexState?.indexedPathKeys ?? null
                                 }
                                 selectedUrls={
                                   selectedCatalog.has(entry.package)
@@ -3308,12 +3570,7 @@ export default function AdminSourceUpdaterPage() {
                                 </div>
                               ) : null}
                             </div>
-                            <CatalogMetricChips
-                              entry={entry}
-                              rankMode={catalogRankMode}
-                              layout="stack"
-                            />
-                          </button>
+                          </div>
                         </div>
                       </li>
                     );
@@ -3326,12 +3583,18 @@ export default function AdminSourceUpdaterPage() {
               <CatalogDetailPanel
                 entry={focusCatalogEntry}
                 rankMode={catalogRankMode}
+                scope={scope}
                 displayRank={
                   focusCatalogEntry
                     ? (catalogDisplayRankByPackage.get(
                         focusCatalogEntry.package,
                       ) ?? null)
                     : null
+                }
+                indexState={
+                  focusCatalogEntry
+                    ? catalogIndexByPackage.get(focusCatalogEntry.package)
+                    : undefined
                 }
                 selectedUrls={
                   focusCatalogEntry

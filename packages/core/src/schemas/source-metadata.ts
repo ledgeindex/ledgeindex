@@ -59,6 +59,31 @@ export const docsIdentitySchema = z.object({
   paths: z.array(docsIdentityPathSchema).max(48),
 });
 
+/** Multi-lens research profile attached to a source (library / API / service story). */
+const SITE_PROFILE_LENS_SOURCE_MAX = 80;
+
+export const siteProfileLensSourceSchema = z.object({
+  urls: z
+    .array(z.string())
+    .transform((urls) => urls.slice(0, SITE_PROFILE_LENS_SOURCE_MAX))
+    .pipe(z.array(z.string()).max(SITE_PROFILE_LENS_SOURCE_MAX)),
+  titles: z
+    .array(z.string())
+    .transform((titles) => titles.slice(0, SITE_PROFILE_LENS_SOURCE_MAX))
+    .pipe(z.array(z.string()).max(SITE_PROFILE_LENS_SOURCE_MAX)),
+  pickSummary: z.string().max(4000).optional(),
+});
+
+export const siteProfileSchema = z.object({
+  rootUrl: z.string().min(1),
+  lenses: z.array(z.string().min(1)).min(1).max(20),
+  profile: z.record(z.string(), z.unknown()),
+  lensSources: z.record(z.string(), siteProfileLensSourceSchema).optional(),
+  generatedAt: z.string().optional(),
+  updatedAt: z.string().optional(),
+  runId: z.string().optional(),
+});
+
 export const sourceMetadataSchema = z.object({
   sourceType: sourceContentTypeSchema,
   sourceTypeConfidence: z.number().min(0).max(1),
@@ -69,6 +94,8 @@ export const sourceMetadataSchema = z.object({
   llmsTxt: llmsTxtCaptureSchema.nullable().optional(),
   /** Profile of the indexed docs start URL (lens: crawl → pick context → synthesize). */
   docsIdentity: docsIdentitySchema.optional(),
+  /** Multi-lens site profile (library / framework / API / service). */
+  siteProfile: siteProfileSchema.optional(),
 });
 
 export type SourceContentType = z.infer<typeof sourceContentTypeSchema>;
@@ -79,6 +106,8 @@ export type DocsIdentityPath = z.infer<typeof docsIdentityPathSchema>;
 export type DocsIdentityKind = z.infer<typeof docsIdentityKindSchema>;
 export type DocsIdentityLanguage = z.infer<typeof docsIdentityLanguageSchema>;
 export type DocsIdentity = z.infer<typeof docsIdentitySchema>;
+export type SiteProfileLensSource = z.infer<typeof siteProfileLensSourceSchema>;
+export type SiteProfile = z.infer<typeof siteProfileSchema>;
 export type SourceMetadata = z.infer<typeof sourceMetadataSchema>;
 
 export const DOCS_IDENTITY_KIND_LABELS: Record<DocsIdentityKind, string> = {

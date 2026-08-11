@@ -20,20 +20,6 @@ export function DashboardViewToggle({
     >
       <button
         type="button"
-        onClick={() => onChange("grid")}
-        aria-label="Bookshelf view"
-        className={cn(
-          "inline-flex size-8 items-center justify-center rounded-md transition-colors",
-          value === "grid"
-            ? "bg-foreground text-background"
-            : "text-muted hover:text-foreground",
-        )}
-        aria-pressed={value === "grid"}
-      >
-        <LayoutGrid className="size-3.5" aria-hidden />
-      </button>
-      <button
-        type="button"
         onClick={() => onChange("list")}
         aria-label="List view"
         className={cn(
@@ -45,6 +31,20 @@ export function DashboardViewToggle({
         aria-pressed={value === "list"}
       >
         <List className="size-3.5" aria-hidden />
+      </button>
+      <button
+        type="button"
+        onClick={() => onChange("grid")}
+        aria-label="Bookshelf view"
+        className={cn(
+          "inline-flex size-8 items-center justify-center rounded-md transition-colors",
+          value === "grid"
+            ? "bg-foreground text-background"
+            : "text-muted hover:text-foreground",
+        )}
+        aria-pressed={value === "grid"}
+      >
+        <LayoutGrid className="size-3.5" aria-hidden />
       </button>
     </div>
   );

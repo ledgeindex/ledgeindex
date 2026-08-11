@@ -6,28 +6,61 @@ type LegacyPipelineNode = Omit<IngestPipelineNode, "id"> & {
 
 export const IDLE_INGEST_PIPELINE: IngestPipelineNode[] = [
   { id: "crawl", label: "Crawling", status: "pending", detail: "Waiting" },
+  {
+    id: "filter",
+    label: "Filtering",
+    status: "pending",
+    detail: "HTTP errors · optional version filters",
+  },
   { id: "extract", label: "Extracting", status: "pending", detail: "Waiting" },
   { id: "embed", label: "Indexing", status: "pending", detail: "Waiting" },
   { id: "store", label: "Storing", status: "pending", detail: "Waiting" },
 ];
+
+function idleNode(id: IngestPipelineNode["id"]): IngestPipelineNode {
+  return (
+    IDLE_INGEST_PIPELINE.find((node) => node.id === id) ?? {
+      id,
+      label: id,
+      status: "pending",
+      detail: "Waiting",
+    }
+  );
+}
+
+/** Ensure the display strip always has Filtering after Crawling (UI-only step). */
+function ensureFilterStep(nodes: IngestPipelineNode[]): IngestPipelineNode[] {
+  if (nodes.some((node) => node.id === "filter")) return nodes;
+
+  const crawlIndex = nodes.findIndex((node) => node.id === "crawl");
+  const filter = { ...idleNode("filter") };
+  if (crawlIndex < 0) return [filter, ...nodes];
+
+  return [
+    ...nodes.slice(0, crawlIndex + 1),
+    filter,
+    ...nodes.slice(crawlIndex + 1),
+  ];
+}
 
 function normalizePipeline(
   nodes: LegacyPipelineNode[],
 ): IngestPipelineNode[] {
   const hasLegacyIndex = nodes.some((node) => node.id === "index");
   if (!hasLegacyIndex) {
-    return nodes as IngestPipelineNode[];
+    return ensureFilterStep(nodes as IngestPipelineNode[]);
   }
 
   const index = nodes.find((node) => node.id === "index");
-  const crawl =
-    nodes.find((node) => node.id === "crawl") ?? IDLE_INGEST_PIPELINE[0]!;
+  const crawl = nodes.find((node) => node.id === "crawl") ?? idleNode("crawl");
   const extract =
-    nodes.find((node) => node.id === "extract") ?? IDLE_INGEST_PIPELINE[1]!;
+    nodes.find((node) => node.id === "extract") ?? idleNode("extract");
+  const embedIdle = idleNode("embed");
+  const storeIdle = idleNode("store");
   const embed =
     nodes.find((node) => node.id === "embed") ??
     ({
-      ...IDLE_INGEST_PIPELINE[2]!,
+      ...embedIdle,
       status: index?.status ?? "pending",
       detail:
         index?.status === "running"
@@ -39,7 +72,7 @@ function normalizePipeline(
   const store =
     nodes.find((node) => node.id === "store") ??
     ({
-      ...IDLE_INGEST_PIPELINE[3]!,
+      ...storeIdle,
       status:
         index?.status === "done"
           ? "done"
@@ -54,13 +87,20 @@ function normalizePipeline(
             : "Waiting",
     } satisfies IngestPipelineNode);
 
-  return [
+  return ensureFilterStep([
     crawl as IngestPipelineNode,
     extract as IngestPipelineNode,
     embed as IngestPipelineNode,
     store as IngestPipelineNode,
-  ];
+  ]);
 }
+
+export type FilterPipelinePhase =
+  | "idle"
+  | "discovering"
+  | "http"
+  | "auto-exclude"
+  | "done";
 
 export function resolveDisplayPipeline(input: {
   snapshotPipeline: IngestPipelineNode[] | null | undefined;
@@ -70,6 +110,10 @@ export function resolveDisplayPipeline(input: {
   selectedCount: number;
   extractedCount: number;
   chunkCount?: number;
+  /** UI-only Filtering step (HTTP cleanup → optional auto-exclude). */
+  filterPhase?: FilterPipelinePhase;
+  filterDetail?: string;
+  httpErrorCount?: number;
 }): {
   pipeline: IngestPipelineNode[];
   headline: string;
@@ -79,6 +123,11 @@ export function resolveDisplayPipeline(input: {
       ? input.snapshotPipeline
       : IDLE_INGEST_PIPELINE) as LegacyPipelineNode[],
   );
+
+  const filterPhase = input.filterPhase ?? "idle";
+  const filterRunning =
+    filterPhase === "http" || filterPhase === "auto-exclude";
+  const filterDone = filterPhase === "done";
 
   const pipeline = base.map((node) => {
     let status = node.status;
@@ -95,10 +144,47 @@ export function resolveDisplayPipeline(input: {
       status = "done";
     }
 
-    if (input.busy === "crawl" && node.id === "crawl") {
+    if (input.busy === "crawl" && node.id === "crawl" && !filterRunning) {
       status = "running";
       detail = `Scanning up to ${input.maxPages} pages…`;
     }
+
+    if (node.id === "filter") {
+      if (filterRunning) {
+        status = "running";
+        detail =
+          input.filterDetail ??
+          (filterPhase === "auto-exclude"
+            ? "Filter versions (AI)…"
+            : "Dropping non-2xx pages…");
+      } else if (filterDone) {
+        status = "done";
+        detail =
+          input.filterDetail ??
+          (input.httpErrorCount != null
+            ? `Removed ${input.httpErrorCount} error page${input.httpErrorCount === 1 ? "" : "s"}`
+            : "URL cleanup done");
+      } else if (input.busy === "crawl") {
+        status = "pending";
+        detail = "After discovery";
+      } else if (
+        status === "pending" &&
+        (input.discoveredCount > 0 || input.busy === "parse" || input.busy === "save")
+      ) {
+        // Past crawl without an explicit filter pass (restored session, etc.)
+        if (input.busy === "parse" || input.busy === "save") {
+          status = "done";
+          detail = "URL cleanup done";
+        }
+      }
+    }
+
+    // While Filtering runs, keep Crawling marked done so the strip advances.
+    if (node.id === "crawl" && filterRunning) {
+      status = "done";
+      detail = `${input.discoveredCount} of ${input.maxPages} URLs discovered`;
+    }
+
     if (input.busy === "parse" && node.id === "extract") {
       status = "running";
       detail =
@@ -109,19 +195,22 @@ export function resolveDisplayPipeline(input: {
     if (input.busy === "save") {
       const effectiveStatus = (id: IngestPipelineNode["id"]) => {
         const raw = base.find((entry) => entry.id === id)?.status ?? "pending";
-        // After Index & save, review gates are already confirmed — don't stall on suspended crawl/extract.
-        if (raw === "suspended" && (id === "crawl" || id === "extract")) {
+        if (
+          raw === "suspended" &&
+          (id === "crawl" || id === "extract" || id === "filter")
+        ) {
           return "done" as const;
         }
+        if (id === "filter") return "done" as const;
         return raw;
       };
 
       const snapshotRunning = base.find((entry) => entry.status === "running")?.id;
       const optimisticRunning =
         snapshotRunning ??
-        (["crawl", "extract", "embed", "store"] as const).find((id) => {
-          const status = effectiveStatus(id);
-          return status !== "done" && status !== "error";
+        (["crawl", "filter", "extract", "embed", "store"] as const).find((id) => {
+          const next = effectiveStatus(id);
+          return next !== "done" && next !== "error";
         });
 
       if (node.id === optimisticRunning && status !== "done" && status !== "error") {

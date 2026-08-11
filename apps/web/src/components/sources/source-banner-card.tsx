@@ -9,6 +9,8 @@ import {
   SourceActionsMenu,
   type SourceActionsMenuPoint,
 } from "@/components/sources/source-actions-menu";
+import { SourceProfileBadge } from "@/components/sources/source-profile-badge";
+import { SourceSiteProfileDialog } from "@/components/sources/source-site-profile-dialog";
 import { resolveSourceVersion } from "@/components/sources/source-version-select";
 import { formatUrlLabel } from "@/components/sources/source-display";
 import {
@@ -223,6 +225,7 @@ export function SourceBannerCard({
   onNameUpdated,
   onSlugUpdated,
   onRefreshApplied,
+  onSiteProfileUpdated,
 }: {
   source: SourceSummary;
   highlighted?: boolean;
@@ -235,10 +238,15 @@ export function SourceBannerCard({
   onNameUpdated?: (sourceId: string, name: string) => void;
   onSlugUpdated?: (sourceId: string, slug: string) => void;
   onRefreshApplied?: () => void;
+  onSiteProfileUpdated?: (
+    sourceId: string,
+    payload: { hasSiteProfile: boolean; siteProfileLensCount: number },
+  ) => void;
 }) {
   const router = useRouter();
   const [contextPoint, setContextPoint] =
     useState<SourceActionsMenuPoint | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [ogFailed, setOgFailed] = useState(false);
   const activeSource = useMemo(
     () => resolveSourceVersion(source, source.id),
@@ -337,6 +345,12 @@ export function SourceBannerCard({
             </p>
             <div className="mt-0.5 flex min-w-0 items-center gap-1.5 font-mono text-[0.5625rem] tracking-[0.06em] text-muted uppercase">
               <span className="shrink-0">{activeSource.pageCount} pages</span>
+              {activeSource.hasSiteProfile ? (
+                <SourceProfileBadge
+                  lensCount={activeSource.siteProfileLensCount}
+                  onClick={() => setProfileOpen(true)}
+                />
+              ) : null}
               {startUrls.length > 0 ? (
                 <>
                   <span className="shrink-0 text-muted/50" aria-hidden>
@@ -365,8 +379,21 @@ export function SourceBannerCard({
           onNameUpdated={(name) => onNameUpdated?.(activeSource.id, name)}
           onSlugUpdated={(slug) => onSlugUpdated?.(activeSource.id, slug)}
           onRefreshApplied={onRefreshApplied}
+          onSiteProfileUpdated={(payload) =>
+            onSiteProfileUpdated?.(activeSource.id, payload)
+          }
         />
       ) : null}
+
+      <SourceSiteProfileDialog
+        source={activeSource}
+        open={profileOpen}
+        onOpenChange={setProfileOpen}
+        initialMode="view"
+        onSaved={(payload) =>
+          onSiteProfileUpdated?.(activeSource.id, payload)
+        }
+      />
     </>
   );
 }
