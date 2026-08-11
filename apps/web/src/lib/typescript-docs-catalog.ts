@@ -212,7 +212,7 @@ export const CURATED_TOP_DOCS_PACKAGES = [
   "openai",
 ] as const;
 
-const CURATED_TOP_DOCS_RANK = new Map(
+const CURATED_TOP_DOCS_RANK: Map<string, number> = new Map(
   CURATED_TOP_DOCS_PACKAGES.map((name, index) => [name, index]),
 );
 
