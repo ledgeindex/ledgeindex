@@ -496,15 +496,91 @@ export function parseRetrievalPart(
   return part.data as RetrievalMeta;
 }
 
+function formatDurationMs(ms: number): string {
+  if (!Number.isFinite(ms) || ms < 0) return "—";
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  const seconds = ms / 1000;
+  if (seconds < 10) return `${seconds.toFixed(1)}s`;
+  return `${Math.round(seconds)}s`;
+}
+
+function TimingBreakdown({
+  timings,
+}: {
+  timings: NonNullable<RetrievalMeta["timings"]>;
+}) {
+  const maxMs = Math.max(
+    timings.totalMs,
+    ...timings.steps.map((step) => step.ms),
+    1,
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <p className="font-medium text-foreground">Retrieval timing</p>
+        <p className="font-mono text-[0.625rem] tabular-nums text-foreground">
+          {formatDurationMs(timings.totalMs)} total
+        </p>
+      </div>
+      <ul className="space-y-1.5">
+        {timings.steps.map((step) => {
+          const widthPct = Math.max(2, Math.round((step.ms / maxMs) * 100));
+          const isSubstep = step.id.includes("-embed") ||
+            step.id.includes("-vector") ||
+            step.id.includes("-rerank") ||
+            step.id.includes("-expand");
+          return (
+            <li
+              key={step.id}
+              className={cn(isSubstep && "pl-3")}
+              title={step.detail}
+            >
+              <div className="flex items-baseline justify-between gap-2">
+                <span
+                  className={cn(
+                    "min-w-0 truncate text-[0.625rem]",
+                    isSubstep ? "text-muted" : "text-foreground/80",
+                  )}
+                >
+                  {step.label}
+                  {step.detail ? (
+                    <span className="text-muted"> · {step.detail}</span>
+                  ) : null}
+                </span>
+                <span className="shrink-0 font-mono text-[0.5625rem] tabular-nums text-muted">
+                  {formatDurationMs(step.ms)}
+                </span>
+              </div>
+              <div className="mt-0.5 h-1 overflow-hidden rounded-full bg-border/50">
+                <div
+                  className={cn(
+                    "h-full rounded-full",
+                    isSubstep ? "bg-muted-foreground/35" : "bg-accent/70",
+                  )}
+                  style={{ width: `${widthPct}%` }}
+                />
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
 export function ChatRetrievalCard({ meta }: { meta: RetrievalMeta }) {
   const [expanded, setExpanded] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [timingOpen, setTimingOpen] = useState(false);
   const rewrittenQueries = readRewrittenQueries(meta);
   const skippedSet = new Set(meta.skippedQueries ?? []);
   const attempts = meta.searchAttempts ?? [];
   const chunks = meta.chunks ?? [];
+  const timings = meta.timings;
   const sourceCount = countUniqueUrls(chunks);
   const canExpand = chunks.length > 0;
+  const hasTiming = Boolean(timings && timings.steps.length > 0);
   const usedFallback = meta.rewriteMethod === "fallback";
   const usedCascade =
     meta.rewriteMethod === "cascade" || Boolean(meta.cascadePassUsed);
@@ -541,6 +617,7 @@ export function ChatRetrievalCard({ meta }: { meta: RetrievalMeta }) {
     attempts.length > 0 ||
     Boolean(meta.answerMode || meta.coverageTier || meta.coverageReason);
   const summaryBits = [
+    timings ? formatDurationMs(timings.totalMs) : null,
     `${chunks.length} chunk${chunks.length === 1 ? "" : "s"}`,
     sourceCount > 0
       ? `${sourceCount} page${sourceCount === 1 ? "" : "s"}`
@@ -610,6 +687,16 @@ export function ChatRetrievalCard({ meta }: { meta: RetrievalMeta }) {
                   {expanded ? "Hide chunks" : "Show chunks"}
                 </button>
               ) : null}
+              {hasTiming ? (
+                <button
+                  type="button"
+                  onClick={() => setTimingOpen((open) => !open)}
+                  className="text-[0.625rem] text-foreground/80 underline-offset-2 hover:underline"
+                  aria-expanded={timingOpen}
+                >
+                  {timingOpen ? "Hide timing" : "Show timing"}
+                </button>
+              ) : null}
               {hasDetails ? (
                 <button
                   type="button"
@@ -623,6 +710,12 @@ export function ChatRetrievalCard({ meta }: { meta: RetrievalMeta }) {
             </div>
           </div>
         </div>
+
+        {timingOpen && hasTiming && timings ? (
+          <div className="mt-2 border-t border-border/40 pt-2">
+            <TimingBreakdown timings={timings} />
+          </div>
+        ) : null}
 
         {detailsOpen && hasDetails ? (
           <div className="mt-2 space-y-2 border-t border-border/40 pt-2">

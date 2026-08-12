@@ -46,6 +46,22 @@ export type RetrievalSearchAttempt = {
   prunedCount?: number;
 };
 
+/** One timed stage in the RAG pipeline (shown in Retrieved sources). */
+export type RetrievalTimingStep = {
+  id: string;
+  label: string;
+  /** Duration in milliseconds (wall clock for sequential stages). */
+  ms: number;
+  /** Optional note, e.g. "sum across 2 queries" or model id. */
+  detail?: string;
+};
+
+export type RetrievalTimings = {
+  /** Full RAG processor wall time (catalog → coverage). */
+  totalMs: number;
+  steps: RetrievalTimingStep[];
+};
+
 export type RetrievalMeta = {
   question: string;
   rewrittenQueries: string[];
@@ -90,6 +106,8 @@ export type RetrievalMeta = {
   pickedSources?: RetrievalPickedSource[];
   searchAttempts: RetrievalSearchAttempt[];
   chunks: RetrievalMetaChunk[];
+  /** Per-step latency for Retrieved sources (expandable timing). */
+  timings?: RetrievalTimings;
   /** @deprecated use rewrittenQueries */
   queries?: string[];
 };

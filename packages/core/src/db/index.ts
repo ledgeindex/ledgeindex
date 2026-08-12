@@ -18,11 +18,11 @@ import { logInfo } from "../lib/logger.js";
 let store: Store | null = null;
 
 /**
- * Local FileStore for personal data + cloud Postgres read-through for global
- * sources when LEDGEINDEX_CLOUD_POSTGRES_URI is set.
+ * Local FileStore for personal/local data + cloud Postgres read-through for
+ * **public/global** sources when LEDGEINDEX_CLOUD_POSTGRES_URI is set (proxy).
  *
- * - Public/global: read + admin writes (categories, displayOrder, delete) via cloud
- * - Personal: FileStore only (including categories)
+ * Just-me cloud sources are listed via the hosted HTTP API from the client —
+ * not via this Postgres read-through.
  */
 class LocalWithCloudGlobalStore implements Store {
   constructor(

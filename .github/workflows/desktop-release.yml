@@ -142,7 +142,7 @@ jobs:
             NOTES="$(printf '%s\n\n%s\n%s' \
               "LedgeIndex desktop ${VERSION}" \
               'Windows: `LedgeIndex-*-setup.exe`' \
-              'macOS: `LedgeIndex-*-mac-*.dmg` (Apple Silicon + Intel). Unsigned until notarization — right-click the app → Open the first time.')"
+              'macOS: `LedgeIndex-*-mac-*.dmg` (Apple Silicon). Unsigned until notarization — right-click the app → Open the first time.')"
             gh release create "$TAG" \
               --repo ledgeindex/ledgeindex \
               --title "LedgeIndex Desktop ${VERSION}" \

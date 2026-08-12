@@ -379,6 +379,12 @@ export function StreamingChatPanel({
     () => [...retrievalEntries].reverse(),
     [retrievalEntries],
   );
+  const hasRetrievalResults = retrievalEntries.length > 0;
+  const [aboutExpanded, setAboutExpanded] = useState(true);
+
+  useEffect(() => {
+    if (hasRetrievalResults) setAboutExpanded(false);
+  }, [hasRetrievalResults]);
 
   return (
     <div
@@ -664,12 +670,24 @@ export function StreamingChatPanel({
             </div>
             {showDocsIdentityAdmin && hasDocsIdentity ? (
               <div className="shrink-0 border-b border-border bg-card-solid/60 px-3 py-2.5">
-                <p className="font-mono text-[0.5rem] font-semibold tracking-[0.1em] text-muted uppercase">
-                  About
-                </p>
-                <p className="mt-1.5 text-xs leading-relaxed text-foreground">
-                  {docsIdentitySummary}
-                </p>
+                <button
+                  type="button"
+                  onClick={() => setAboutExpanded((open) => !open)}
+                  className="flex w-full items-center justify-between gap-2 text-left"
+                  aria-expanded={aboutExpanded}
+                >
+                  <p className="font-mono text-[0.5rem] font-semibold tracking-[0.1em] text-muted uppercase">
+                    About
+                  </p>
+                  <span className="font-mono text-[0.5rem] tracking-[0.06em] text-muted uppercase">
+                    {aboutExpanded ? "Hide" : "Show"}
+                  </span>
+                </button>
+                {aboutExpanded ? (
+                  <p className="mt-1.5 text-xs leading-relaxed text-foreground">
+                    {docsIdentitySummary}
+                  </p>
+                ) : null}
               </div>
             ) : null}
             {resolvedPathOptions.length >= 2 ? (

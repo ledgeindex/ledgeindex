@@ -13,6 +13,7 @@ import {
   LEDGEINDEX_RETRIEVAL_META_KEY,
   toRetrievalMetaChunk,
   type RetrievalMeta,
+  type RetrievalTimingStep,
 } from "../../retrieval/retrieval-meta.js";
 import { rewriteQueries } from "../../retrieval/rewrite-queries.js";
 import {
@@ -97,6 +98,61 @@ function scoreSummary(chunks: KapaRetrievedChunk[]): {
   };
 }
 
+function elapsedMs(started: number): number {
+  return Math.round(performance.now() - started);
+}
+
+function pushRetrievePhaseSteps(
+  steps: RetrievalTimingStep[],
+  retrieval: Awaited<ReturnType<typeof kapaRetrieveMany>>,
+  {
+    idPrefix,
+    labelPrefix,
+  }: { idPrefix: string; labelPrefix: string },
+) {
+  const timings = retrieval.timings;
+  if (!timings) return;
+
+  const multi =
+    timings.queryCount > 1
+      ? `sum across ${timings.queryCount} queries`
+      : undefined;
+
+  steps.push({
+    id: `${idPrefix}-wall`,
+    label: `${labelPrefix} (wall)`,
+    ms: timings.wallMs,
+    detail:
+      timings.queryCount > 1
+        ? `${timings.queryCount} queries · phase sums may exceed wall when parallel`
+        : undefined,
+  });
+  steps.push({
+    id: `${idPrefix}-embed`,
+    label: `${labelPrefix} · embed`,
+    ms: timings.embedMs,
+    detail: multi,
+  });
+  steps.push({
+    id: `${idPrefix}-vector`,
+    label: `${labelPrefix} · vector`,
+    ms: timings.vectorMs,
+    detail: multi,
+  });
+  steps.push({
+    id: `${idPrefix}-rerank`,
+    label: `${labelPrefix} · rerank`,
+    ms: timings.rerankMs,
+    detail: multi,
+  });
+  steps.push({
+    id: `${idPrefix}-expand`,
+    label: `${labelPrefix} · expand`,
+    ms: timings.expandMs,
+    detail: multi,
+  });
+}
+
 function buildRetrievalMeta(input: {
   question: string;
   rewrittenQueries: string[];
@@ -112,6 +168,7 @@ function buildRetrievalMeta(input: {
   coverage: Awaited<ReturnType<typeof assessCoverage>>;
   cascadePassUsed?: boolean;
   cascadeTopScore?: number;
+  timings?: RetrievalMeta["timings"];
 }): RetrievalMeta {
   const { maxChunkScore, avgTop3Score } = scoreSummary(input.chunks);
   const rerankRuntime = describeRerankRuntimeMeta({
@@ -156,6 +213,7 @@ function buildRetrievalMeta(input: {
       prunedCount: entry.prunedCount,
     })),
     chunks: input.chunks.map(toRetrievalMetaChunk),
+    timings: input.timings,
   };
 }
 
@@ -263,6 +321,10 @@ export class RAGQueryProcessor implements Processor {
     const question = lastUser ? textFromMessage(lastUser) : "";
     if (!question) return messages;
 
+    const ragStarted = performance.now();
+    const timingSteps: RetrievalTimingStep[] = [];
+
+    const catalogStarted = performance.now();
     const catalogRecord =
       (await ensureCatalogHasPages(sourceId)) ??
       (await getMetadataCatalog(sourceId));
@@ -273,18 +335,33 @@ export class RAGQueryProcessor implements Processor {
     );
     const catalogText = formatCatalogForAgent(scopedCatalog);
     const history = buildHistory(messages);
+    timingSteps.push({
+      id: "catalog",
+      label: "Catalog",
+      ms: elapsedMs(catalogStarted),
+    });
 
     // Cascade: cheap vector peek on the raw question — skip rewrite + rerank on slam dunks.
+    const cascadeStarted = performance.now();
     const cascade = await tryCascadeRetrieve({
       query: question,
       sourceId,
       filter: pathFilter,
+    });
+    timingSteps.push({
+      id: "cascade",
+      label: cascade ? "Cascade (hit)" : "Cascade (miss/off)",
+      ms: elapsedMs(cascadeStarted),
+      detail: cascade
+        ? `top ${cascade.topScore.toFixed(2)}`
+        : undefined,
     });
 
     if (cascade) {
       const agentChunks = cascade.chunks;
       const insufficient = agentChunks.length === 0;
       const { maxChunkScore, avgTop3Score } = scoreSummary(agentChunks);
+      const coverageStarted = performance.now();
       const coverage = await assessCoverage({
         question,
         chunks: agentChunks,
@@ -293,6 +370,16 @@ export class RAGQueryProcessor implements Processor {
         maxChunkScore,
         avgTop3Score,
         requestContext,
+      });
+      timingSteps.push({
+        id: "coverage",
+        label: coverage.coverageGraderUsed
+          ? "Coverage (grader)"
+          : "Coverage",
+        ms: elapsedMs(coverageStarted),
+        detail: coverage.coverageModelId
+          ? coverage.coverageModelId
+          : coverage.answerMode,
       });
       const sourceSummary = await getSourceSummary(sourceId);
       const meta = buildRetrievalMeta({
@@ -324,6 +411,10 @@ export class RAGQueryProcessor implements Processor {
         coverage,
         cascadePassUsed: true,
         cascadeTopScore: cascade.topScore,
+        timings: {
+          totalMs: elapsedMs(ragStarted),
+          steps: timingSteps,
+        },
       });
       if (sourceSummary) {
         meta.pickedSources = [
@@ -345,6 +436,7 @@ export class RAGQueryProcessor implements Processor {
         topScore: cascade.topScore,
         chunkCount: agentChunks.length,
         answerMode: coverage.answerMode,
+        timings: meta.timings,
       });
 
       const retrievalInstruction = instructionForAnswerMode(
@@ -372,12 +464,19 @@ export class RAGQueryProcessor implements Processor {
       };
     }
 
+    const rewriteStarted = performance.now();
     const { queries, topicScope, method: rewriteMethod, rewriteModelId } =
       await rewriteQueries({
       question,
       catalogText,
       history,
       requestContext,
+    });
+    timingSteps.push({
+      id: "rewrite",
+      label: `Rewrite (${rewriteMethod})`,
+      ms: elapsedMs(rewriteStarted),
+      detail: rewriteModelId,
     });
 
     const queryMode = topicScope === "multi" ? "merge_all" : "short_circuit";
@@ -393,6 +492,7 @@ export class RAGQueryProcessor implements Processor {
       : undefined;
 
     let relaxedPassUsed = false;
+    const retrieveStrictStarted = performance.now();
     let retrieval = await kapaRetrieveMany({
       queries,
       sourceId,
@@ -400,6 +500,18 @@ export class RAGQueryProcessor implements Processor {
       catalogUrlFilter,
       filter: pathFilter,
     });
+    pushRetrievePhaseSteps(timingSteps, retrieval, {
+      idPrefix: "retrieve-strict",
+      labelPrefix: "Retrieve",
+    });
+    // Prefer wall from retrieveMany; keep a fallback if timings missing.
+    if (!retrieval.timings) {
+      timingSteps.push({
+        id: "retrieve-strict-wall",
+        label: "Retrieve (wall)",
+        ms: elapsedMs(retrieveStrictStarted),
+      });
+    }
 
     if (retrieval.merged.length === 0) {
       logVerbose("RAG strict pass empty, retrying relaxed threshold", "RAGQuery", {
@@ -409,6 +521,7 @@ export class RAGQueryProcessor implements Processor {
         catalogUrlFilter: catalogUrlCandidate?.url,
         docsUrlPrefix: docsUrlPrefix || null,
       });
+      const retrieveRelaxedStarted = performance.now();
       retrieval = await kapaRetrieveMany({
         queries,
         sourceId,
@@ -417,12 +530,24 @@ export class RAGQueryProcessor implements Processor {
         filter: pathFilter,
         relevanceThreshold: RELAXED_RELEVANCE_THRESHOLD,
       });
+      pushRetrievePhaseSteps(timingSteps, retrieval, {
+        idPrefix: "retrieve-relaxed",
+        labelPrefix: "Retrieve relaxed",
+      });
+      if (!retrieval.timings) {
+        timingSteps.push({
+          id: "retrieve-relaxed-wall",
+          label: "Retrieve relaxed (wall)",
+          ms: elapsedMs(retrieveRelaxedStarted),
+        });
+      }
       relaxedPassUsed = retrieval.merged.length > 0;
     }
 
     const agentChunks = retrieval.merged;
     const insufficient = agentChunks.length === 0;
     const { maxChunkScore, avgTop3Score } = scoreSummary(agentChunks);
+    const coverageStarted = performance.now();
     const coverage = await assessCoverage({
       question,
       chunks: agentChunks,
@@ -431,6 +556,14 @@ export class RAGQueryProcessor implements Processor {
       maxChunkScore,
       avgTop3Score,
       requestContext,
+    });
+    timingSteps.push({
+      id: "coverage",
+      label: coverage.coverageGraderUsed ? "Coverage (grader)" : "Coverage",
+      ms: elapsedMs(coverageStarted),
+      detail: coverage.coverageModelId
+        ? coverage.coverageModelId
+        : coverage.answerMode,
     });
     const partial = relaxedPassUsed;
     const sourceSummary = await getSourceSummary(sourceId);
@@ -448,6 +581,10 @@ export class RAGQueryProcessor implements Processor {
       catalogUrlFilter: retrieval.catalogUrlFilter,
       coverage,
       cascadePassUsed: false,
+      timings: {
+        totalMs: elapsedMs(ragStarted),
+        steps: timingSteps,
+      },
     });
     if (sourceSummary) {
       meta.pickedSources = [
@@ -478,6 +615,7 @@ export class RAGQueryProcessor implements Processor {
       catalogUrlFilter: retrieval.catalogUrlFilter?.applied
         ? retrieval.catalogUrlFilter.url
         : undefined,
+      timings: meta.timings,
     });
 
     const retrievalInstruction = instructionForAnswerMode(

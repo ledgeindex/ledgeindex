@@ -28,27 +28,32 @@ function idleNode(id: IngestPipelineNode["id"]): IngestPipelineNode {
   );
 }
 
-/** Ensure the display strip always has Filtering after Crawling (UI-only step). */
-function ensureFilterStep(nodes: IngestPipelineNode[]): IngestPipelineNode[] {
-  if (nodes.some((node) => node.id === "filter")) return nodes;
+/** Ensure the display strip has Filtering after Crawling when enabled (UI-only). */
+function ensureFilterStep(
+  nodes: IngestPipelineNode[],
+  include: boolean,
+): IngestPipelineNode[] {
+  const withoutFilter = nodes.filter((node) => node.id !== "filter");
+  if (!include) return withoutFilter;
 
-  const crawlIndex = nodes.findIndex((node) => node.id === "crawl");
+  const crawlIndex = withoutFilter.findIndex((node) => node.id === "crawl");
   const filter = { ...idleNode("filter") };
-  if (crawlIndex < 0) return [filter, ...nodes];
+  if (crawlIndex < 0) return [filter, ...withoutFilter];
 
   return [
-    ...nodes.slice(0, crawlIndex + 1),
+    ...withoutFilter.slice(0, crawlIndex + 1),
     filter,
-    ...nodes.slice(crawlIndex + 1),
+    ...withoutFilter.slice(crawlIndex + 1),
   ];
 }
 
 function normalizePipeline(
   nodes: LegacyPipelineNode[],
+  includeFilterStep = true,
 ): IngestPipelineNode[] {
   const hasLegacyIndex = nodes.some((node) => node.id === "index");
   if (!hasLegacyIndex) {
-    return ensureFilterStep(nodes as IngestPipelineNode[]);
+    return ensureFilterStep(nodes as IngestPipelineNode[], includeFilterStep);
   }
 
   const index = nodes.find((node) => node.id === "index");
@@ -87,12 +92,15 @@ function normalizePipeline(
             : "Waiting",
     } satisfies IngestPipelineNode);
 
-  return ensureFilterStep([
-    crawl as IngestPipelineNode,
-    extract as IngestPipelineNode,
-    embed as IngestPipelineNode,
-    store as IngestPipelineNode,
-  ]);
+  return ensureFilterStep(
+    [
+      crawl as IngestPipelineNode,
+      extract as IngestPipelineNode,
+      embed as IngestPipelineNode,
+      store as IngestPipelineNode,
+    ],
+    includeFilterStep,
+  );
 }
 
 export type FilterPipelinePhase =
@@ -114,20 +122,25 @@ export function resolveDisplayPipeline(input: {
   filterPhase?: FilterPipelinePhase;
   filterDetail?: string;
   httpErrorCount?: number;
+  /** When false (Filter toggle off), omit the Filtering pill entirely. */
+  showFilterStep?: boolean;
 }): {
   pipeline: IngestPipelineNode[];
   headline: string;
 } {
+  const showFilterStep = input.showFilterStep !== false;
   const base = normalizePipeline(
     (input.snapshotPipeline && input.snapshotPipeline.length > 0
       ? input.snapshotPipeline
       : IDLE_INGEST_PIPELINE) as LegacyPipelineNode[],
+    showFilterStep,
   );
 
-  const filterPhase = input.filterPhase ?? "idle";
+  const filterPhase = showFilterStep ? (input.filterPhase ?? "idle") : "idle";
   const filterRunning =
-    filterPhase === "http" || filterPhase === "auto-exclude";
-  const filterDone = filterPhase === "done";
+    showFilterStep &&
+    (filterPhase === "http" || filterPhase === "auto-exclude");
+  const filterDone = showFilterStep && filterPhase === "done";
 
   const pipeline = base.map((node) => {
     let status = node.status;

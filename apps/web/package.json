@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/web",
-  "version": "0.1.0",
+  "version": "0.1.9",
   "private": true,
   "description": "LedgeIndex web UI (Next.js)",
   "scripts": {

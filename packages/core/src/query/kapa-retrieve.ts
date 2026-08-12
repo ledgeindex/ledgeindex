@@ -80,6 +80,14 @@ export type KapaRetrievedChunk = {
   details?: RerankResult["details"];
 };
 
+export type KapaRetrieveStepTimings = {
+  embedMs: number;
+  vectorMs: number;
+  rerankMs: number;
+  expandMs: number;
+  totalMs: number;
+};
+
 export type KapaRetrieveResult = {
   query: string;
   filter: KapaRetrieveFilter;
@@ -94,6 +102,7 @@ export type KapaRetrieveResult = {
   insufficient: boolean;
   chunks: KapaRetrievedChunk[];
   pruned: KapaRetrievedChunk[];
+  timings?: KapaRetrieveStepTimings;
 };
 
 function toRetrievedChunk(
@@ -151,6 +160,15 @@ export type KapaRetrieveManyResult = {
   }>;
   /** Deduplicated union of pruned chunks across queries (highest score wins). */
   merged: KapaRetrievedChunk[];
+  /** Wall clock for this retrieveMany call; phase sums may exceed wall when parallel. */
+  timings?: {
+    wallMs: number;
+    queryCount: number;
+    embedMs: number;
+    vectorMs: number;
+    rerankMs: number;
+    expandMs: number;
+  };
 };
 
 function chunkDedupeKey(chunk: KapaRetrievedChunk): string {
@@ -490,6 +508,7 @@ export async function kapaRetrieveMany(input: {
     title?: string;
   };
 }): Promise<KapaRetrieveManyResult> {
+  const wallStarted = performance.now();
   const queries = [
     ...new Set(
       input.queries.map((query) => query.trim()).filter((query) => query.length > 0),
@@ -529,10 +548,12 @@ export async function kapaRetrieveMany(input: {
   });
 
   const byQueryRaw: KapaRetrieveManyResult["byQuery"] = [];
+  const queryTimings: KapaRetrieveStepTimings[] = [];
   const queryMode = input.queryMode ?? "short_circuit";
 
   const first = await kapaRetrieve({ query: queries[0], ...retrieveOpts });
   byQueryRaw.push(toByQueryEntry(first));
+  if (first.timings) queryTimings.push(first.timings);
 
   let skippedQueries: string[] = [];
   let catalogUrlFilterResult: KapaRetrieveManyResult["catalogUrlFilter"];
@@ -570,6 +591,7 @@ export async function kapaRetrieveMany(input: {
         catalogMatchScore: catalogMatch.score,
       }),
     );
+    if (catalogAttempt.timings) queryTimings.push(catalogAttempt.timings);
 
     catalogSucceeded = catalogAttempt.directHitCount > 0;
     catalogUrlFilterResult = {
@@ -619,10 +641,16 @@ export async function kapaRetrieveMany(input: {
       rest.map((query) => kapaRetrieve({ query, ...retrieveOpts })),
     );
     byQueryRaw.push(...parallelResults.map((r) => toByQueryEntry(r)));
+    for (const result of parallelResults) {
+      if (result.timings) queryTimings.push(result.timings);
+    }
   }
 
   const byQuery = dedupeAcrossQueries(byQueryRaw);
   const merged = mergePrunedChunks(byQueryRaw);
+
+  const sumPhase = (key: keyof KapaRetrieveStepTimings) =>
+    queryTimings.reduce((sum, row) => sum + row[key], 0);
 
   return {
     queries,
@@ -632,6 +660,14 @@ export async function kapaRetrieveMany(input: {
     catalogUrlFilter: catalogUrlFilterResult,
     byQuery,
     merged,
+    timings: {
+      wallMs: Math.round(performance.now() - wallStarted),
+      queryCount: queryTimings.length,
+      embedMs: sumPhase("embedMs"),
+      vectorMs: sumPhase("vectorMs"),
+      rerankMs: sumPhase("rerankMs"),
+      expandMs: sumPhase("expandMs"),
+    },
   };
 }
 
@@ -650,6 +686,7 @@ export async function kapaRetrieve(input: {
    */
   expandPages?: boolean;
 }): Promise<KapaRetrieveResult> {
+  const totalStarted = performance.now();
   await ensureChunksIndex();
 
   const threshold = input.relevanceThreshold ?? RELEVANCE_THRESHOLD;
@@ -657,7 +694,9 @@ export async function kapaRetrieve(input: {
   const candidateCount = getSearchRerankCandidates();
 
   const store = getVectorStore();
+  const embedStarted = performance.now();
   const queryVector = await embedQuery(input.query);
+  const embedMs = Math.round(performance.now() - embedStarted);
 
   const metadataFilter: Record<string, string> = {
     sourceId: input.sourceId,
@@ -667,6 +706,7 @@ export async function kapaRetrieve(input: {
   if (input.filter?.section) metadataFilter.section = input.filter.section;
   if (input.filter?.crawlRoot) metadataFilter.crawlRoot = input.filter.crawlRoot;
 
+  const vectorStarted = performance.now();
   let initialResults = await store.query({
     indexName: LEDGEINDEX_CHUNKS_INDEX,
     queryVector,
@@ -688,6 +728,7 @@ export async function kapaRetrieve(input: {
       filter: withoutCrawlRoot,
     });
   }
+  const vectorMs = Math.round(performance.now() - vectorStarted);
 
   logVerbose("Kapa retrieve: initial vector search", "KapaRetrieve", {
     sourceId: input.sourceId,
@@ -697,12 +738,14 @@ export async function kapaRetrieve(input: {
     urlPrefix: input.filter?.urlPrefix ?? null,
   });
 
+  const rerankStarted = performance.now();
   const reranked = await executeKapaRerank({
     query: input.query,
     results: initialResults,
     queryVector,
     topK: SEARCH_TOP_K,
   });
+  const rerankMs = Math.round(performance.now() - rerankStarted);
 
   const pruned = reranked.filter(
     (entry) => entry.score >= threshold,
@@ -724,6 +767,7 @@ export async function kapaRetrieve(input: {
     input.filter?.urlPrefix,
   );
 
+  const expandStarted = performance.now();
   const prunedChunks = expandPages
     ? applyUrlPrefixFilter(
         await expandTopPages({
@@ -735,6 +779,7 @@ export async function kapaRetrieve(input: {
         input.filter?.urlPrefix,
       )
     : directHits;
+  const expandMs = Math.round(performance.now() - expandStarted);
 
   logVerbose("Kapa retrieve: pruned + page-expanded", "KapaRetrieve", {
     directHits: directHits.length,
@@ -755,5 +800,12 @@ export async function kapaRetrieve(input: {
     insufficient: directHits.length === 0,
     chunks,
     pruned: prunedChunks,
+    timings: {
+      embedMs,
+      vectorMs,
+      rerankMs,
+      expandMs,
+      totalMs: Math.round(performance.now() - totalStarted),
+    },
   };
 }

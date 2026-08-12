@@ -13,8 +13,15 @@ export type RobotsDiscoverySignal = DiscoverySignal & {
   disallowRules?: number;
 };
 
+export type SitemapCandidate = {
+  url: string;
+  reachable: boolean;
+};
+
 export type SitemapDiscoverySignal = DiscoverySignal & {
   pageCount?: number;
+  /** All probed sitemap URLs (robots + common paths + custom). */
+  candidates?: SitemapCandidate[];
 };
 
 export type DiscoverySignals = {
@@ -90,20 +97,32 @@ export async function probeSitemap(
   origin: string,
   userAgent: string,
   options?: { robotsBody?: string; customSitemapUrls?: string[] },
-): Promise<DiscoverySignal> {
+): Promise<SitemapDiscoverySignal> {
   const candidates = collectSitemapCandidates(
     origin,
     options?.robotsBody,
     options?.customSitemapUrls,
   );
 
+  const probed: SitemapCandidate[] = [];
+  let firstFound: string | null = null;
+
   for (const sitemapUrl of candidates) {
     const { ok, text } = await fetchText(sitemapUrl, userAgent);
-    if (!ok || !SITEMAP_LOC_RE.test(text)) continue;
-    return { found: true, url: sitemapUrl };
+    const reachable = ok && SITEMAP_LOC_RE.test(text);
+    probed.push({ url: sitemapUrl, reachable });
+    if (reachable && !firstFound) firstFound = sitemapUrl;
   }
 
-  return { found: false, url: `${origin}/sitemap.xml` };
+  if (firstFound) {
+    return { found: true, url: firstFound, candidates: probed };
+  }
+
+  return {
+    found: false,
+    url: `${origin}/sitemap.xml`,
+    candidates: probed,
+  };
 }
 
 /** Scope used for sitemap page counts — includes parent for landing seeds. */

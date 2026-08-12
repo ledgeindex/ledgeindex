@@ -101,6 +101,43 @@ export async function discoverSitemapUrls(
 }
 
 /**
+ * Expand one or more sitemap / sitemap-index URLs into page URLs
+ * (follows nested sitemap references).
+ */
+export async function expandSitemapPageUrls(
+  sitemapRoots: string[],
+  userAgent: string,
+  options?: { maxPages?: number },
+): Promise<string[]> {
+  const maxPages = options?.maxPages ?? 50_000;
+  const pageUrls = new Set<string>();
+  const queue = [...new Set(sitemapRoots.map((url) => url.trim()).filter(Boolean))];
+  const visited = new Set<string>();
+
+  while (queue.length > 0 && pageUrls.size < maxPages) {
+    const sitemapUrl = queue.shift();
+    if (!sitemapUrl || visited.has(sitemapUrl)) continue;
+    visited.add(sitemapUrl);
+
+    try {
+      const locs = await fetchSitemapUrls(sitemapUrl, userAgent);
+      for (const loc of locs) {
+        if (pageUrls.size >= maxPages) break;
+        if (isSitemapReference(loc)) {
+          if (!visited.has(loc)) queue.push(loc);
+          continue;
+        }
+        pageUrls.add(loc);
+      }
+    } catch {
+      // ignore unreachable sitemaps
+    }
+  }
+
+  return [...pageUrls];
+}
+
+/**
  * Parent path for a start URL leaf (`/docs/intro` → `/docs`,
  * `/components/attachments` → `/components`).
  * Multi-start crawls need this so a second page URL includes sibling

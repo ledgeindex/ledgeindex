@@ -5,6 +5,10 @@ import {
   filterCrawlUrls,
   proposeCrawlFilterRemovals,
 } from "../crawler/crawl-url-filter.js";
+import { expandSitemapPageUrls } from "../crawler/sitemap.js";
+import { DEFAULT_CRAWL_USER_AGENT } from "@ledgeindex/core/crawl/crawl-user-agent.js";
+import { probePageStatus } from "@ledgeindex/core/crawl/validate-page-statuses.js";
+import { mapWithConcurrency } from "@ledgeindex/core/lib/map-with-concurrency.js";
 import { requireUser } from "../lib/resource-access.js";
 
 function formatZodError(error: z.ZodError): string {
@@ -140,6 +144,158 @@ export async function crawlFilterRoutes(fastify: FastifyInstance) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "URL removals failed";
+      return reply.status(502).send({ error: message });
+    }
+  });
+
+  /** Expand selected sitemap XML files into page URLs (for the sitemap picker modal). */
+  fastify.post("/api/crawl/sitemap-pages", async (request, reply) => {
+    const userId = await requireUser(request, reply);
+    if (!userId) return;
+
+    const body = z
+      .object({
+        sitemapUrls: z.array(z.string().url()).min(1).max(40),
+        userAgent: z.string().min(1).max(400).optional(),
+        maxPages: z.number().int().min(1).max(50_000).optional(),
+      })
+      .safeParse(request.body ?? {});
+
+    if (!body.success) {
+      return reply.status(400).send({ error: formatZodError(body.error) });
+    }
+
+    try {
+      const urls = await expandSitemapPageUrls(
+        body.data.sitemapUrls,
+        body.data.userAgent?.trim() || DEFAULT_CRAWL_USER_AGENT,
+        { maxPages: body.data.maxPages ?? 20_000 },
+      );
+      return {
+        pages: {
+          urls,
+          total: urls.length,
+          truncated: urls.length >= (body.data.maxPages ?? 20_000),
+        },
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Sitemap expand failed";
+      return reply.status(502).send({ error: message });
+    }
+  });
+
+  /** Fetch robots.txt for the Robots discovery pill modal. */
+  fastify.post("/api/crawl/robots-txt", async (request, reply) => {
+    const userId = await requireUser(request, reply);
+    if (!userId) return;
+
+    const body = z
+      .object({
+        url: z.string().url(),
+        userAgent: z.string().min(1).max(400).optional(),
+      })
+      .safeParse(request.body ?? {});
+
+    if (!body.success) {
+      return reply.status(400).send({ error: formatZodError(body.error) });
+    }
+
+    try {
+      let robotsUrl = body.data.url.trim();
+      try {
+        const parsed = new URL(robotsUrl);
+        if (!parsed.pathname.toLowerCase().endsWith("robots.txt")) {
+          robotsUrl = `${parsed.origin}/robots.txt`;
+        }
+      } catch {
+        return reply.status(400).send({ error: "Invalid URL" });
+      }
+
+      const userAgent =
+        body.data.userAgent?.trim() || DEFAULT_CRAWL_USER_AGENT;
+      const response = await fetch(robotsUrl, {
+        headers: { "User-Agent": userAgent },
+        signal: AbortSignal.timeout(12_000),
+      });
+
+      if (!response.ok) {
+        return {
+          robots: {
+            url: robotsUrl,
+            found: false,
+            status: response.status,
+            text: "",
+          },
+        };
+      }
+
+      const text = await response.text();
+      return {
+        robots: {
+          url: robotsUrl,
+          found: Boolean(text.trim()),
+          status: response.status,
+          text,
+        },
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "robots.txt fetch failed";
+      return reply.status(502).send({ error: message });
+    }
+  });
+
+  /** HEAD/GET status probe for a batch of URLs (sitemap modal, etc.). */
+  fastify.post("/api/crawl/probe-statuses", async (request, reply) => {
+    const userId = await requireUser(request, reply);
+    if (!userId) return;
+
+    const body = z
+      .object({
+        urls: z.array(z.string().url()).min(1).max(200),
+        userAgent: z.string().min(1).max(400).optional(),
+        concurrency: z.number().int().min(1).max(16).optional(),
+      })
+      .safeParse(request.body ?? {});
+
+    if (!body.success) {
+      return reply.status(400).send({ error: formatZodError(body.error) });
+    }
+
+    const userAgent =
+      body.data.userAgent?.trim() || DEFAULT_CRAWL_USER_AGENT;
+    const concurrency = Math.min(16, body.data.concurrency ?? 12);
+
+    try {
+      const results = await mapWithConcurrency(
+        body.data.urls,
+        concurrency,
+        (url) => probePageStatus(url, userAgent),
+      );
+
+      let okCount = 0;
+      let nonOkCount = 0;
+      for (const result of results) {
+        if (result.ok) okCount += 1;
+        else nonOkCount += 1;
+      }
+
+      return {
+        probe: {
+          results: results.map((result) => ({
+            url: result.url,
+            ok: result.ok,
+            status: result.status,
+            reason: result.reason,
+          })),
+          okCount,
+          nonOkCount,
+        },
+      };
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Status probe failed";
       return reply.status(502).send({ error: message });
     }
   });

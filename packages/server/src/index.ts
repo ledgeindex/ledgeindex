@@ -11,6 +11,7 @@ import {
   mountMastraOnFastify,
   type MastraContribution,
 } from "./mastra-contribution.js";
+import { registerLedgeIndexRateLimit } from "./rate-limit/plugin.js";
 
 export const LEDGEINDEX_SERVER_VERSION = "0.1.0" as const;
 
@@ -79,6 +80,10 @@ export async function createLedgeIndexServer(
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Content-Type", "Authorization", "ApiKey"],
   });
+
+  // Same pattern as backend-api legacy scopes: @fastify/rate-limit + onRoute
+  // injection. Must register before profile routes so hooks attach.
+  await registerLedgeIndexRateLimit(app);
 
   if (options.beforeProfiles) {
     await options.beforeProfiles(app);

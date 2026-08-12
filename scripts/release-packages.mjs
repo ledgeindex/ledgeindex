@@ -210,6 +210,18 @@ function applyVersion(version, versions) {
     }
   }
 
+  // Keep the web app badge (NEXT_PUBLIC_APP_VERSION from apps/web/package.json)
+  // in lockstep with published @ledgeindex/* versions.
+  const webPkgPath = packageJsonPath(path.join(ledgeRoot, "apps/web"));
+  if (existsSync(webPkgPath)) {
+    const webPkg = readJson(webPkgPath);
+    if (webPkg.version !== version) {
+      webPkg.version = version;
+      if (!dryRun) writeJson(webPkgPath, webPkg);
+      touched.push(`@ledgeindex/web version → ${version}`);
+    }
+  }
+
   for (const { dir, style } of allConsumers()) {
     const file = packageJsonPath(dir);
     if (!existsSync(file)) continue;

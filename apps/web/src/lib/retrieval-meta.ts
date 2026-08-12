@@ -39,6 +39,18 @@ export type RetrievalSearchAttempt = {
   prunedCount?: number;
 };
 
+export type RetrievalTimingStep = {
+  id: string;
+  label: string;
+  ms: number;
+  detail?: string;
+};
+
+export type RetrievalTimings = {
+  totalMs: number;
+  steps: RetrievalTimingStep[];
+};
+
 export type AnswerMode = "full" | "partial" | "none";
 export type CoverageTier = "tier0" | "tier1_heuristic" | "tier2_llm";
 
@@ -76,6 +88,8 @@ export type RetrievalMeta = {
   pickedSources?: RetrievalPickedSource[];
   searchAttempts: RetrievalSearchAttempt[];
   chunks: RetrievalMetaChunk[];
+  /** Per-step latency (expandable on Retrieved sources). */
+  timings?: RetrievalTimings;
   /** @deprecated use rewrittenQueries */
   queries?: string[];
 };

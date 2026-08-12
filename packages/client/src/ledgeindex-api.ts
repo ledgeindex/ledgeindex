@@ -45,6 +45,53 @@ export function setLedgeIndexApiBaseUrl(url: string): void {
 
 const getApiBase = () => getLedgeIndexApiBaseUrl();
 
+const REMOTE_API_FALLBACK = "https://api.ledgeindex.com";
+
+function envTrim(name: string): string | undefined {
+  if (typeof process === "undefined") return undefined;
+  const value = process.env[name];
+  return typeof value === "string" && value.trim()
+    ? value.trim().replace(/\/$/, "")
+    : undefined;
+}
+
+function isLoopbackApiUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "::1";
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Hosted API for Just-me cloud / public corpus. Never a loopback URL.
+ * Used when the active API base is local so the client can list cloud personal
+ * sources without Cloud SQL proxy.
+ */
+export function resolveRemoteApiBaseUrl(): string {
+  const candidates = [
+    envTrim("NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL"),
+    envTrim("NEXT_PUBLIC_KNOWLEDGEINDEX_REMOTE_API_URL"),
+    envTrim("LEDGEINDEX_REMOTE_API_URL"),
+    REMOTE_API_FALLBACK,
+  ];
+  for (const candidate of candidates) {
+    if (!candidate) continue;
+    if (isLoopbackApiUrl(candidate)) continue;
+    return candidate;
+  }
+  return REMOTE_API_FALLBACK;
+}
+
+function sameApiOrigin(a: string, b: string): boolean {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return a.replace(/\/$/, "") === b.replace(/\/$/, "");
+  }
+}
+
 export type {
   SourceMetadata,
   DocsIdentity,
@@ -189,7 +236,12 @@ export type CrawlRun = {
   status: string;
   pagesDiscovered: number;
   result?: {
-    urls?: { url: string; title?: string }[];
+    urls?: {
+      url: string;
+      title?: string;
+      httpStatus?: number;
+      httpErrorReason?: string;
+    }[];
     skipped?: { url: string; reason: string }[];
   };
   error?: string | null;
@@ -384,8 +436,14 @@ export async function authenticatedFetch(
 async function fetchWithAuth(
   path: string,
   init: RequestInit | undefined,
-  options?: { notFoundAsNull?: boolean; retried?: boolean },
+  options?: {
+    notFoundAsNull?: boolean;
+    retried?: boolean;
+    /** Override active API base (e.g. hosted API while UI talks to local). */
+    baseUrl?: string;
+  },
 ): Promise<{ response: Response; data: unknown }> {
+  const base = (options?.baseUrl ?? getApiBase()).replace(/\/$/, "");
   const hasBody = init?.body != null && init.body !== "";
   const headers = new Headers(init?.headers);
 
@@ -402,13 +460,13 @@ async function fetchWithAuth(
 
   let response: Response;
   try {
-    response = await fetch(`${getApiBase()}${path}`, {
+    response = await fetch(`${base}${path}`, {
       ...init,
       headers,
     });
   } catch {
     throw new KnowledgeIndexApiError(
-      `Cannot reach LedgeIndex API at ${getApiBase()}. Is the LedgeIndex server running?`,
+      `Cannot reach LedgeIndex API at ${base}. Is the LedgeIndex server running?`,
       0,
     );
   }
@@ -438,7 +496,11 @@ async function fetchWithAuth(
 async function requestApi<T>(
   path: string,
   init?: RequestInit,
-  options?: { notFoundAsNull?: boolean; retried?: boolean },
+  options?: {
+    notFoundAsNull?: boolean;
+    retried?: boolean;
+    baseUrl?: string;
+  },
 ): Promise<T | null> {
   const { response, data } = await fetchWithAuth(path, init, options);
 
@@ -454,16 +516,24 @@ async function requestApi<T>(
   return data as T;
 }
 
-async function api<T>(path: string, init?: RequestInit): Promise<T> {
-  const result = await requestApi<T>(path, init);
+async function api<T>(
+  path: string,
+  init?: RequestInit,
+  options?: { baseUrl?: string },
+): Promise<T> {
+  const result = await requestApi<T>(path, init, options);
   if (result === null) {
     throw new KnowledgeIndexApiError("Not found", 404);
   }
   return result;
 }
 
-async function tryApi<T>(path: string, init?: RequestInit): Promise<T | null> {
-  return requestApi<T>(path, init, { notFoundAsNull: true });
+async function tryApi<T>(
+  path: string,
+  init?: RequestInit,
+  options?: { baseUrl?: string },
+): Promise<T | null> {
+  return requestApi<T>(path, init, { ...options, notFoundAsNull: true });
 }
 
 export function normalizeStartUrl(input: string): string {
@@ -495,6 +565,7 @@ export type DiscoverySignal = {
   url: string;
   disallowRules?: number;
   pageCount?: number;
+  candidates?: Array<{ url: string; reachable: boolean }>;
 };
 
 export type DiscoverySignals = {
@@ -640,6 +711,68 @@ export async function proposeCrawlFilterRemovals(input: {
     modelId: filter.modelId,
     ...(filter.truncated ? { truncated: true, totalUrls: filter.totalUrls } : {}),
   };
+}
+
+/** HEAD/GET probe for a batch of page URLs. */
+export async function probeUrlStatuses(input: {
+  urls: string[];
+  userAgent?: string;
+  concurrency?: number;
+}) {
+  const result = await api<{
+    probe: {
+      results: Array<{
+        url: string;
+        ok: boolean;
+        status: number | null;
+        reason?: string;
+      }>;
+      okCount: number;
+      nonOkCount: number;
+    };
+  }>("/api/crawl/probe-statuses", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return result.probe;
+}
+
+/** Fetch robots.txt for the discovery pill modal. */
+export async function fetchRobotsTxt(input: {
+  url: string;
+  userAgent?: string;
+}) {
+  const result = await api<{
+    robots: {
+      url: string;
+      found: boolean;
+      status?: number;
+      text: string;
+    };
+  }>("/api/crawl/robots-txt", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return result.robots;
+}
+
+/** Expand sitemap XML roots into page URLs (paginated in the UI). */
+export async function listSitemapPages(input: {
+  sitemapUrls: string[];
+  userAgent?: string;
+  maxPages?: number;
+}) {
+  const result = await api<{
+    pages: {
+      urls: string[];
+      total: number;
+      truncated?: boolean;
+    };
+  }>("/api/crawl/sitemap-pages", {
+    method: "POST",
+    body: JSON.stringify(input),
+  });
+  return result.pages;
 }
 
 export async function createProject(name: string) {
@@ -849,7 +982,41 @@ export async function listProjects() {
 export async function listSources(scope?: SourceScope | "all") {
   const query =
     scope && scope !== "all" ? `?scope=${encodeURIComponent(scope)}` : "";
-  return api<{ sources: SourceSummary[] }>(`/api/sources${query}`);
+  const primary = await api<{ sources: SourceSummary[] }>(
+    `/api/sources${query}`,
+  );
+
+  // Local API base: also pull Just-me cloud rows from the hosted API (HTTP),
+  // so desktop/local web does not need Cloud SQL proxy for personal cloud.
+  if (scope === "global") return primary;
+
+  const activeBase = getLedgeIndexApiBaseUrl();
+  if (!isLoopbackApiUrl(activeBase)) return primary;
+
+  const remoteBase = resolveRemoteApiBaseUrl();
+  if (sameApiOrigin(activeBase, remoteBase)) return primary;
+
+  try {
+    const remote = await api<{ sources: SourceSummary[] }>(
+      "/api/sources?scope=personal",
+      undefined,
+      { baseUrl: remoteBase },
+    );
+    const cloudPersonal = remote.sources.filter(
+      (source) =>
+        (source.scope ?? "personal") !== "global" &&
+        (source.hosting === "cloud" || source.hosting == null),
+    );
+    if (cloudPersonal.length === 0) return primary;
+
+    const byId = new Map<string, SourceSummary>();
+    for (const source of primary.sources) byId.set(source.id, source);
+    for (const source of cloudPersonal) byId.set(source.id, source);
+    return { sources: [...byId.values()] };
+  } catch {
+    // Hosted API unreachable — keep local-only list.
+    return primary;
+  }
 }
 
 export async function listSourceCategories(scope?: SourceScope | "all") {

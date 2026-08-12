@@ -32,3 +32,58 @@ export function isHttpStatusSkipReason(reason: string): boolean {
     reason.startsWith("Network error")
   );
 }
+
+/** Parse `HTTP 404` → 404; network/request failures → null. */
+export function parseHttpStatusFromSkipReason(reason: string): number | null {
+  const match = /^HTTP\s+(\d{3})\b/i.exec(reason.trim());
+  if (!match) return null;
+  const status = Number(match[1]);
+  return Number.isFinite(status) ? status : null;
+}
+
+export type DiscoveredReviewUrl = {
+  url: string;
+  title?: string;
+  /** Set when Filter is off and we keep non-2xx pages in the review list. */
+  httpStatus?: number;
+  /** Raw skip reason for non-numeric failures (network, etc.). */
+  httpErrorReason?: string;
+};
+
+/**
+ * When Filter is off: move HTTP-error skips back into the URL list (marked),
+ * so the user can see them. When Filter is on, leave errors in `skipped`.
+ */
+export function promoteHttpErrorsIntoReviewList(
+  urls: readonly { url: string; title?: string }[],
+  skipped: readonly { url: string; reason: string }[],
+): {
+  urls: DiscoveredReviewUrl[];
+  skipped: { url: string; reason: string }[];
+  httpErrorCount: number;
+} {
+  const httpErrors = skipped.filter((item) => isHttpStatusSkipReason(item.reason));
+  const otherSkipped = skipped.filter(
+    (item) => !isHttpStatusSkipReason(item.reason),
+  );
+  const seen = new Set(urls.map((item) => item.url));
+  const promoted: DiscoveredReviewUrl[] = [];
+
+  for (const item of httpErrors) {
+    if (seen.has(item.url)) continue;
+    seen.add(item.url);
+    const status = parseHttpStatusFromSkipReason(item.reason);
+    promoted.push({
+      url: item.url,
+      ...(status != null
+        ? { httpStatus: status }
+        : { httpErrorReason: item.reason }),
+    });
+  }
+
+  return {
+    urls: [...urls.map((item) => ({ ...item })), ...promoted],
+    skipped: otherSkipped,
+    httpErrorCount: httpErrors.length,
+  };
+}
