@@ -1,10 +1,11 @@
 # LedgeIndex Docs
 
-Nextra docs site for `@ledgeindex/core` and `@ledgeindex/profile`.
+Nextra site: **Docs**, **Guides**, **Reference**. Port **3005**.
 
 ```bash
-npm run dev:ledgeindex-docs
+# from the ledgeindex repo root
+npm run dev:docs
 # http://localhost:3005
 ```
 
-VS Code task: **Start LedgeIndex Docs**
+- Guides: [Set up web](./content/guides/setup-web.mdx), [Set up desktop](./content/guides/setup-desktop.mdx)

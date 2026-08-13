@@ -1,29 +1,31 @@
 # Apps
 
-LedgeIndex ships more than packages. These apps sit on top of the same API.
+LedgeIndex ships more than packages. These apps sit on top of the same API. Step-by-step env and run commands are in [Guides](/guides).
 
 ## Web (`@ledgeindex/web`)
 
-Next.js UI on port **3004** (`npm run dev:ledgeindex`).
+Next.js UI on port **3004**. See [Set up web](/guides/setup-web).
 
 Typical work:
 
 - Connect documentation sources
 - Run ingest / refresh
 - Chat against an indexed source with citations
-- Manage source sets (including public/global sets for admins)
+- Manage source sets
 
-Point the UI at your API with `NEXT_PUBLIC_LEDGEINDEX_API_URL` when the API is not on the default origin.
+Point the UI at your API with `NEXT_PUBLIC_LEDGEINDEX_API_URL` (dev default `http://localhost:3010`).
 
-On the hosted cloud product, accounts can be invite-only: after sign-in, access stays pending until an admin approves. Admins get a users panel for that.
+On the hosted cloud product, accounts can be invite-only: after sign-in, access stays pending until an admin approves.
 
 ## Desktop (`@ledgeindex/desktop`)
 
-Electron app (`npm run dev:ledgeindex-desktop`). It talks to a local sidecar (`hosts/desktop-server`) that runs `@ledgeindex/server` with docs + profile, so indexing can stay on the machine.
+Electron app. See [Set up desktop](/guides/setup-desktop).
+
+It talks to a local sidecar (`hosts/desktop-server`) that runs `@ledgeindex/server` with docs + profile on **`:3015`**, so indexing can stay on the machine. Public / cloud sources need `NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL`.
 
 ## Docs site (`@ledgeindex/docs-site`)
 
-This site. Nextra on port **3005** (`npm run dev:ledgeindex-docs` or VS Code task **Start LedgeIndex Docs**).
+This site. Nextra on port **3005** (`npm run dev:docs` from the ledgeindex repo root).
 
 ## Mobile (`@ledgeindex/mobile`)
 
@@ -33,7 +35,7 @@ Expo app (`npm run start -w @ledgeindex/mobile`). Still early relative to web an
 
 | Host | Role |
 |------|------|
-| `ledgeindex-api` (workspace) | Hosted/dev API entry around `@ledgeindex/server` |
-| `hosts/desktop-server` | Electron sidecar (docs + profile) |
+| `hosts/api` | OSS / hosted Fastify entry (`npm run dev:api`, `:3010`, MCP at `/mcp`) |
+| `hosts/desktop-server` | Electron sidecar (`:3015`) |
 
 Minimal open-source server: `LEDGEINDEX_PROFILES=docs,profile`.

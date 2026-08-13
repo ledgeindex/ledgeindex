@@ -5,8 +5,7 @@ import type { KnowledgeSetScope } from "@/components/sources/knowledge-set-scope
 import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
 
 const LOCAL_FALLBACK = "http://127.0.0.1:3015";
-/** Last-resort hosted API — never localhost (that shipped once and broke ledgeindex.com). */
-const REMOTE_FALLBACK = "https://api.ledgeindex.com";
+const WEB_LOCAL_FALLBACK = "http://localhost:3010";
 
 function envUrl(name: string): string | undefined {
   const value = (process.env as Record<string, string | undefined>)[name];
@@ -24,17 +23,20 @@ function isLoopbackApiUrl(url: string): boolean {
   }
 }
 
-/** Local desktop sidecar (:3015). Do not fall back to the hosted API URL. */
+function isProductionBuild(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
+/** Local desktop sidecar (:3015). Do not fall back to a hosted API URL. */
 export function resolveDesktopLocalApiUrl(): string {
   return envUrl("NEXT_PUBLIC_LEDGEINDEX_LOCAL_API_URL") || LOCAL_FALLBACK;
 }
 
 /**
  * Hosted / web API for Public (global) sources on desktop.
- * Prefer an explicit remote override. Never use a loopback URL — that is the
- * local sidecar / web API, not the public corpus.
+ * Null when unset — OSS local-only must not invent a cloud origin.
  */
-export function resolveDesktopRemoteApiUrl(): string {
+export function resolveDesktopRemoteApiUrl(): string | null {
   const candidates = [
     envUrl("NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL"),
     envUrl("NEXT_PUBLIC_KNOWLEDGEINDEX_REMOTE_API_URL"),
@@ -43,26 +45,28 @@ export function resolveDesktopRemoteApiUrl(): string {
   for (const url of candidates) {
     if (url && !isLoopbackApiUrl(url)) return url;
   }
-  return REMOTE_FALLBACK;
+  return null;
 }
 
 /** Default local API for the web app in dev (usually :3010). */
 export function resolveWebLocalApiUrl(): string {
-  return (
+  const fromEnv =
     envUrl("NEXT_PUBLIC_LEDGEINDEX_API_URL") ||
-    envUrl("NEXT_PUBLIC_KNOWLEDGEINDEX_API_URL") ||
-    "http://localhost:3010"
-  );
+    envUrl("NEXT_PUBLIC_KNOWLEDGEINDEX_API_URL");
+  if (fromEnv) return fromEnv;
+  if (isProductionBuild()) return "";
+  return WEB_LOCAL_FALLBACK;
 }
 
 /** Point the shared client at local vs remote depending on Personal/Public scope. */
 export function syncDesktopApiBaseForScope(scope: KnowledgeSetScope): void {
   if (!getLedgeIndexDesktop()) return;
-  const url =
-    scope === "global"
-      ? resolveDesktopRemoteApiUrl()
-      : resolveDesktopLocalApiUrl();
-  setLedgeIndexApiBaseUrl(url);
+  if (scope === "global") {
+    const remote = resolveDesktopRemoteApiUrl();
+    if (remote) setLedgeIndexApiBaseUrl(remote);
+    return;
+  }
+  setLedgeIndexApiBaseUrl(resolveDesktopLocalApiUrl());
 }
 
 /**
@@ -76,8 +80,11 @@ export function syncApiBaseForHosting(input: {
 }): void {
   const desktop = Boolean(getLedgeIndexDesktop());
   if (input.scope === "global" || input.hosting === "cloud") {
-    setLedgeIndexApiBaseUrl(resolveDesktopRemoteApiUrl());
-    return;
+    const remote = resolveDesktopRemoteApiUrl();
+    if (remote) {
+      setLedgeIndexApiBaseUrl(remote);
+      return;
+    }
   }
   setLedgeIndexApiBaseUrl(
     desktop ? resolveDesktopLocalApiUrl() : resolveWebLocalApiUrl(),

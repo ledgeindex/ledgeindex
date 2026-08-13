@@ -1,0 +1,78 @@
+# Set up desktop
+
+The Electron app is the same UI as web, bundled with Vite. It does **not** start Next.js. Personal data goes to a sidecar on this machine. Public / cloud sources only if you set a remote API URL.
+
+## What you need
+
+- Node.js 20+
+- A clone of [ledgeindex/ledgeindex](https://github.com/ledgeindex/ledgeindex)
+- Optional: model keys in the environment the sidecar inherits (same names as the API `.env`)
+
+## Install and env
+
+From the **ledgeindex repo root**:
+
+```bash
+npm install
+
+cp apps/desktop/.env.example apps/desktop/.env
+# optional: also copy apps/web/.env.example → apps/web/.env.local
+# electron-vite reads NEXT_PUBLIC_* from apps/web and apps/desktop
+```
+
+| Variable | Default | What it does |
+|----------|---------|----------------|
+| `NEXT_PUBLIC_LEDGEINDEX_LOCAL_API_URL` | `http://127.0.0.1:3015` | Personal tab. The sidecar always listens here unless you change `PORT`. |
+| `NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL` | empty | Public tab and cloud-personal sources. **Leave empty** for local-only OSS. Never a loopback URL. |
+| `NEXT_PUBLIC_FIREBASE_*` | unset | Sign-in for cloud features. Optional if you only use Personal locally. |
+
+A **packaged** desktop build fails if `NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL` is missing or localhost. That value belongs in CI secrets for official releases, not in this repo.
+
+The sidecar also sets `MASTRA_PUBLIC_URL` to its own origin so MCP on `:3015` advertises the right URL.
+
+## Run
+
+From the repo root:
+
+```bash
+npm run dev:desktop
+```
+
+That starts:
+
+1. Electron + the shared web UI
+2. `@ledgeindex/desktop-server` on **`:3015`** (docs + profile)
+
+You do **not** need `npm run dev:api` or `npm run dev:web` for Personal.
+
+| URL | What |
+|-----|------|
+| sidecar `http://127.0.0.1:3015/health` | Local API |
+| sidecar `http://127.0.0.1:3015/mcp` | MCP for this machine’s indexes |
+
+## Personal vs Public
+
+- **Personal** always uses the sidecar (`:3015`). Indexes stay under the app user-data dir.
+- **Public** uses `NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL` when set. If it is empty, the app does not call a hosted API.
+
+## MCP
+
+Local Cursor config against the sidecar:
+
+```json
+{
+  "mcpServers": {
+    "ledgeindex-desktop": {
+      "url": "http://127.0.0.1:3015/mcp"
+    }
+  }
+}
+```
+
+Auth is off on the sidecar by default (`LEDGEINDEX_AUTH_REQUIRED` is not `1`). The in-app connect page prints this URL.
+
+## Related
+
+- [Set up web](/guides/setup-web)
+- [Apps](/docs/apps)
+- [Server](/docs/server)

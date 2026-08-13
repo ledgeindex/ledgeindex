@@ -18,7 +18,7 @@ const appVersion = JSON.parse(
 ).version as string;
 
 // NEXT_PUBLIC_* is inlined into the browser bundle at build time. Without it,
-// @ledgeindex/client falls back to http://localhost:3010 (broken on ledgeindex.com).
+// @ledgeindex/client falls back to localhost in development only.
 if (process.env.NODE_ENV === "production") {
   const apiUrl =
     process.env.NEXT_PUBLIC_LEDGEINDEX_API_URL?.trim() ||

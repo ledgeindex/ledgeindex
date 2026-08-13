@@ -33,6 +33,11 @@ export function getFrontendBaseUrl(): string {
     process.env.LEDGEINDEX_FRONTEND_URL?.trim() ??
     process.env.FRONTEND_BASE_URL?.trim();
   if (raw) return raw.replace(/\/$/, "");
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "LEDGEINDEX_FRONTEND_URL is required in production (MCP OAuth redirect).",
+    );
+  }
   return "http://localhost:3004";
 }
 

@@ -22,6 +22,7 @@ name: Desktop release
 # Desktop Google OAuth loopback (ActiveHue-style; packaged file:// auth):
 #   LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_ID
 #   LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_SECRET
+#   NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL   (hosted API for Public tab, non-localhost)
 
 on:
   push:
@@ -90,6 +91,7 @@ jobs:
           NEXT_PUBLIC_FIREBASE_FIRESTORE_DATABASE_ID: ${{ secrets.NEXT_PUBLIC_FIREBASE_FIRESTORE_DATABASE_ID }}
           LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_ID: ${{ secrets.LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_ID }}
           LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_SECRET: ${{ secrets.LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_SECRET }}
+          NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL: ${{ secrets.NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL }}
 
       - name: Package installer
         working-directory: apps/desktop

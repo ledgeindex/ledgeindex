@@ -1,3 +1,5 @@
+import { getLedgeIndexApiBaseUrl } from "@/lib/ledgeindex-api";
+
 export type BuilderPinKind = "markdown" | "code";
 
 export type BuilderMarkdownPin = {
@@ -185,6 +187,7 @@ export function createEmptyDraft(name = "Untitled source"): SourceBuilderDraft {
 }
 
 export function createSampleDraft(): SourceBuilderDraft {
+  const apiBase = getLedgeIndexApiBaseUrl();
   const draftId = createId("draft");
   const gettingStartedId = createId("cat");
   const basicsId = createId("sub");
@@ -300,7 +303,7 @@ Teams wiring docs copilots, support agents, or IDE tools that must stay tied to 
             id: createId("pin"),
             kind: "markdown",
             title: "Configure",
-            markdown: `Set your API base (local default is often \`http://localhost:3010\`) and pass auth when the server requires it.`,
+            markdown: `Set your API base (\`${apiBase}\`) and pass auth when the server requires it.`,
           },
           {
             id: createId("pin"),
@@ -312,7 +315,7 @@ Teams wiring docs copilots, support agents, or IDE tools that must stay tied to 
 
 export const ledge = createLedgeIndexClient({
   apiBaseUrl:
-    process.env.LEDGEINDEX_API_URL ?? "http://localhost:3010",
+    process.env.LEDGEINDEX_API_URL ?? "${apiBase}",
   getAuthHeaders: async () => ({
     Authorization: \`Bearer \${process.env.LEDGEINDEX_API_KEY}\`,
   }),
@@ -404,7 +407,7 @@ Flow: list sources or open a set → pick a slug → \`ask_source\`.`,
             code: `{
   "mcpServers": {
     "ledgeindex": {
-      "url": "http://localhost:3010/mcp"
+      "url": "${apiBase}/mcp"
     }
   }
 }`,

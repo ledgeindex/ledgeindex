@@ -50,9 +50,12 @@ export default defineConfig(({ mode }) => {
     }
   }
 
-  // Desktop: Personal → local sidecar (:3015). Public → hosted API (never web's :3010).
-  const localApi = 'http://127.0.0.1:3015'
-  const hostedFallback = 'https://api.ledgeindex.com'
+  // Desktop: Personal → local sidecar (:3015). Public → REMOTE_API_URL (never web's :3010).
+  const localApi =
+    (typeof webEnv.NEXT_PUBLIC_LEDGEINDEX_LOCAL_API_URL === 'string' &&
+    webEnv.NEXT_PUBLIC_LEDGEINDEX_LOCAL_API_URL.trim()) ||
+    'http://127.0.0.1:3015'
+  const isProd = mode === 'production'
   const isLoopback = (url: string) => {
     try {
       const host = new URL(url).hostname
@@ -68,13 +71,18 @@ export default defineConfig(({ mode }) => {
     process.env.NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL,
     process.env.LEDGEINDEX_REMOTE_API_URL
   ]
-  let remoteApi = hostedFallback
+  let remoteApi = ''
   for (const candidate of remoteCandidates) {
     const trimmed = typeof candidate === 'string' ? candidate.trim().replace(/\/$/, '') : ''
     if (trimmed && !isLoopback(trimmed)) {
       remoteApi = trimmed
       break
     }
+  }
+  if (isProd && !remoteApi) {
+    throw new Error(
+      'Production desktop build requires NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL (non-localhost).'
+    )
   }
   defineEnv['process.env.NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL'] = JSON.stringify(remoteApi)
   defineEnv['process.env.NEXT_PUBLIC_KNOWLEDGEINDEX_REMOTE_API_URL'] =

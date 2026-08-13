@@ -1,4 +1,4 @@
-/* LedgeIndex docs — Nextra theme + Docs/Reference tabs */
+/* LedgeIndex docs — Nextra theme + Docs / Guides / Reference tabs */
 
 .docs-tabs-container {
   width: 100%;
@@ -26,13 +26,72 @@ html:not(.dark) .docs-tabs-container {
 .docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href="/reference"]),
 .docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href^="/reference/"]),
 .docs-section-root[data-docs-section="docs"] aside li:has(a[href="/reference"]),
-.docs-section-root[data-docs-section="docs"] aside li:has(a[href^="/reference/"]) {
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href^="/reference/"]),
+.docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href="/guides"]),
+.docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href^="/guides/"]),
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href="/guides"]),
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href^="/guides/"]) {
   display: none !important;
 }
 
 .docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href="/docs"]),
 .docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href^="/docs/"]),
 .docs-section-root[data-docs-section="reference"] aside li:has(a[href="/docs"]),
-.docs-section-root[data-docs-section="reference"] aside li:has(a[href^="/docs/"]) {
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href^="/docs/"]),
+.docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href="/guides"]),
+.docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href^="/guides/"]),
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href="/guides"]),
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href^="/guides/"]) {
+  display: none !important;
+}
+
+.docs-section-root[data-docs-section="guides"] .nextra-sidebar-container li:has(a[href="/docs"]),
+.docs-section-root[data-docs-section="guides"] .nextra-sidebar-container li:has(a[href^="/docs/"]),
+.docs-section-root[data-docs-section="guides"] aside li:has(a[href="/docs"]),
+.docs-section-root[data-docs-section="guides"] aside li:has(a[href^="/docs/"]),
+.docs-section-root[data-docs-section="guides"] .nextra-sidebar-container li:has(a[href="/reference"]),
+.docs-section-root[data-docs-section="guides"] .nextra-sidebar-container li:has(a[href^="/reference/"]),
+.docs-section-root[data-docs-section="guides"] aside li:has(a[href="/reference"]),
+.docs-section-root[data-docs-section="guides"] aside li:has(a[href^="/reference/"]) {
+  display: none !important;
+}
+
+/* Leftover top-level /core /profile /server (canonical is /docs/*) */
+.docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href="/core"]),
+.docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href^="/core/"]),
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href="/core"]),
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href^="/core/"]),
+.docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href="/profile"]),
+.docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href^="/profile/"]),
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href="/profile"]),
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href^="/profile/"]),
+.docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href="/server"]),
+.docs-section-root[data-docs-section="docs"] .nextra-sidebar-container li:has(a[href^="/server/"]),
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href="/server"]),
+.docs-section-root[data-docs-section="docs"] aside li:has(a[href^="/server/"]),
+.docs-section-root[data-docs-section="guides"] .nextra-sidebar-container li:has(a[href="/core"]),
+.docs-section-root[data-docs-section="guides"] .nextra-sidebar-container li:has(a[href^="/core/"]),
+.docs-section-root[data-docs-section="guides"] aside li:has(a[href="/core"]),
+.docs-section-root[data-docs-section="guides"] aside li:has(a[href^="/core/"]),
+.docs-section-root[data-docs-section="guides"] .nextra-sidebar-container li:has(a[href="/profile"]),
+.docs-section-root[data-docs-section="guides"] .nextra-sidebar-container li:has(a[href^="/profile/"]),
+.docs-section-root[data-docs-section="guides"] aside li:has(a[href="/profile"]),
+.docs-section-root[data-docs-section="guides"] aside li:has(a[href^="/profile/"]),
+.docs-section-root[data-docs-section="guides"] .nextra-sidebar-container li:has(a[href="/server"]),
+.docs-section-root[data-docs-section="guides"] .nextra-sidebar-container li:has(a[href^="/server/"]),
+.docs-section-root[data-docs-section="guides"] aside li:has(a[href="/server"]),
+.docs-section-root[data-docs-section="guides"] aside li:has(a[href^="/server/"]),
+.docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href="/core"]),
+.docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href^="/core/"]),
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href="/core"]),
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href^="/core/"]),
+.docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href="/profile"]),
+.docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href^="/profile/"]),
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href="/profile"]),
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href^="/profile/"]),
+.docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href="/server"]),
+.docs-section-root[data-docs-section="reference"] .nextra-sidebar-container li:has(a[href^="/server/"]),
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href="/server"]),
+.docs-section-root[data-docs-section="reference"] aside li:has(a[href^="/server/"]) {
   display: none !important;
 }

@@ -2,13 +2,23 @@
   "name": "@ledgeindex/hosts-api",
   "version": "0.0.0",
   "private": true,
-  "description": "Hosted LedgeIndex API entry (Firebase, registry) — thin wrapper",
+  "description": "Hosted LedgeIndex API entry (Firebase, MCP OAuth, Inngest) via @ledgeindex/server",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch ../../../ledgeindex-api/src/server.ts",
-    "start": "node ../../../ledgeindex-api/dist/server.js"
+    "dev": "tsx watch src/start.ts",
+    "build": "esbuild src/start.ts --bundle --outfile=dist/start.js --platform=node --format=esm --packages=external",
+    "start": "node dist/start.js",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@ledgeindex/server": "^0.1.9"
+    "@ledgeindex/docs": "^0.1.9",
+    "@ledgeindex/server": "^0.1.9",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "esbuild": "^0.28.1",
+    "tsx": "^4.20.5",
+    "typescript": "^7.0.2"
   }
 }

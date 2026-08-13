@@ -23,6 +23,20 @@ const navbar = (
 );
 const footer = null;
 
+const LEGACY_TOP_LEVEL = new Set(["core", "profile", "server"]);
+
+function sidebarPageMap(pageMap) {
+  return pageMap.filter((item) => {
+    const name = typeof item.name === "string" ? item.name : "";
+    const route = typeof item.route === "string" ? item.route : "";
+    if (LEGACY_TOP_LEVEL.has(name)) return false;
+    if (route === "/core" || route === "/profile" || route === "/server") {
+      return false;
+    }
+    return true;
+  });
+}
+
 export default async function RootLayout({ children }) {
   return (
     <html lang="en" dir="ltr" suppressHydrationWarning>
@@ -31,7 +45,7 @@ export default async function RootLayout({ children }) {
         <SectionProvider>
           <Layout
             navbar={navbar}
-            pageMap={await getPageMap()}
+            pageMap={sidebarPageMap(await getPageMap())}
             docsRepositoryBase="https://github.com/ledgeindex/ledgeindex/tree/main/ledgeindex/apps/docs"
             footer={footer}
             sidebar={{

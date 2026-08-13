@@ -25,7 +25,12 @@ export function resolveApiBaseUrl(env?: ApiUrlEnv): string {
     (typeof process !== "undefined"
       ? process.env.NEXT_PUBLIC_KNOWLEDGEINDEX_API_URL
       : undefined);
-  return ledge?.trim() || legacy?.trim() || "http://localhost:3010";
+  const fromEnv = ledge?.trim() || legacy?.trim();
+  if (fromEnv) return fromEnv;
+  if (typeof process !== "undefined" && process.env.NODE_ENV === "production") {
+    return "";
+  }
+  return "http://localhost:3010";
 }
 
 /** Lazily resolved so Next can inline NEXT_PUBLIC_* at app build time. */
@@ -44,8 +49,6 @@ export function setLedgeIndexApiBaseUrl(url: string): void {
 }
 
 const getApiBase = () => getLedgeIndexApiBaseUrl();
-
-const REMOTE_API_FALLBACK = "https://api.ledgeindex.com";
 
 function envTrim(name: string): string | undefined {
   if (typeof process === "undefined") return undefined;
@@ -67,21 +70,20 @@ function isLoopbackApiUrl(url: string): boolean {
 /**
  * Hosted API for Just-me cloud / public corpus. Never a loopback URL.
  * Used when the active API base is local so the client can list cloud personal
- * sources without Cloud SQL proxy.
+ * sources without Cloud SQL proxy. Null when unset (OSS local-only).
  */
-export function resolveRemoteApiBaseUrl(): string {
+export function resolveRemoteApiBaseUrl(): string | null {
   const candidates = [
     envTrim("NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL"),
     envTrim("NEXT_PUBLIC_KNOWLEDGEINDEX_REMOTE_API_URL"),
     envTrim("LEDGEINDEX_REMOTE_API_URL"),
-    REMOTE_API_FALLBACK,
   ];
   for (const candidate of candidates) {
     if (!candidate) continue;
     if (isLoopbackApiUrl(candidate)) continue;
     return candidate;
   }
-  return REMOTE_API_FALLBACK;
+  return null;
 }
 
 function sameApiOrigin(a: string, b: string): boolean {
@@ -994,7 +996,7 @@ export async function listSources(scope?: SourceScope | "all") {
   if (!isLoopbackApiUrl(activeBase)) return primary;
 
   const remoteBase = resolveRemoteApiBaseUrl();
-  if (sameApiOrigin(activeBase, remoteBase)) return primary;
+  if (!remoteBase || sameApiOrigin(activeBase, remoteBase)) return primary;
 
   try {
     const remote = await api<{ sources: SourceSummary[] }>(

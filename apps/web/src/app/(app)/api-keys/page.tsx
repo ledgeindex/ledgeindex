@@ -10,6 +10,7 @@ import {
   deleteApiKey,
   KnowledgeIndexApiError,
   listApiKeys,
+  getLedgeIndexApiBaseUrl,
   type ApiKeySummary,
 } from "@/lib/ledgeindex-api";
 import { cn } from "@/lib/utils";
@@ -159,7 +160,7 @@ export default function ApiKeysPage() {
             Usage
           </p>
           <pre className="field-input mt-3 overflow-x-auto font-mono text-xs leading-relaxed">
-{`curl http://localhost:3010/api/projects \\
+{`curl ${getLedgeIndexApiBaseUrl()}/api/projects \\
   -H "Authorization: ApiKey live_..."`}
           </pre>
         </div>

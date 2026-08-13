@@ -2,6 +2,11 @@
 
 LedgeIndex is a pipeline: **discover → extract → chunk → embed → store → query**. Core owns those steps. The docs profile and profile package build products on top. Server is how you expose them over HTTP.
 
+To run the **web UI** or **desktop app** from a git clone, use the Guides tab:
+
+- [Set up web](/guides/setup-web)
+- [Set up desktop](/guides/setup-desktop)
+
 ## When to use which package
 
 | You want… | Use |
@@ -13,60 +18,13 @@ LedgeIndex is a pipeline: **discover → extract → chunk → embed → store �
 
 For predetermined multi-step flows you control in your own code, call core primitives. For “figure out what’s on this site and fill these lenses,” use profile. For a deployable API, use server.
 
-## Install (npm)
+## Install (npm, as a library)
 
 ```bash
 npm i @ledgeindex/core @ledgeindex/docs @ledgeindex/profile @ledgeindex/server
 ```
 
-In this monorepo, install from the **workspace root** that lists `ledgeindex/` and `ledgeindex-api/`.
-
-## Run the monorepo locally
-
-From the npm workspace root:
-
-```bash
-npm install
-
-# API + Mastra (default :3010)
-cp ledgeindex/env.example ledgeindex-api/.env
-# edit ledgeindex-api/.env
-npm run dev:ledgeindex-api
-
-# Web UI (default :3004)
-npm run dev:ledgeindex
-
-# This docs site (default :3005)
-npm run dev:ledgeindex-docs
-```
-
-Or use the VS Code tasks **Start LedgeIndex API**, **Start LedgeIndex Website**, and **Start LedgeIndex Docs**.
-
-| Service | Port | Script |
-|---------|------|--------|
-| API | 3010 | `npm run dev:ledgeindex-api` |
-| Web | 3004 | `npm run dev:ledgeindex` |
-| Docs site | 3005 | `npm run dev:ledgeindex-docs` |
-
-Data defaults to `ledgeindex-api/.data/` unless `LEDGEINDEX_DATA_DIR` is set.
-
-Health: `http://localhost:3010/health` and `GET /health/packages`.
-
-## Environment
-
-Minimal:
-
-```bash
-LEDGEINDEX_PROFILES=docs,profile
-PORT=3010
-LEDGEINDEX_DATA_DIR=./.data
-```
-
-You also need at least one model provider key (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, or `DEEPSEEK_API_KEY`). Optional: `COHERE_API_KEY` for rerank, `LEDGEINDEX_VECTOR_BACKEND=libsql|pgvector`.
-
-`LEDGEINDEX_PROFILES` is usually parsed by the host and passed into `createLedgeIndexServer({ profiles })`. Legacy value `company` maps to `profile`.
-
-Hosted cloud installs can require Firebase auth. When auth is required, an early-access gate applies: signed-in users stay pending until an admin approves them. Local desktop sidecars that run without that auth mode are not gated the same way. See [Apps](/docs/apps).
+To develop this monorepo, clone [ledgeindex/ledgeindex](https://github.com/ledgeindex/ledgeindex) and `npm install` from that repo root.
 
 ## First server (code)
 
@@ -82,12 +40,32 @@ await startLedgeIndexServer({
 
 Then hit `GET /health/packages` to confirm versions and active profiles.
 
+The in-repo host is `hosts/api` (`npm run dev:api`). See [Set up web](/guides/setup-web).
+
+## Environment (API process)
+
+Minimal:
+
+```bash
+LEDGEINDEX_PROFILES=docs,profile
+PORT=3010
+LEDGEINDEX_AUTH_REQUIRED=0
+LEDGEINDEX_DATA_DIR=./.data
+```
+
+You also need at least one model provider key (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, or `DEEPSEEK_API_KEY`) for ingest and chat. Optional: `COHERE_API_KEY` for rerank, `LEDGEINDEX_VECTOR_BACKEND=libsql|pgvector`.
+
+`LEDGEINDEX_PROFILES` is usually parsed by the host and passed into `createLedgeIndexServer({ profiles })`. Legacy value `company` maps to `profile`.
+
+Hosted cloud installs can require Firebase auth. When auth is required, signed-in users stay pending until an admin approves them. Local desktop sidecars that run without that auth mode are not gated the same way.
+
 ## Next steps
 
 | Goal | Start here |
 |------|------------|
-| Web, desktop, docs site | [Apps](/docs/apps) |
-| Sources, ingest, chat, MCP | [Docs profile](/docs/docs-profile) |
-| Core context and pipeline | [Core](/docs/core) |
+| Web UI + MCP | [Set up web](/guides/setup-web) |
+| Electron app | [Set up desktop](/guides/setup-desktop) |
+| Sources, ingest, chat, MCP internals | [Docs profile](/docs/docs-profile) |
+| Core pipeline | [Core](/docs/core) |
 | `profileSite` and lenses | [Profile](/docs/profile) |
-| Server options and hooks | [Server](/docs/server) |
+| Server options | [Server](/docs/server) |

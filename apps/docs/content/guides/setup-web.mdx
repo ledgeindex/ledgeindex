@@ -1,0 +1,92 @@
+# Set up web
+
+Run the Next.js UI against a local Fastify API. MCP is on that API process, not in Next.js.
+
+## What you need
+
+- Node.js 20+
+- A clone of [ledgeindex/ledgeindex](https://github.com/ledgeindex/ledgeindex)
+- Optional until you crawl or chat: a model key (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, or `DEEPSEEK_API_KEY`)
+
+## Install and env
+
+From the **ledgeindex repo root**:
+
+```bash
+npm install
+
+cp env.example .env
+# edit .env — add a model key when you want ingest or chat
+
+cp apps/web/.env.example apps/web/.env.local
+```
+
+### API (`.env`)
+
+Copy from `env.example` at the repo root.
+
+| Variable | Default | What it does |
+|----------|---------|----------------|
+| `PORT` / `HOST` | `3010` / `0.0.0.0` | Where the API listens |
+| `LEDGEINDEX_PROFILES` | `docs,profile` | Server profiles |
+| `LEDGEINDEX_AUTH_REQUIRED` | `0` | `0` = local MCP and UI work without Firebase |
+| `LEDGEINDEX_DATA_DIR` | `./.data` | Index files on disk |
+| `MASTRA_PUBLIC_URL` | `http://localhost:3010` | Origin advertised for `/mcp` and OAuth discovery |
+| `LEDGEINDEX_FRONTEND_URL` | `http://localhost:3004` | Browser origin for MCP OAuth (`/mcp/connect`) |
+| `GOOGLE_GENERATIVE_AI_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` | unset | Models |
+| `COHERE_API_KEY` | unset | Rerank (optional) |
+| `LEDGEINDEX_VECTOR_BACKEND` | `libsql` | `libsql` or `pgvector` |
+
+### Web UI (`apps/web/.env.local`)
+
+Copy from `apps/web/.env.example`.
+
+| Variable | Default | What it does |
+|----------|---------|----------------|
+| `NEXT_PUBLIC_LEDGEINDEX_API_URL` | `http://localhost:3010` | Browser and server calls to the API |
+| `NEXT_PUBLIC_LEDGEINDEX_MASTRA_URL` | same as API | Only if Mastra is on a different origin |
+| `NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL` | empty | Hosted API for desktop Public. Leave empty for local-only web. |
+| `NEXT_PUBLIC_FIREBASE_*` | unset | Sign-in. Optional for local `LEDGEINDEX_AUTH_REQUIRED=0`. |
+
+Dev falls back to `http://localhost:3010` if the web env is missing. A **production** `next build` fails unless `NEXT_PUBLIC_LEDGEINDEX_API_URL` is set to a non-localhost origin.
+
+## Run
+
+Two processes, from the repo root:
+
+```bash
+npm run dev:api    # Fastify + MCP on :3010
+npm run dev:web    # Next.js on :3004
+```
+
+| URL | What |
+|-----|------|
+| http://localhost:3004 | UI |
+| http://localhost:3010/health | API health |
+| http://localhost:3010/mcp | MCP for Cursor / agents |
+
+## MCP
+
+`LEDGEINDEX_AUTH_REQUIRED=0` means `/mcp` works without OAuth. Cursor:
+
+```json
+{
+  "mcpServers": {
+    "ledgeindex": {
+      "url": "http://localhost:3010/mcp"
+    }
+  }
+}
+```
+
+The UI page `/mcp/connect` prints the same URL from `NEXT_PUBLIC_LEDGEINDEX_API_URL`. If you publish the API, set `MASTRA_PUBLIC_URL` to that public origin.
+
+## Production web
+
+Set `NEXT_PUBLIC_LEDGEINDEX_API_URL` to your hosted API at **build** time (Next inlines `NEXT_PUBLIC_*`). Do not leave it on localhost. Firebase public keys go in the same web env if you turn auth on.
+
+## Related
+
+- [Set up desktop](/guides/setup-desktop)
+- [Docs profile / MCP](/docs/docs-profile)
+- [Apps](/docs/apps)

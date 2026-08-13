@@ -1,23 +1,33 @@
 # @ledgeindex/desktop
 
-Electron desktop app for LedgeIndex. UI is the **same React app as `apps/web`**, bundled in Electron Vite — **no Next.js website server**.
+Electron app. Same React UI as `apps/web`, bundled with Vite. **No Next.js server.** Personal indexes run on a sidecar (`hosts/desktop-server`) at `:3015`.
 
-## Develop
+Full walkthrough: docs site **Guides → Set up desktop** ([`apps/docs/content/guides/setup-desktop.mdx`](../docs/content/guides/setup-desktop.mdx)).
+
+## Run (from the ledgeindex repo root)
 
 ```bash
-npm run dev:ledgeindex-desktop
+npm install
+cp apps/desktop/.env.example apps/desktop/.env
+
+npm run dev:desktop
 ```
 
-Starts:
+Starts Electron plus `@ledgeindex/desktop-server` on **`:3015`**. You do not need `dev:api` / `dev:web` for Personal.
 
-1. Electron + Vite renderer (shared web UI)
-2. **Its own** `@ledgeindex/desktop-server` on **`:3015`** for **Personal**
-3. **Public** tab uses the remote/web API URL from `apps/web` env (`NEXT_PUBLIC_LEDGEINDEX_API_URL`) — never the local sidecar
+## Env (`apps/desktop/.env.example`)
+
+| Variable | Dev default | Notes |
+|----------|-------------|--------|
+| `NEXT_PUBLIC_LEDGEINDEX_LOCAL_API_URL` | `http://127.0.0.1:3015` | Personal tab / sidecar |
+| `NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL` | empty | Public / cloud. Leave empty for local-only OSS. Required (non-localhost) for a packaged production build. |
+
+MCP for this machine: `http://127.0.0.1:3015/mcp`.
 
 ## Stack
 
-- Frameless window; web AppShell header = drag region + window controls
-- Next.js imports shimmed → React Router
-- Sidecar: `@ledgeindex/desktop-server` → `@ledgeindex/server` on dedicated port
+- Frameless window; web AppShell header is the drag region
+- Next.js imports shimmed to React Router
+- Sidecar: `@ledgeindex/desktop-server` → `@ledgeindex/server`
 
-**License:** same as monorepo — see [`../../LICENSE.md`](../../LICENSE.md).
+**License:** [`../../LICENSE.md`](../../LICENSE.md)

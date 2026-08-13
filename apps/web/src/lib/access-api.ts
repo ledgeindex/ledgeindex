@@ -36,9 +36,8 @@ async function readJson<T>(response: Response): Promise<T> {
  * sidecar — that one runs without Firebase and would report everyone as approved.
  */
 function url(path: string): string {
-  const base = getLedgeIndexDesktop()
-    ? resolveDesktopRemoteApiUrl()
-    : getLedgeIndexApiBaseUrl();
+  const remote = getLedgeIndexDesktop() ? resolveDesktopRemoteApiUrl() : null;
+  const base = remote ?? getLedgeIndexApiBaseUrl();
   return `${base.replace(/\/$/, "")}${path}`;
 }
 

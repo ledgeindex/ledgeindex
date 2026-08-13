@@ -43,7 +43,7 @@ export default function ExploreChatPage(): React.JSX.Element {
     if (!isDesktop) return;
     setLedgeIndexApiBaseUrl(
       chatUsesRemoteApi
-        ? resolveDesktopRemoteApiUrl()
+        ? (resolveDesktopRemoteApiUrl() ?? resolveDesktopLocalApiUrl())
         : resolveDesktopLocalApiUrl(),
     );
     return () => {

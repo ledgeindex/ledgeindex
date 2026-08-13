@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Eyebrow, SectionBadge } from "@/components/ui/section-badge";
 import { type DesktopReleaseAsset } from "@/lib/desktop-release";
+import { getLedgeIndexApiBaseUrl } from "@/lib/ledgeindex-api";
 import { cn } from "@/lib/utils";
 
 type OpenSourceSectionProps = {
@@ -49,14 +50,16 @@ function buildPillars(
   ];
 }
 
-const TERMINAL_LINES = [
-  { prompt: true, text: "npm install @ledgeindex/server" },
-  { prompt: true, text: "LEDGEINDEX_DATA_DIR=~/.ledgeindex ledgeindex-server" },
-  {
-    prompt: false,
-    text: "✓ docs + company profiles ready on http://localhost:3010",
-  },
-] as const;
+function terminalLines(apiUrl: string) {
+  return [
+    { prompt: true, text: "npm install @ledgeindex/server" },
+    { prompt: true, text: "LEDGEINDEX_DATA_DIR=~/.ledgeindex ledgeindex-server" },
+    {
+      prompt: false,
+      text: `✓ docs + company profiles ready on ${apiUrl}`,
+    },
+  ] as const;
+}
 
 export function SelfHostTerminal({ className }: { className?: string }) {
   return (
@@ -75,7 +78,7 @@ export function SelfHostTerminal({ className }: { className?: string }) {
         </span>
       </div>
       <div className="space-y-1.5 overflow-x-auto p-4 font-mono text-[0.8125rem] leading-6 sm:p-5">
-        {TERMINAL_LINES.map((line) => (
+        {terminalLines(getLedgeIndexApiBaseUrl()).map((line) => (
           <p key={line.text} className="whitespace-nowrap">
             {line.prompt ? (
               <span aria-hidden className="mr-2 select-none text-accent">

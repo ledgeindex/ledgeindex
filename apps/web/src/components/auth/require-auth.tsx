@@ -26,7 +26,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
         <p className="max-w-md text-center text-sm text-muted">
           Firebase Auth is not configured. Add{" "}
           <code className="font-mono text-xs">NEXT_PUBLIC_FIREBASE_*</code> to{" "}
-          <code className="font-mono text-xs">ledgeindex/.env.local</code>.
+          <code className="font-mono text-xs">apps/web/.env.local</code>.
         </p>
       </div>
     );

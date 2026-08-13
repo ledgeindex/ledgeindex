@@ -80,8 +80,8 @@ function LoginContent() {
         <SiteBrand className="justify-center" />
         <p className="mt-8 text-sm text-muted">
           Add Firebase web config to{" "}
-          <code className="font-mono text-xs">ledgeindex/.env.local</code>{" "}
-          (see <code className="font-mono text-xs">.env.example</code>).
+          <code className="font-mono text-xs">apps/web/.env.local</code>{" "}
+          (see <code className="font-mono text-xs">apps/web/.env.example</code>).
         </p>
       </div>
     );
