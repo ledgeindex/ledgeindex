@@ -1,0 +1,178 @@
+# askAcross
+
+Ask a question across **several indexed sources** and get **one synthesized answer** with citations from each corpus that was read.
+
+Use this when a repo and its docs site are separate sources — or any stack where the answer may span code and prose. For a single source, use [`ask`](/reference/sdk/ask) instead.
+
+**Requires a chat model key** — there is no `retrieve-only` mode. The Explore pipeline picks sources (unless you pin `sourceMode: "all"`), retrieves per source, merges hits, and writes the agent answer.
+
+## Minimal example
+
+```ts
+import { createLedgeIndex } from "@ledgeindex/sdk";
+
+const li = await createLedgeIndex({
+  keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+});
+
+const { answer, citations, pickedSources, insufficient } = await li.askAcross(
+  "how is act() implemented from the public API to the browser click?",
+  {
+    sources: ["stagehand", "stagehand-docs"],
+    sourceMode: "all",
+  },
+);
+
+for (const source of pickedSources) {
+  console.log(`read ${source.slug} (${source.kind})`);
+}
+for (const cite of citations) {
+  console.log(cite.score.toFixed(2), cite.name, cite.url);
+}
+console.log(answer);
+```
+
+Repo sources cite **file paths and line ranges**; docs sources cite **page URLs**.
+
+## vs `li.ask`
+
+| | `li.ask(slug, question)` | `li.askAcross(question, options)` |
+|---|--------------------------|-----------------------------------|
+| Sources | Exactly one | One or more (picker or all) |
+| Chat key | Optional with `mode: "retrieve-only"` | **Required** |
+| Routing | Direct RAG on that source | Explore pipeline + optional LLM picker |
+| Typical use | One docs site or one repo | Repo + docs, multi-package stacks |
+| HTTP API | `POST /api/sources/:id/ask` | SDK / CLI only (for now) |
+
+## Source modes
+
+| Mode | Option | Behavior |
+|------|--------|----------|
+| **Picker** (default) | `sourceMode: "picker"` | LLM chooses which allowed sources to read (up to 3). Skips irrelevant corpora when the question is clearly docs-only or code-only. |
+| **All** | `sourceMode: "all"` | Always retrieve from **every** source in `sources` or the saved set. No picker — use for end-to-end questions that need both implementation and reference docs. |
+
+When sources are pinned (`sources` or `sourceSet`), retrieval is forced even if the question looks conversational.
+
+## Pin sources per call
+
+Pass slugs or ids inline:
+
+```ts
+await li.askAcross("what changed in v4?", {
+  sources: ["stagehand-docs", "stagehand"],
+  sourceMode: "picker",
+});
+```
+
+Slugs are resolved the same way as `li.ask` — id, slug, or partial name.
+
+## Pin sources ahead of time (source sets)
+
+Save a named set once, then reference it by slug:
+
+```ts
+await li.saveSourceSet({
+  name: "Stagehand stack",
+  slug: "stagehand-stack",
+  description: "Implementation + official docs",
+  sources: ["stagehand", "stagehand-docs"],
+});
+
+const sets = await li.listSourceSets();
+// [{ slug: "stagehand-stack", sourceCount: 2, sources: [...] }]
+
+await li.askAcross("how does caching work in act()?", {
+  sourceSet: "stagehand-stack",
+  sourceMode: "all",
+});
+```
+
+Saving the same `slug` again **updates** membership. Sets are scoped to `localUserId` (default `ledgeindex-sdk-local` for SDK).
+
+HTTP CRUD for sets: [Source sets API](/reference/api/source-sets).
+
+## LedgeIndexAskAcrossOptions
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `sources` | — | Inline slug/id allowlist — e.g. `["my-repo", "my-repo-docs"]` |
+| `sourceSet` | — | Saved set id or slug instead of listing sources each call |
+| `sourceMode` | `"picker"` | `"picker"` \| `"all"` |
+| `rerankBackend` | from `createLedgeIndex` / env | Same backends as [`ask`](/reference/sdk/ask#rerank-backends-quick-reference). Applied per source during retrieval. |
+
+Provide **`sources` or `sourceSet`** (or both — the allowlist is the intersection of constraints from the Explore processor).
+
+## RoutedAskResult
+
+```ts
+type RoutedAskResult = {
+  answer: string;
+  chunks: SourceAskHit[];       // full passage text + scores
+  citations: AskCitation[];   // deduped name + url (+ file:line on repos)
+  insufficient: boolean;      // true when retrieval found too little context
+  pickedSources: Array<{
+    id: string;
+    slug: string;
+    name: string;
+    kind: "code" | "docs";    // repository vs crawled documentation
+  }>;
+};
+```
+
+`pickedSources` lists what was actually read for this question. In `sourceMode: "all"`, every allowed source appears. In picker mode, it is the subset the router chose.
+
+## How retrieval works
+
+1. **Scope** — Allowed sources come from `explore_source_slugs` and/or `source_set_id`.
+2. **Picker** (unless `all`) — Structured LLM call chooses slugs; each candidate includes `kind: code | docs` so code questions route to repos and prose questions to docs when appropriate.
+3. **Per-source retrieve** — Each picked source runs the full hybrid stack (dense + lexical → rerank) under its own rerank context. Code sources keep the fused order; prose sources use the cross-encoder when configured.
+4. **Fair merge** — Hits are merged round-robin by rank across sources (not a single global score pool), up to the chunk budget (~24).
+5. **Answer** — One agent pass synthesizes the final text and `citations`.
+
+Merging corpora into one vector query would break per-source ranking — that is why retrieval stays per-source on purpose.
+
+## CLI
+
+```bash
+# Picker — LLM chooses which pinned sources to read
+ledgeindex ask --sources stagehand,stagehand-docs "how does act() work?"
+
+# All — always read every pinned source
+ledgeindex ask --all --sources stagehand,stagehand-docs "how is act() implemented end to end?"
+
+# Saved set
+ledgeindex ask --set stagehand-stack "how does caching work?"
+ledgeindex ask --all --set stagehand-stack "how is act() wired?"
+```
+
+Requires a chat key (`ledgeindex config set google …` or env). See [Set up CLI](/guides/setup-cli).
+
+## Helper script
+
+From a LedgeIndex clone:
+
+```bash
+node scripts/ask-across.mjs stagehand,stagehand-docs "your question"
+node scripts/ask-across.mjs --all stagehand,stagehand-docs "your question"
+node scripts/ask-across.mjs --set stagehand-stack "your question"
+```
+
+Same flags as the CLI. See [Index documentation](/guides/setup-docs#repo--docs-together).
+
+## Low-level export
+
+```ts
+import { askAcrossSources, saveSourceSet, listSourceSets } from "@ledgeindex/sdk";
+
+await initRuntime(resolved); // or createLedgeIndex() first
+
+const result = await askAcrossSources("…", { sources: ["a", "b"], sourceMode: "all" });
+```
+
+## Related
+
+- [ask](/reference/sdk/ask) — single-source RAG
+- [Index documentation](/guides/setup-docs) — crawl docs + repo together
+- [Index a repository](/guides/setup-repo)
+- [Source sets API](/reference/api/source-sets)
+- [createLedgeIndex](/reference/sdk/create-ledgeindex)

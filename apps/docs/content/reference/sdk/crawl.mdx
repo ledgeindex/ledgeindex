@@ -1,0 +1,145 @@
+# crawl
+
+Full web crawl → URL filter → ingest pipeline. Same flow as the CLI and web UI source builder.
+
+## On the handle
+
+```ts
+const result = await li.crawl({
+  url: "https://docs.example.com",
+  maxPages: 50,
+  onProgress: (update) => console.error(update.phase, update.detail),
+});
+// { sourceId, runId, name, url, pageCount, chunkCount }
+```
+
+## Low-level export
+
+```ts
+import { runWebCrawl, defaultWebCrawlConfig } from "@ledgeindex/sdk";
+
+// Requires initRuntime / createLedgeIndex first
+const result = await runWebCrawl({ url: "https://docs.example.com" });
+```
+
+## LedgeIndexCrawlOptions
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `url` | — | Start URL (required) |
+| `name` | from preflight site name | Source display name |
+| `maxPages` | `1000` | Cap discovered pages |
+| `autoFilter` | `false` | Opt-in LLM URL cleanup (requires model key) |
+| `enrichExamples` | `false` | Opt-in example extraction — see [below](#enrich-examples-enrichexamples) |
+| `crawlConfig` | — | Merge patterns, selectors, `renderJs`, etc. into crawl config |
+| `scope` | `"personal"` | `"personal"` or `"global"` |
+| `onProgress` | — | Callback with phase updates |
+
+## Enrich examples (`enrichExamples`)
+
+**Off by default. Experimental.**
+
+After pages are crawled and converted to markdown, this optional step runs an LLM over each page to extract **structured examples that already appear in the docs** — it does not invent content.
+
+| Kind | What gets extracted |
+|------|---------------------|
+| `code` | Snippets, SDK calls, curl, shell |
+| `setup` | Install steps, env vars, getting started |
+| `usage` | How-to procedures, request/response walkthroughs |
+| `config` | YAML / JSON / TOML samples |
+| `api_response` | HTTP response bodies (status line, error codes, JSON payloads) |
+
+Each example keeps the nearest heading on the page as its `section` (e.g. “Quickstart”, “Authentication”). Those examples are chunked and embedded as **extra vector entries** (`chunkKind: "example"`) on top of normal page text.
+
+That example index powers **`queryExamples` / `findExamples`** and the **example catalog** — the retrieval path agents and builder workflows use when they need **copy-pasteable code**, install steps, or config snippets from your docs (not just prose summaries). Typical use: a **planner or builder workflow** that must ground each step in real SDK calls, curl commands, or setup blocks from the source you crawled.
+
+**Default crawl skips this** — pages are still indexed via normal chunking + FastEmbed, and `ask` / prose RAG work fine. Turn enrichment on when downstream automation needs a **searchable example catalog**.
+
+**When to use**
+
+- **Planner / builder workflows** that assemble steps from docs and must cite real code (agents, codegen, “build me X from these docs”)
+- API / SDK docs with lots of fenced code, curl, or copy-paste snippets
+- You call `queryExamples`, `findExamples`, or MCP `find_examples` and want sharper hits
+- You are fine with slower ingest and a chat model key per page
+
+**When to skip (default)**
+
+- Chat-only Q&A over prose (`ask` / source chat) — normal page chunks are enough
+- General marketing or changelog pages with little copy-paste material
+- No model key, or you want the fastest/cheapest crawl
+
+| | |
+|---|---|
+| Enable | `enrichExamples: true` or CLI `--enrich` |
+| Requires | Chat model key (google / openai / deepseek) |
+| Cost | Extra LLM call per page — slower than plain crawl |
+| Web UI | Not exposed yet (always off in the app) |
+| Kill switch | `LEDGEINDEX_ENRICH_EXAMPLES=0` disables even when opted in |
+
+Low-level primitive: [Enrich](/reference/core/enrich). Example retrieval after index: [Query](/reference/core/query) (`queryExamples`, `findExamples`).
+
+## Progress phases
+
+`onProgress` receives `CrawlProgressUpdate`:
+
+| `phase` | Meaning |
+|---------|---------|
+| `preflight` | Checking start URL |
+| `crawl` | Discovering / validating pages |
+| `filter` | LLM URL cleanup |
+| `index` | Extract, chunk, embed, store |
+| `done` | Finished |
+| `error` | Failed (also throws) |
+
+## Usage — minimal
+
+```ts
+const { sourceId, pageCount, chunkCount } = await li.crawl({
+  url: "https://docs.astro.build",
+  maxPages: 20,
+});
+
+// Optional AI URL cleanup (needs model key):
+await li.crawl({
+  url: "https://docs.example.com",
+  autoFilter: true,
+});
+
+// Fine-grained crawl config:
+await li.crawl({
+  url: "https://docs.example.com",
+  crawlConfig: {
+    includePatterns: ["/docs/"],
+    excludePatterns: ["/blog/"],
+    renderJs: true,
+  },
+});
+
+console.log(sourceId, pageCount, chunkCount);
+```
+
+## Usage — with progress
+
+```ts
+await li.crawl({
+  url: "https://docs.example.com",
+  enrichExamples: true,
+  onProgress: ({ phase, detail, crawlProgress }) => {
+    if (phase === "crawl" && crawlProgress) {
+      console.log(`discovered ${crawlProgress.pagesDiscovered}`);
+    } else {
+      console.log(phase, detail);
+    }
+  },
+});
+```
+
+## defaultWebCrawlConfig
+
+Build a `WebCrawlSourceConfig` for a start URL (selectors, sitemap, max pages, user agent). Used internally; override fields before passing to lower-level ingest APIs if you compose manually.
+
+## Related
+
+- [createLedgeIndex](/reference/sdk/create-ledgeindex)
+- [ask](/reference/sdk/ask)
+- [@ledgeindex/client runWebCrawl](/reference/client/crawl) — HTTP variant against a running API

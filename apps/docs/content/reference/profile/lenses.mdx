@@ -1,6 +1,6 @@
 # Lenses
 
-Named research modes for `@ledgeindex/profile`. Each lens picks relevant URLs from the crawl catalog, fetches pages, and synthesizes structured output.
+Named research modes for `@ledgeindex/profile`. Each lens picks relevant URLs from the crawl catalog, fetches pages, and synthesizes **typed JSON** output (with citations).
 
 ## Setup
 
@@ -19,13 +19,25 @@ import {
 
 ```ts
 const lenses = defaultProfileLenses();
-// typically identity, pricing, capabilities
+// all 14 built-in lenses (see table below)
+```
+
+Pass a subset when you only need part of a profile:
+
+```ts
+await profileSite("https://example.com/", [
+  "identity",
+  "capabilities",
+  "package_usage_examples",
+]);
 ```
 
 ## Usage — from CLI / env strings
 
 ```ts
-const lenses = parseResearchLensList("identity,pricing");
+const lenses = parseResearchLensList(
+  "identity,pricing,package_primitives_usage,package_usage_examples",
+);
 ```
 
 ## Usage — introspect
@@ -33,33 +45,392 @@ const lenses = parseResearchLensList("identity,pricing");
 ```ts
 for (const id of researchLensIds) {
   const def = getLensDefinition(id);
-  console.log(id, def);
+  console.log(id, def.label);
 }
 
 const lens = getResearchLens("capabilities");
 ```
 
-## Built-in lenses
+## Built-in lenses (14)
 
-| Id | Output focus |
-|----|----------------|
-| `identity` | Who the company is, positioning |
-| `pricing` | Plans, pricing pages |
-| `capabilities` | Product features / what it does |
+### Company & market
 
-Typed outputs: `IdentityLensOutput`, `PricingLensOutput`, `CapabilitiesLensOutput`, `CompanyProfileData`, `LensOutputById`.
+| Id | Label | Output focus |
+|----|-------|----------------|
+| `identity` | Positioning & ICP | Category, one-liner, buyers, segments |
+| `pricing` | Pricing | Plans, price text, trial / enterprise signals |
+| `capabilities` | Product & features | Ranked capabilities (`main` / `top` / `supporting`) |
+| `integrations` | Integrations | Third-party tools, connectors, channels |
+| `trust` | Trust & security | Compliance, security, privacy claims |
+| `gtm` | Go-to-market | Sales motion, CTAs, trial/demo/signup |
+| `business_usage` | Business usage | Business problems → what teams build/run (not feature list) |
+| `content_seo_strategy` | Content & SEO strategy | Content pillars, URL patterns, organic discovery plays |
 
-## Example
+### Docs & developer experience
+
+| Id | Label | Output focus |
+|----|-------|----------------|
+| `docs_identity` | About | What a **docs set** covers (kind, language, summary) |
+| `ai_and_dev_experience` | AI & developer experience | APIs, SDKs, MCP, docs integration for builders |
+| `basic_usage` | Basic usage | Quickstarts, hello-world, install paths |
+| `main_use_cases` | Main use cases | Primary product scenarios (ranked for example catalogs) |
+
+### Package library / builder workflows
+
+| Id | Label | Output focus |
+|----|-------|----------------|
+| `package_primitives_usage` | Package primitives | Core APIs / building blocks and how to use them |
+| `package_usage_examples` | Package guides & examples | Concrete tutorials, recipes, templates with code paths |
+
+Use **`package_primitives_usage`** + **`package_usage_examples`** when feeding **planner / builder workflows** or a Package Library — primitives for API moves, examples for full guided scenarios.
+
+## Example output per lens
+
+After `profileSite`, each lens merges into `profile.<lensId>`. Shapes below are **illustrative** (truncated arrays, fictional “Acme Docs” site). Real runs include more items and citations grounded in fetched pages.
+
+### `identity`
+
+```json
+{
+  "category": "Developer documentation platform",
+  "oneLiner": "Turn product docs into a searchable knowledge base agents can query with citations.",
+  "primaryBuyers": ["Developer relations", "Technical writers", "Platform engineering"],
+  "segmentsAndIndustries": ["B2B SaaS", "API-first products", "Open-source projects"],
+  "citations": [
+    {
+      "url": "https://acme.example/about",
+      "quote": "Built for teams who ship docs alongside code."
+    }
+  ]
+}
+```
+
+### `docs_identity`
+
+```json
+{
+  "overallSummary": "Acme Docs covers installation, source configuration, crawl pipelines, and the ask API. It targets backend and full-stack developers integrating documentation search into apps and agents.",
+  "kind": "libraries",
+  "language": "typescript",
+  "citations": [
+    { "url": "https://docs.acme.example/getting-started" }
+  ]
+}
+```
+
+### `capabilities`
+
+```json
+{
+  "capabilities": [
+    {
+      "name": "Web crawl & ingest",
+      "description": "Discover URLs, extract markdown, chunk, and embed into a vector index.",
+      "priority": "main",
+      "citation": { "url": "https://acme.example/product/crawl" }
+    },
+    {
+      "name": "Source chat (RAG)",
+      "description": "Ask questions over indexed docs with rerank and cited chunks.",
+      "priority": "main",
+      "citation": { "url": "https://acme.example/product/chat" }
+    },
+    {
+      "name": "MCP server",
+      "description": "Expose list/ask tools to Cursor and Claude Desktop.",
+      "priority": "top",
+      "citation": { "url": "https://acme.example/integrations/mcp" }
+    }
+  ],
+  "gapsOrUnclear": "On-prem HA deployment details not stated on marketing pages."
+}
+```
+
+### `pricing`
+
+```json
+{
+  "plans": [
+    {
+      "name": "Starter",
+      "priceText": "$0",
+      "billingPeriod": "month",
+      "limits": "1 source, 500 pages",
+      "citation": { "url": "https://acme.example/pricing" }
+    },
+    {
+      "name": "Team",
+      "priceText": "$49",
+      "billingPeriod": "month",
+      "limits": "10 sources, 10k pages",
+      "citation": { "url": "https://acme.example/pricing" }
+    }
+  ],
+  "enterpriseOrCustom": "Contact sales for SSO, VPC, and SLA.",
+  "trialOrFreeTier": "Starter tier is free; Team includes 14-day trial."
+}
+```
+
+### `integrations`
+
+```json
+{
+  "integrations": [
+    {
+      "name": "Cursor",
+      "category": "IDE / MCP",
+      "citation": { "url": "https://acme.example/integrations/cursor" }
+    },
+    {
+      "name": "Slack",
+      "category": "Notifications",
+      "citation": { "url": "https://acme.example/integrations" }
+    }
+  ]
+}
+```
+
+### `trust`
+
+```json
+{
+  "claims": [
+    {
+      "claim": "SOC 2 Type II certified",
+      "citation": { "url": "https://acme.example/security" }
+    },
+    {
+      "claim": "Data encrypted at rest (AES-256) and in transit (TLS 1.2+)",
+      "citation": { "url": "https://acme.example/security" }
+    }
+  ]
+}
+```
+
+### `gtm`
+
+```json
+{
+  "motion": "Product-led growth with self-serve signup; sales assist for enterprise.",
+  "primaryCtas": ["Start free", "Book a demo", "View docs"],
+  "trialDemoSignup": "Free Starter tier; Team trial without credit card.",
+  "citations": [
+    { "url": "https://acme.example/", "quote": "Start free — no credit card" }
+  ]
+}
+```
+
+### `ai_and_dev_experience`
+
+```json
+{
+  "items": [
+    {
+      "name": "REST API",
+      "description": "Sources, crawl runs, and ask endpoints with OpenAPI spec.",
+      "citation": { "url": "https://docs.acme.example/api" }
+    },
+    {
+      "name": "TypeScript SDK",
+      "description": "`@acme/sdk` for crawl and ask from Node workers.",
+      "citation": { "url": "https://docs.acme.example/sdk" }
+    },
+    {
+      "name": "MCP",
+      "description": "`list_source_sets` and `ask_source` tools for agents.",
+      "citation": { "url": "https://docs.acme.example/mcp" }
+    }
+  ]
+}
+```
+
+### `basic_usage`
+
+```json
+{
+  "examples": [
+    {
+      "name": "Install CLI",
+      "description": "Global install and first crawl from the terminal.",
+      "kind": "install",
+      "prerequisites": ["Node.js 22+"],
+      "citation": { "url": "https://docs.acme.example/cli" }
+    },
+    {
+      "name": "Hello-world ask",
+      "description": "Crawl a docs URL and ask one question in a script.",
+      "kind": "hello-world",
+      "citation": { "url": "https://docs.acme.example/quickstart" }
+    }
+  ]
+}
+```
+
+### `main_use_cases`
+
+```json
+{
+  "useCases": [
+    {
+      "name": "In-app docs search",
+      "description": "Embed ask API in a product help panel with cited answers.",
+      "priority": "main",
+      "audienceOrProblem": "SaaS products with large doc sets",
+      "suggestedExampleTitle": "Add docs search to your app",
+      "citation": { "url": "https://docs.acme.example/use-cases/in-app" }
+    },
+    {
+      "name": "Agent grounding for support",
+      "description": "MCP tools so support bots answer from official docs only.",
+      "priority": "top",
+      "citation": { "url": "https://docs.acme.example/use-cases/support" }
+    }
+  ]
+}
+```
+
+### `business_usage`
+
+```json
+{
+  "usages": [
+    {
+      "name": "Reduce support ticket volume",
+      "description": "Customers self-serve accurate answers from indexed help docs.",
+      "priority": "main",
+      "problem": "Support teams overwhelmed by repetitive how-to questions",
+      "audienceOrIndustry": "Customer support / success",
+      "featuresUsed": ["Source chat", "MCP ask_source"],
+      "outcome": "Fewer L1 tickets and faster time-to-answer",
+      "citation": { "url": "https://acme.example/customers/support" }
+    }
+  ]
+}
+```
+
+### `package_primitives_usage`
+
+```json
+{
+  "primitives": [
+    {
+      "name": "createLedgeIndex",
+      "description": "Initialize in-process runtime and return crawl/ask/profile handle.",
+      "priority": "main",
+      "primitiveOrApi": "createLedgeIndex(options?)",
+      "howToHint": "Pass model keys in options or env before crawl/ask.",
+      "usageExample": "const li = await createLedgeIndex({ keys: { google: process.env.GOOGLE_KEY } });",
+      "suggestedTemplateTitle": "SDK bootstrap",
+      "citation": { "url": "https://docs.acme.example/sdk/create-ledgeindex" }
+    },
+    {
+      "name": "crawl",
+      "description": "Run full web crawl → filter → ingest for a start URL.",
+      "priority": "main",
+      "primitiveOrApi": "li.crawl({ url, maxPages })",
+      "citation": { "url": "https://docs.acme.example/sdk/crawl" }
+    }
+  ]
+}
+```
+
+### `package_usage_examples`
+
+```json
+{
+  "examples": [
+    {
+      "name": "Crawl and ask in one script",
+      "description": "End-to-end: index a docs site and print the answer to a question.",
+      "priority": "main",
+      "kind": "tutorial",
+      "primitivesUsed": ["createLedgeIndex", "crawl", "ask"],
+      "suggestedExampleTitle": "First crawl and ask",
+      "usageExample": "// see docs — crawl then li.ask(sourceId, question)",
+      "citation": { "url": "https://docs.acme.example/tutorials/first-crawl" }
+    }
+  ],
+  "notes": "pageMarkdown may be attached on the run object after fetch (not shown here)."
+}
+```
+
+### `content_seo_strategy`
+
+```json
+{
+  "strategySummary": "Acme leads with comparison and integration landing pages, a deep /docs hub for long-tail how-tos, and a /blog for product updates. Commercial intent clusters around pricing and vs-competitor pages.",
+  "pillars": [
+    {
+      "name": "Product documentation",
+      "description": "Reference and guides under /docs for integration and API keywords.",
+      "priority": "main",
+      "searchIntent": "informational",
+      "siteAreas": ["/docs", "/docs/api", "/docs/sdk"],
+      "exampleQueries": ["acme sdk crawl", "acme mcp setup"],
+      "citation": { "url": "https://docs.acme.example/" }
+    },
+    {
+      "name": "Comparisons",
+      "description": "Alternative and vs pages targeting evaluation traffic.",
+      "priority": "top",
+      "searchIntent": "commercial",
+      "siteAreas": ["/compare"],
+      "citation": { "url": "https://acme.example/compare" }
+    }
+  ],
+  "urlPatterns": [
+    {
+      "pattern": "/docs/**",
+      "role": "Technical SEO and developer discovery",
+      "citation": { "url": "https://docs.acme.example/" }
+    }
+  ],
+  "strengths": [
+    { "point": "Clear docs hierarchy with getting-started funnel" }
+  ],
+  "gaps": [
+    { "point": "Few industry-specific landing pages beyond generic SaaS" }
+  ]
+}
+```
+
+### Priority badges
+
+Several lenses tag items as `main`, `top`, or `supporting` (capabilities, main_use_cases, business_usage, package lenses, content_seo_strategy). The UI and downstream agents use these to surface pillars first.
+
+## Typed outputs
+
+Per-lens TypeScript types: `IdentityLensOutput`, `DocsIdentityLensOutput`, `CapabilitiesLensOutput`, `PackageUsageExamplesLensOutput`, …
+
+Merged profile shape: `CompanyProfileData` / `LensOutputById`.
+
+## Example — company profile
 
 ```ts
 import { profileSite, parseResearchLensList } from "@ledgeindex/profile";
 
-const modes = parseResearchLensList(process.env.LENSES ?? "identity,capabilities");
+const modes = parseResearchLensList("identity,capabilities,pricing,gtm");
 
-const { profile } = await profileSite("https://mastra.ai/", modes);
-console.log(profile);
+const { profile } = await profileSite("https://example.com/", modes);
+console.log(profile.identity);
+console.log(profile.capabilities);
+```
+
+## Example — docs / builder research
+
+```ts
+const { profile } = await profileSite("https://docs.example.com/", [
+  "docs_identity",
+  "basic_usage",
+  "package_primitives_usage",
+  "package_usage_examples",
+]);
+
+console.log(profile.docs_identity);
+console.log(profile.package_usage_examples);
 ```
 
 ## Related
 
 - [profileSite](/reference/profile/profile-site)
+- [Core Query — queryExamples](/reference/core/query) — example chunks after ingest (complements `package_*` lenses)

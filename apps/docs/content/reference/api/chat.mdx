@@ -1,0 +1,78 @@
+# Chat & indexing
+
+RAG ask, example search, low-level query, and index inspection — used by source chat, admin tools, and MCP-adjacent flows.
+
+## Ask (source chat)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/sources/:id/ask` | RAG question → `{ answer, chunks[], citations[] }` |
+| `POST` | `/api/sources/:id/find-examples` | Search example chunks by natural language query |
+
+`ask` runs the same stack as the web UI source chat: query rewrite → vector search → rerank → coverage → agent answer.
+
+**Multi-source routed ask** (`askAcross`) is available on the SDK and CLI — pin sources or a source set, picker vs `all` mode. There is no dedicated HTTP route yet; use [`li.askAcross`](/reference/sdk/ask-across) or `ledgeindex ask --sources …`.
+
+**Client:** `askSource`, `findExamples`
+
+## Query (lower-level)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/sources/:id/query` | Vector / catalog query without full agent answer |
+
+Use when you want retrieval hits only (similar to MCP `ask_source` behavior).
+
+## Index catalogs & page drill-down
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/sources/:id/metadata-catalog` | Page-level metadata catalog |
+| `GET` | `/api/sources/:id/example-catalog` | Example entries catalog |
+| `GET` | `/api/sources/:id/page-chunks` | Chunks for one page URL (`?url=…`) |
+| `GET` | `/api/sources/:id/page-examples` | Examples for one page URL (`?url=…`) |
+
+## Index preview & repo ingest
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/sources/:id/index-preview` | Preview chunking for content |
+| `POST` | `/api/sources/:id/index-estimate` | Token/chunk estimate |
+| `POST` | `/api/sources/:id/index-repo` | Index from a git repo ([details](/reference/api/index-repo)) |
+| `POST` | `/api/repo/profile` | Run repo profile analysis (separate from web crawl) |
+
+## Example request — ask
+
+```http
+POST /api/sources/src_abc123/ask
+Content-Type: application/json
+
+{
+  "message": "How do I install?",
+  "rerankBackend": "cohere"
+}
+```
+
+```json
+{
+  "answer": "Install with npm …",
+  "chunks": [
+    { "text": "…", "url": "https://docs.example.com/install", "title": "Install", "score": 0.92 }
+  ],
+  "citations": [
+    { "name": "Install", "url": "https://docs.example.com/install", "score": 0.92 }
+  ]
+}
+```
+
+`citations` is deduped name + url for display; `chunks` has full passage text.
+
+Exact body fields match `@ledgeindex/client` `askSource` options.
+
+## Related
+
+- [askAcross](/reference/sdk/ask-across) — multi-source routed ask (SDK / CLI)
+- [Index repo](/reference/api/index-repo)
+- [Sources](/reference/api/sources)
+- [Client Sources & ingest](/reference/client/sources)
+- [Set up MCP](/guides/setup-mcp) — `ask_source` tool (retrieval hits, not synthesized answer)

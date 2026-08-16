@@ -72,6 +72,12 @@ export const LEDGEINDEX_API_RATE_LIMIT: RateLimitConfig = {
         { method: "POST", path: "/api/sources/:id/ingest/start" },
         { method: "POST", path: "/api/sources/:id/ingest/cancel" },
         { method: "POST", path: "/api/sources/:id/ingest/:runId/resume" },
+      ],
+    },
+    ingest_poll: {
+      maxPerWindow: 600,
+      label: "Ingest run status (UI polling)",
+      routes: [
         { method: "GET", path: "/api/sources/:id/ingest/:runId" },
       ],
     },

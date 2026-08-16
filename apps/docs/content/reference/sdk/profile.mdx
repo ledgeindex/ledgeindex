@@ -1,0 +1,92 @@
+# profile
+
+Site research profile — crawl a site once, then run research lenses (pick → fetch → structured synth). Same engine as `@ledgeindex/profile` and the web API `/api/profile/site-runs`, but **in-process** with no HTTP server.
+
+**Requires a chat model key** (unlike crawl). Does not use your index store — profile is separate from crawl/ask sources.
+
+## On the handle
+
+```ts
+import { createLedgeIndex } from "@ledgeindex/sdk";
+
+const li = await createLedgeIndex({
+  keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+});
+
+const result = await li.profile("https://example.com", {
+  lenses: ["identity", "capabilities", "pricing"],
+  maxPages: 200,
+  onProgress: (p) => console.error(p.phase, p.lens ?? ""),
+});
+
+console.log(result.profile.identity?.oneLiner);
+```
+
+## Standalone (no Mastra init)
+
+`runProfile` does **not** need `createLedgeIndex` or `initRuntime` — useful for profile-only scripts:
+
+```ts
+import { runProfile, defaultProfileLenses } from "@ledgeindex/sdk";
+
+const result = await runProfile(
+  "https://example.com",
+  { lenses: defaultProfileLenses() },
+  { keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY } },
+);
+```
+
+## LedgeIndexProfileOptions
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `lenses` | all 14 | Subset of [research lenses](/reference/profile/lenses) |
+| `maxPages` | — | Cap site catalog crawl |
+| `sitemapOnly` | `false` | Discover URLs from sitemap only |
+| `pickOnly` | `false` | Pick URLs per lens; skip fetch + synth |
+| `seedPages` | — | Skip crawl; use pre-built catalog pages |
+| `modelId` | auto | Legacy catalog model id |
+| `model` | — | Backend selection (api / lm-studio / ag-native) |
+| `onLensStart` | — | `(lens, index, total) => void` |
+| `onProgress` | — | `(CompanyProfileProgress) => void` |
+
+## CompanyProfileResult
+
+```ts
+type CompanyProfileResult = {
+  rootUrl: string;
+  modelId: string;
+  crawl: { urlCount: number; /* … */ };
+  lenses: ResearchLens[];
+  runs: CompanyProfileLensRun[];
+  profile: CompanyProfileData; // merged structured output per lens
+};
+```
+
+Lens ids and shapes: [Profile lenses](/reference/profile/lenses).
+
+## Helpers
+
+Re-exported from `@ledgeindex/profile`:
+
+- `researchLensIds` — all lens id strings
+- `defaultProfileLenses()` — copy of all 14 ids
+- `parseResearchLensList("identity,pricing")` — parse CLI-style list
+- `getLensDefinition(id)` — human label + pick hints
+
+## CLI
+
+```bash
+ledgeindex profile https://example.com --lenses identity,capabilities --json
+ledgeindex profile --list-lenses
+```
+
+See [Set up CLI](/guides/setup-cli#profile-a-site).
+
+## vs HTTP client
+
+| | SDK / CLI | `@ledgeindex/client` |
+|---|-----------|----------------------|
+| Server | Not required | API on `:3010` |
+| Async jobs | Runs inline | `startProfileSiteRun` + poll |
+| Best for | Scripts, CI | Web UI, remote API |

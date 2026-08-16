@@ -1,0 +1,81 @@
+# runWebCrawl
+
+End-to-end crawl orchestrator over HTTP — preflight, create source, discover URLs, auto-filter, ingest, index.
+
+Same pipeline as the CLI and `@ledgeindex/sdk`, but calls the API instead of running in-process.
+
+## Signature
+
+```ts
+import { runWebCrawl } from "@ledgeindex/client";
+
+const result = await runWebCrawl({
+  url: "https://docs.example.com",
+  maxPages: 50,
+  onProgress: (update) => console.log(update.phase, update.detail),
+});
+```
+
+Returns `{ sourceId, runId, name, url, pageCount, chunkCount }`.
+
+## Prerequisites
+
+1. API running (`npm run dev:api` or desktop sidecar)
+2. [Auth & URLs](/reference/client/auth) configured
+3. Model key on the **server** (not just the client)
+
+## RunWebCrawlOptions
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `url` | — | Start URL (required) |
+| `name` | from preflight | Source display name |
+| `maxPages` | `1000` | Cap discovered pages |
+| `autoFilter` | `false` | Opt-in LLM URL cleanup (requires model key on server) |
+| `enrichExamples` | `false` | Opt-in example extraction — [details](/reference/sdk/crawl#enrich-examples-enrichexamples) |
+| `scope` | `"personal"` | `"personal"` or `"global"` |
+| `onProgress` | — | Phase progress callback |
+
+## Progress phases
+
+Same as SDK — `preflight` → `crawl` → `filter` → `index` → `done`.
+
+## Usage
+
+```ts
+import { runWebCrawl } from "@ledgeindex/client";
+import { setLedgeIndexApiBaseUrl } from "@ledgeindex/client";
+
+setLedgeIndexApiBaseUrl("http://127.0.0.1:3010");
+
+const crawl = await runWebCrawl({
+  url: "https://docs.astro.build",
+  maxPages: 20,
+});
+
+console.log(crawl.sourceId, crawl.pageCount);
+```
+
+## defaultWebCrawlConfig
+
+```ts
+import { defaultWebCrawlConfig } from "@ledgeindex/client";
+
+const config = defaultWebCrawlConfig("https://docs.example.com");
+config.maxPages = 100;
+// pass to createSource + startIngestWorkflow for manual control
+```
+
+## vs SDK
+
+| | `client.runWebCrawl` | `sdk.li.crawl` |
+|---|---------------------|----------------|
+| Needs server | Yes | No |
+| Data location | Server's `LEDGEINDEX_DATA_DIR` | Client `dataDir` option |
+| Use when | UI stack already up, shared remote index | Scripts, CI, no server |
+
+## Related
+
+- [Sources & ingest](/reference/client/sources)
+- [@ledgeindex/sdk crawl](/reference/sdk/crawl)
+- [Set up CLI](/guides/setup-cli)

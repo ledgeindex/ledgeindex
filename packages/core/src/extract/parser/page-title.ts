@@ -89,6 +89,14 @@ const GENERIC_PATH_SEGMENTS = new Set([
   "www",
   "v1",
   "v2",
+  // Git host plumbing — present on every blob URL of a repo source.
+  "blob",
+  "tree",
+  "raw",
+  "refs",
+  "heads",
+  "main",
+  "master",
 ]);
 
 /**

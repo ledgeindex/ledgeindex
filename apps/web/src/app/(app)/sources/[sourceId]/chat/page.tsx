@@ -44,6 +44,7 @@ export default function SourceChatPage() {
         setActiveSource({
           sourceId,
           sourceName: source.name,
+          startUrls: source.config.startUrls ?? [],
           scope,
           hosting,
         });

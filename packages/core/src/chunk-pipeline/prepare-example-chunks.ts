@@ -1,6 +1,7 @@
 import { chunk } from "../chunk/chunk.js";
 import { apiResponseMetaToChunkMetadata } from "../enrich/api-response-meta.js";
 import type { EnrichedExample, EnrichPageResult } from "../enrich/schemas.js";
+import { hashUrl } from "./chunk-id.js";
 
 export const DEFAULT_EXAMPLE_CODE_MAX_CHARS = 2000;
 
@@ -8,10 +9,6 @@ export function getExampleCodeMaxChars(): number {
   const raw = Number(process.env.LEDGEINDEX_EXAMPLE_CODE_MAX_CHARS);
   if (Number.isFinite(raw) && raw > 0) return Math.floor(raw);
   return DEFAULT_EXAMPLE_CODE_MAX_CHARS;
-}
-
-function hashUrl(url: string): string {
-  return Buffer.from(url).toString("base64url").slice(0, 80);
 }
 
 function contextPrefix(input: {

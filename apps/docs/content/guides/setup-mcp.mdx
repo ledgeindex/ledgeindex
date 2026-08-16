@@ -1,0 +1,108 @@
+# Set up MCP
+
+LedgeIndex exposes an **MCP (Model Context Protocol)** server so agents in Cursor, Claude Desktop, and other MCP clients can list your source sets and ask questions against indexed documentation.
+
+MCP requires a **running API** — it is not available from the CLI or `@ledgeindex/sdk` (those run in-process without HTTP).
+
+## Endpoints
+
+| Deployment | MCP URL | Auth |
+|------------|---------|------|
+| Web dev (`npm run dev`) | `http://127.0.0.1:3010/mcp` | OAuth consent on first connect |
+| Docker (`docker-compose.*.yml`) | `http://127.0.0.1:3010/mcp` | Same OAuth flow |
+| Desktop app | `http://127.0.0.1:3015/mcp` | Local sidecar — no cloud OAuth |
+
+The web UI shows a copy-paste config at **MCP → Connect** (`/mcp/connect`).
+
+## Tools
+
+Workflow: **list source sets → get a set → ask a member source**.
+
+| Tool | Purpose |
+|------|---------|
+| `list_source_sets` | Your source sets (slugs and ids) |
+| `get_source_set` | Members of a set (source slugs to use with `ask_source`) |
+| `ask_source` | Vector search + rerank on a source in your sets; returns grounded chunks |
+
+`ask_source` only works for sources that belong to one of your source sets. It returns retrieval hits for the agent to reason over — not a synthesized chat answer.
+
+## Cursor
+
+1. Start the API (web dev or Docker) or the desktop app.
+2. Open **MCP → Connect** in the LedgeIndex UI and copy the example `mcp.json`, or add this to `.cursor/mcp.json`:
+
+**Web / Docker:**
+
+```json
+{
+  "mcpServers": {
+    "ledgeindex": {
+      "url": "http://127.0.0.1:3010/mcp"
+    }
+  }
+}
+```
+
+**Desktop (sidecar on :3015):**
+
+```json
+{
+  "mcpServers": {
+    "ledgeindex-desktop": {
+      "url": "http://127.0.0.1:3015/mcp"
+    }
+  }
+}
+```
+
+3. Restart Cursor (or reload MCP servers).
+4. **Web/cloud:** the first connection opens a browser consent page — sign in and click **Allow**.
+5. **Desktop:** keep the app running; MCP uses your local source sets without OAuth.
+
+## Claude Desktop
+
+Add the same server block to Claude’s MCP config (location varies by OS). Use the `url` form for HTTP transport:
+
+```json
+{
+  "mcpServers": {
+    "ledgeindex": {
+      "url": "http://127.0.0.1:3010/mcp"
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving.
+
+## Docker
+
+With [Set up Docker](/guides/setup-docker):
+
+```bash
+docker compose -f docker-compose.oss.yml up
+# or
+docker compose -f docker-compose.postgres.yml up
+```
+
+MCP is on port **3010** at path `/mcp`. The web UI on `:3004` links to the connect page.
+
+## API keys (optional)
+
+For programmatic API access (not MCP OAuth), create keys in the web UI under **API keys**. MCP from Cursor typically uses OAuth instead of API keys.
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| Connection refused | Ensure API is running (`:3010` web/Docker, `:3015` desktop) |
+| Consent loop | Sign in to the web app, then reopen the connect link from the MCP client |
+| `ask_source` not found | Call `list_source_sets` → `get_source_set` and use a **member slug** from your set |
+| Desktop tools empty | Create source sets in the desktop app and add indexed sources |
+
+## Related
+
+- [Set up web](/guides/setup-web) — API + UI + MCP at `/mcp`
+- [Set up desktop](/guides/setup-desktop) — local sidecar `:3015`
+- [Set up Docker](/guides/setup-docker)
+- [Set up SDK](/guides/setup-sdk) — in-process crawl/ask (no MCP)

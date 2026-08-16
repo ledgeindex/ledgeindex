@@ -2,6 +2,7 @@ import type { QueryResult } from "@mastra/core/vector";
 import type { RerankResult } from "@mastra/rag";
 import { logVerbose } from "../lib/logger.js";
 import {
+  MAX_DIRECT_HITS_PER_PAGE,
   PAGE_EXPANSION_CONCENTRATED_MAX_CHUNKS,
   PAGE_EXPANSION_CONCENTRATED_PULL_CHUNKS,
   PAGE_EXPANSION_CONCENTRATION_RATIO,
@@ -10,10 +11,19 @@ import {
   RELEVANCE_THRESHOLD,
   SEARCH_TOP_K,
   LEDGEINDEX_CHUNKS_INDEX,
+  LEXICAL_TOP_K,
 } from "../vector/constants.js";
 import { embedQuery } from "../vector/embedding.js";
 import { ensureChunksIndex, getVectorStore } from "../vector/store.js";
-import { executeKapaRerank, getSearchRerankCandidates } from "./rerank-backend.js";
+import { fuseDenseAndLexical } from "./hybrid-fuse.js";
+import { applyLastMileRank, lastMileRankEnabled } from "./last-mile-rank.js";
+import { searchLexical } from "./lexical-store.js";
+import {
+  effectiveRerankBackend,
+  executeKapaRerank,
+  getSearchRerankCandidates,
+  type RerankBackend,
+} from "./rerank-backend.js";
 
 export type KapaRetrieveFilter = {
   url?: string;
@@ -77,6 +87,14 @@ export type KapaRetrievedChunk = {
   section: string;
   headingPath: string[];
   chunkIndex: number;
+  /** Repo sources only: where in the checkout this chunk came from. */
+  filePath?: string;
+  startLine?: number;
+  endLine?: number;
+  symbolName?: string;
+  symbolKind?: string;
+  /** source | test | example | docs | config, stamped at ingest. */
+  pageKind?: string;
   details?: RerankResult["details"];
 };
 
@@ -91,6 +109,8 @@ export type KapaRetrieveStepTimings = {
 export type KapaRetrieveResult = {
   query: string;
   filter: KapaRetrieveFilter;
+  /** The backend that scored this query, which a code source may have overridden. */
+  rerankBackendUsed: RerankBackend;
   initialCount: number;
   rerankedCount: number;
   /** Chunks that passed the relevance threshold (before page expansion). */
@@ -115,6 +135,15 @@ function toRetrievedChunk(
     ? metadata.headingPath.map(String)
     : [];
 
+  const optionalString = (value: unknown): string | undefined => {
+    const text = typeof value === "string" ? value.trim() : "";
+    return text || undefined;
+  };
+  const optionalLine = (value: unknown): number | undefined => {
+    const line = Number(value);
+    return Number.isFinite(line) && line > 0 ? line : undefined;
+  };
+
   return {
     id: String(result.id ?? ""),
     score,
@@ -125,6 +154,12 @@ function toRetrievedChunk(
     section: String(metadata.section ?? ""),
     headingPath,
     chunkIndex: Number(metadata.chunkIndex ?? 0),
+    filePath: optionalString(metadata.filePath),
+    startLine: optionalLine(metadata.startLine),
+    endLine: optionalLine(metadata.endLine),
+    symbolName: optionalString(metadata.symbolName),
+    symbolKind: optionalString(metadata.symbolKind),
+    pageKind: optionalString(metadata.pageKind),
     details,
   };
 }
@@ -135,6 +170,8 @@ export type KapaRetrieveManyResult = {
   skippedQueries: string[];
   filter: KapaRetrieveFilter;
   insufficient: boolean;
+  /** The backend that scored these queries; a code source may have overridden it. */
+  rerankBackendUsed?: RerankBackend;
   catalogUrlFilter?: {
     url: string;
     score: number;
@@ -186,27 +223,51 @@ function chunkTextFingerprint(chunk: KapaRetrievedChunk): string {
 }
 
 /** Dedupe exact + near-duplicate chunks, keeping the highest score. */
+/**
+ * Collapse duplicate chunks, keeping the better-ranked copy of each.
+ *
+ * Position in the incoming list is the ranking, and the returned order preserves
+ * it. Re-sorting on score would be wrong: a score is a relevance value, and
+ * relevance is not monotonic in rank once the lexical leg has reordered the pool
+ * — a keyword hit can be ranked above a chunk with a higher cosine, which is the
+ * entire point of fusing them.
+ */
 function dedupeChunks(chunks: KapaRetrievedChunk[]): KapaRetrievedChunk[] {
   const byId = new Map<string, KapaRetrievedChunk>();
-
   for (const chunk of chunks) {
     const key = chunkDedupeKey(chunk);
-    const existing = byId.get(key);
-    if (!existing || chunk.score > existing.score) {
-      byId.set(key, chunk);
-    }
+    if (!byId.has(key)) byId.set(key, chunk);
   }
 
   const byFingerprint = new Map<string, KapaRetrievedChunk>();
   for (const chunk of byId.values()) {
     const key = chunkTextFingerprint(chunk);
-    const existing = byFingerprint.get(key);
-    if (!existing || chunk.score > existing.score) {
-      byFingerprint.set(key, chunk);
-    }
+    if (!byFingerprint.has(key)) byFingerprint.set(key, chunk);
   }
 
-  return [...byFingerprint.values()].sort((a, b) => b.score - a.score);
+  return [...byFingerprint.values()];
+}
+
+/**
+ * Keep at most {@link MAX_DIRECT_HITS_PER_PAGE} hits per page.
+ * Expects rank-ordered input (as returned by {@link dedupeChunks}).
+ */
+function capDirectHitsPerPage(
+  chunks: KapaRetrievedChunk[],
+  maxPerPage = MAX_DIRECT_HITS_PER_PAGE,
+): KapaRetrievedChunk[] {
+  const countByPage = new Map<string, number>();
+  const kept: KapaRetrievedChunk[] = [];
+
+  for (const chunk of chunks) {
+    const key = chunk.url.trim() || chunkDedupeKey(chunk);
+    const count = countByPage.get(key) ?? 0;
+    if (count >= maxPerPage) continue;
+    countByPage.set(key, count + 1);
+    kept.push(chunk);
+  }
+
+  return kept;
 }
 
 /**
@@ -272,8 +333,13 @@ async function expandTopPages(input: {
     }
   }
   const concentrationRatio = concentratedHits / input.pruned.length;
+  // Concentrated expansion pulls a whole page into context, so only use it when
+  // that page is the *only* page with hits (single-huge-page corpora). A merely
+  // dominant page is often a confusable page that won ranking — letting it
+  // concentrate would crowd every other relevant page out of the context.
   const useConcentrated =
     concentratedUrl != null &&
+    hitsByUrl.size === 1 &&
     concentrationRatio >= PAGE_EXPANSION_CONCENTRATION_RATIO;
 
   const store = getVectorStore();
@@ -498,6 +564,12 @@ export type KapaRetrieveQueryMode = "short_circuit" | "merge_all";
 export async function kapaRetrieveMany(input: {
   queries: string[];
   sourceId: string;
+  /**
+   * The user's original question. Used as the rerank query so the cross-encoder
+   * scores intent instead of the keyword rewrite, and so scores stay comparable
+   * across queries when their results are merged.
+   */
+  question?: string;
   filter?: KapaRetrieveFilter;
   relevanceThreshold?: number;
   queryMode?: KapaRetrieveQueryMode;
@@ -523,6 +595,7 @@ export async function kapaRetrieveMany(input: {
     sourceId: input.sourceId,
     filter: input.filter,
     relevanceThreshold: input.relevanceThreshold,
+    rerankQuery: input.question?.trim() || undefined,
   };
 
   const toByQueryEntry = (
@@ -657,6 +730,8 @@ export async function kapaRetrieveMany(input: {
     skippedQueries,
     filter: input.filter ?? {},
     insufficient: merged.length === 0,
+    // Every query hits the same source, so they all resolve the same backend.
+    rerankBackendUsed: first.rerankBackendUsed,
     catalogUrlFilter: catalogUrlFilterResult,
     byQuery,
     merged,
@@ -673,11 +748,17 @@ export async function kapaRetrieveMany(input: {
 
 /**
  * Kapa-style retrieval: metadata filter → wide vector search → rerank → pruner threshold.
- * Rerank backend: COHERE_API_KEY → batched Cohere; else local BGE sidecar (with vector-only fallback).
+ * Rerank backend: auto — `vector` on code sources, else the local MiniLM cross-encoder.
  */
 export async function kapaRetrieve(input: {
   query: string;
   sourceId: string;
+  /**
+   * Text scored by the reranker. Defaults to `query`.
+   * Pass the user's original question so the cross-encoder judges intent rather
+   * than the compressed keyword rewrite, which can match a confusable page.
+   */
+  rerankQuery?: string;
   filter?: KapaRetrieveFilter;
   relevanceThreshold?: number;
   /**
@@ -690,6 +771,7 @@ export async function kapaRetrieve(input: {
   await ensureChunksIndex();
 
   const threshold = input.relevanceThreshold ?? RELEVANCE_THRESHOLD;
+  const rerankQuery = input.rerankQuery?.trim() || input.query;
   const expandPages = input.expandPages !== false;
   const candidateCount = getSearchRerankCandidates();
 
@@ -707,43 +789,80 @@ export async function kapaRetrieve(input: {
   if (input.filter?.crawlRoot) metadataFilter.crawlRoot = input.filter.crawlRoot;
 
   const vectorStarted = performance.now();
-  let initialResults = await store.query({
-    indexName: LEDGEINDEX_CHUNKS_INDEX,
-    queryVector,
-    topK: candidateCount,
-    filter: metadataFilter,
-  });
+  // Both legs run against the same source; the lexical one needs no embedding
+  // so it costs a single indexed query in parallel with the vector search.
+  const [denseInitial, lexicalHits] = await Promise.all([
+    store.query({
+      indexName: LEDGEINDEX_CHUNKS_INDEX,
+      queryVector,
+      topK: candidateCount,
+      filter: metadataFilter,
+    }),
+    searchLexical({
+      sourceId: input.sourceId,
+      query: input.query,
+      topK: LEXICAL_TOP_K,
+      url: input.filter?.url,
+    }),
+  ]);
 
+  let denseResults = denseInitial;
   // Older chunks may lack crawlRoot — fall back to source-wide search + URL prefix.
   if (
     input.filter?.crawlRoot &&
-    initialResults.length === 0 &&
+    denseResults.length === 0 &&
     input.filter.urlPrefix
   ) {
     const { crawlRoot: _drop, ...withoutCrawlRoot } = metadataFilter;
-    initialResults = await store.query({
+    denseResults = await store.query({
       indexName: LEDGEINDEX_CHUNKS_INDEX,
       queryVector,
       topK: candidateCount,
       filter: withoutCrawlRoot,
     });
   }
+
+  const fused = fuseDenseAndLexical({
+    dense: denseResults,
+    lexical: lexicalHits,
+    limit: candidateCount,
+  });
+  const initialResults = fused.results;
   const vectorMs = Math.round(performance.now() - vectorStarted);
 
-  logVerbose("Kapa retrieve: initial vector search", "KapaRetrieve", {
+  // Whether this source is code decides how it should be ranked, and the
+  // candidates are the cheapest place to find out: repo chunks carry a filePath,
+  // crawled pages do not.
+  const codeCandidateRatio = initialResults.length
+    ? initialResults.filter(
+        (result) => typeof result.metadata?.filePath === "string",
+      ).length / initialResults.length
+    : 0;
+
+  logVerbose("Kapa retrieve: hybrid candidate search", "KapaRetrieve", {
     sourceId: input.sourceId,
     initialCount: initialResults.length,
+    codeCandidateRatio: Number(codeCandidateRatio.toFixed(2)),
+    denseCount: fused.denseCount,
+    lexicalCount: fused.lexicalCount,
+    lexicalOnlyCount: fused.lexicalOnlyCount,
     candidateCount,
     filter: metadataFilter,
     urlPrefix: input.filter?.urlPrefix ?? null,
   });
 
+  // Resolved here as well as inside the reranker so the answer can report which
+  // backend actually scored it; the decision is a pure function of the ratio.
+  const { backend: rerankBackendUsed } =
+    effectiveRerankBackend(codeCandidateRatio);
+
   const rerankStarted = performance.now();
   const reranked = await executeKapaRerank({
-    query: input.query,
+    query: rerankQuery,
     results: initialResults,
     queryVector,
     topK: SEARCH_TOP_K,
+    codeCandidateRatio,
   });
   const rerankMs = Math.round(performance.now() - rerankStarted);
 
@@ -751,20 +870,32 @@ export async function kapaRetrieve(input: {
     (entry) => entry.score >= threshold,
   );
 
-  const chunks = applyUrlPrefixFilter(
-    reranked.map((entry) =>
-      toRetrievedChunk(entry.result, entry.score, entry.details),
-    ),
-    input.filter?.urlPrefix,
-  );
+  // Code corpora need a final metadata-aware pass: see last-mile-rank.ts. It is
+  // a no-op on docs-only candidate sets, and runs before the per-page cap so the
+  // cap keeps the best chunk of each file rather than the first one retrieved.
+  const lastMile = <T extends KapaRetrievedChunk>(list: T[]): T[] =>
+    lastMileRankEnabled() ? applyLastMileRank(list, rerankQuery) : list;
 
-  const directHits = applyUrlPrefixFilter(
-    dedupeChunks(
-      pruned.map((entry) =>
+  const chunks = lastMile(
+    applyUrlPrefixFilter(
+      reranked.map((entry) =>
         toRetrievedChunk(entry.result, entry.score, entry.details),
       ),
+      input.filter?.urlPrefix,
     ),
-    input.filter?.urlPrefix,
+  );
+
+  const directHits = capDirectHitsPerPage(
+    lastMile(
+      applyUrlPrefixFilter(
+        dedupeChunks(
+          pruned.map((entry) =>
+            toRetrievedChunk(entry.result, entry.score, entry.details),
+          ),
+        ),
+        input.filter?.urlPrefix,
+      ),
+    ),
   );
 
   const expandStarted = performance.now();
@@ -783,13 +914,16 @@ export async function kapaRetrieve(input: {
 
   logVerbose("Kapa retrieve: pruned + page-expanded", "KapaRetrieve", {
     directHits: directHits.length,
+    directHitPages: new Set(directHits.map((chunk) => chunk.url)).size,
     withExpansion: prunedChunks.length,
     expandPages,
+    rerankedOnQuestion: rerankQuery !== input.query,
   });
 
   return {
     query: input.query,
     filter: input.filter ?? {},
+    rerankBackendUsed,
     initialCount: initialResults.length,
     rerankedCount: reranked.length,
     directHitCount: directHits.length,

@@ -1,0 +1,69 @@
+# profileRepo
+
+Structured **repository profile** and usage-example discovery using Mastra agents — separate from index + ask RAG.
+
+Use when you need a JSON profile of a library (primitives, examples, positioning) rather than open-ended Q&A over chunks.
+
+## `profileRepo(input)`
+
+```ts
+import { profileRepo } from "@ledgeindex/repo";
+
+const result = await profileRepo({
+  repoPath: "/path/to/checkout",
+  libraryName: "stagehand",
+  model: myMastraModel,
+  maxSteps: 12,
+  maxExamples: 6,
+});
+```
+
+### `ProfileRepoResult`
+
+| Field | Description |
+|-------|-------------|
+| `status` | `"profiled"` \| `"skipped"` |
+| `profile` | `RepoProfile` — core metadata + examples schema |
+| `examples` | `EnrichedExample[]` compatible with `@ledgeindex/core` enrich |
+| `exploreNotes` | Agent notes from exploration |
+| `toolCalls` / `toolResults` | Agent tool usage counts |
+
+Requires a **Mastra language model** — not the same as crawl/ask (no vector index involved).
+
+## `exploreRepoExamples(input)`
+
+Lighter exploration focused on **usage examples** in the checkout:
+
+```ts
+import { exploreRepoExamples } from "@ledgeindex/repo";
+
+const { examples, exploreNotes } = await exploreRepoExamples({
+  repoPath: "/path/to/checkout",
+  libraryName: "my-lib",
+  model: myMastraModel,
+});
+```
+
+## Agents & tools
+
+| Export | Role |
+|--------|------|
+| `createRepoExploreAgent` | Mastra agent for repo exploration |
+| `createRepoProfilerExploreAgent` | Profiler-specific explore agent |
+| `createRepoFsTools` | Read-only FS tools (`read_file`, list dirs, …) |
+| `EnsureFinalResponseProcessor` | Processor ensuring structured final output |
+
+Schemas: `repoProfileSchema`, `repoExploreOutputSchema`, `repoPrimitiveSchema`, …
+
+## HTTP
+
+```http
+POST /api/repo/profile
+```
+
+Separate from `index-repo` — profiles do not write to the search index.
+
+## Related
+
+- [indexRepoCheckout](/reference/repo/index-checkout) — searchable index
+- [@ledgeindex/profile](/reference/profile) — site research lenses (web URLs)

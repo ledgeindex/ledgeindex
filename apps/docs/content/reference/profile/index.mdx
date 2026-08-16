@@ -1,6 +1,10 @@
 # @ledgeindex/profile
 
-Site research profile: crawl once, then run named **lenses** (identity, pricing, capabilities, …) to produce structured research output.
+`@ledgeindex/profile` crawls a site once and runs **lenses** — named research modes that return structured JSON (positioning, pricing, capabilities, package guides, and others).
+
+Profile output is not a search index. It fills fixed fields about what a site says. To index docs and ask questions over them, use [crawl + ask](/reference/sdk/crawl) instead. The two can be used together.
+
+[Lenses](/reference/profile/lenses) · [Example output per lens](/reference/profile/lenses#example-output-per-lens)
 
 ## Install
 
@@ -28,9 +32,10 @@ const { profile } = await profileSite(
 );
 
 console.log(profile.identity);
-console.log(profile.pricing);
-console.log(profile.capabilities);
+console.log(profile.package_usage_examples);
 ```
+
+Subset lenses for faster runs — see [Lenses](/reference/profile/lenses).
 
 ## Version
 

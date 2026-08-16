@@ -26,6 +26,7 @@ import {
   requireUser,
 } from "../lib/resource-access.js";
 import { indexRepoCheckout } from "@ledgeindex/repo";
+import { markSourceAsRepository } from "../services/source-kind.js";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -46,12 +47,28 @@ const indexPreviewBodySchema = z.object({
     .max(500),
 });
 
-const indexRepoBodySchema = z.object({
-  /** Absolute path to a local git checkout readable by this server. */
-  checkoutPath: z.string().min(1),
-  githubUrl: z.string().optional(),
-  maxFiles: z.number().int().positive().max(5000).optional(),
-});
+const indexRepoBodySchema = z
+  .object({
+    /** Absolute path to a local git checkout readable by this server. */
+    checkoutPath: z.string().min(1).optional(),
+    /** Repository URL. Cloned into the checkout cache when no path is given. */
+    githubUrl: z.string().optional(),
+    /** Branch, tag, or commit to clone. */
+    ref: z.string().min(1).optional(),
+    maxFiles: z.number().int().positive().max(5000).optional(),
+    /** Opt back into test/eval/fixture files, which are excluded by default. */
+    includeTests: z.boolean().optional(),
+    /** Opt back into .md / .mdx (README, etc.), which are excluded by default. */
+    includeReadme: z.boolean().optional(),
+    /**
+     * Optional extension allowlist (e.g. `[".ts", ".tsx"]` or `["ts","tsx"]`).
+     * Narrows the default JS/TS set; unknown extensions are rejected.
+     */
+    extensions: z.array(z.string().min(1)).max(20).optional(),
+  })
+  .refine((body) => Boolean(body.checkoutPath || body.githubUrl), {
+    message: "Provide checkoutPath or githubUrl",
+  });
 
 const queryBodySchema = z.object({
   query: z.string().min(1),
@@ -281,8 +298,11 @@ export async function indexingRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: body.error.flatten() });
     }
 
-    const checkoutPath = resolve(body.data.checkoutPath);
-    if (!existsSync(checkoutPath)) {
+    // No path means clone from the URL; a path must already exist on this host.
+    const checkoutPath = body.data.checkoutPath
+      ? resolve(body.data.checkoutPath)
+      : undefined;
+    if (checkoutPath && !existsSync(checkoutPath)) {
       return reply
         .status(400)
         .send({ error: `Checkout path not found: ${checkoutPath}` });
@@ -291,7 +311,8 @@ export async function indexingRoutes(fastify: FastifyInstance) {
     try {
       logInfo("Repo index started", "IndexRepo", {
         sourceId: id,
-        checkoutPath,
+        checkoutPath: checkoutPath ?? "(clone)",
+        githubUrl: body.data.githubUrl ?? null,
         vectorBackend: getVectorBackend(),
       });
 
@@ -301,10 +322,16 @@ export async function indexingRoutes(fastify: FastifyInstance) {
         sourceId: id,
         projectId: source.projectId,
         checkoutPath,
-          githubUrl: body.data.githubUrl ?? null,
+        githubUrl: body.data.githubUrl ?? null,
+        ref: body.data.ref ?? null,
         sourceSlug: source.slug,
         maxFiles: body.data.maxFiles,
+        includeTests: body.data.includeTests,
+        includeReadme: body.data.includeReadme,
+        extensions: body.data.extensions,
       });
+
+      await markSourceAsRepository(id);
 
       return {
         indexed: true,

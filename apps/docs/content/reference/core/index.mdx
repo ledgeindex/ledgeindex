@@ -1,6 +1,8 @@
 # @ledgeindex/core
 
-Composable primitives for crawl → extract → enrich → chunk → embed → query. No HTTP server — compose these yourself or use `@ledgeindex/docs` / `@ledgeindex/server`.
+`@ledgeindex/core` handles the low-level work of indexing docs: find URLs, pull markdown from pages, split into chunks, embed, save to a vector store, and run retrieval queries. Each step is a separate function you wire up yourself.
+
+There is no sources model here, no HTTP routes, and no UI. If you want indexed sources, chat, and MCP, use `@ledgeindex/docs` instead, or use the SDK, CLI, or Server, which already bundle it.
 
 ## Install
 

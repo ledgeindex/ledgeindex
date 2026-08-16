@@ -34,6 +34,8 @@ const result = await kapaRetrieve({
 
 ## Usage — queryExamples
 
+Example chunks (from ingest with `enrichExamples`, or manual `enrichPage` + chunk) are retrieved here — used by **planner / builder workflows**, MCP `find_examples`, and any automation that needs copy-paste snippets instead of prose-only RAG.
+
 ```ts
 const hits = await queryExamples({
   sourceId: "src_123",

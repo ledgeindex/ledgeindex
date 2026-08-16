@@ -1,0 +1,114 @@
+# Set up Docker
+
+Two Compose files for local OSS. Both run API (`:3010`) + web UI (`:3004`). Pick the retrieval stack you want.
+
+| Compose file | Embeddings | Vector store | Rerank (default) | Metadata |
+|--------------|------------|--------------|------------------|----------|
+| [`docker-compose.oss.yml`](https://github.com/ledgeindex/ledgeindex/blob/main/docker-compose.oss.yml) | **FastEmbed** (local, 384-d) | **LibSQL** file in volume | Local BGE (in-process) | FileStore in `LEDGEINDEX_DATA_DIR` |
+| [`docker-compose.postgres.yml`](https://github.com/ledgeindex/ledgeindex/blob/main/docker-compose.postgres.yml) | **Gemini** `gemini-embedding-2` (1536-d) | **Postgres + pgvector** | **Cohere Auto** (if key set) | **Postgres** (`PgStore`) |
+
+Indexes are **not interchangeable** between the two stacks — embedding dimension and storage differ. Use one stack per data directory / database.
+
+## What you need
+
+- Docker + Docker Compose
+- A clone of [ledgeindex/ledgeindex](https://github.com/ledgeindex/ledgeindex)
+- Model keys in `.env` at the repo root (see below)
+
+## Light stack (LibSQL + FastEmbed)
+
+No Postgres. Good for quick tries and offline-friendly dev.
+
+```bash
+cp env.example .env
+# optional: OPENAI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY for chat/crawl filter
+
+docker compose -f docker-compose.oss.yml up --build
+```
+
+| URL | What |
+|-----|------|
+| http://localhost:3004 | Web UI |
+| http://localhost:3010/health | API |
+| http://localhost:3010/mcp | MCP |
+
+Data: Docker volume `ledgeindex-data` → LibSQL vector DB + FileStore JSON under `/data`.
+
+## Full stack (Postgres + Gemini + Cohere)
+
+Matches the **cloud retrieval path**: Gemini embeddings, pgvector storage, Cohere Auto rerank.
+
+### Required
+
+- `GOOGLE_GENERATIVE_AI_API_KEY` — embeds queries and chunks at ingest (1536 dimensions)
+
+### Recommended
+
+- `COHERE_API_KEY` — Cohere rerank on chat/ask (`LEDGEINDEX_RERANK_BACKEND` defaults to `cohere-auto` in this compose file)
+- `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` — optional; chat and crawl filter can use Google instead
+
+```bash
+cp env.example .env
+# edit .env — at minimum GOOGLE_GENERATIVE_AI_API_KEY=...
+# optional: COHERE_API_KEY=...
+
+docker compose -f docker-compose.postgres.yml up --build
+```
+
+First boot runs `docker/postgres-init/001-schema.sql` (metadata tables + `vector` extension). Chunk vectors are created by Mastra PgVector on first ingest.
+
+| Service | URL / port |
+|---------|------------|
+| Web UI | http://localhost:3004 |
+| API | http://localhost:3010 |
+| Postgres | `localhost:5432` — `ledgeindex` / `ledgeindex` / db `ledgeindex` |
+
+### Env (API container)
+
+| Variable | Postgres compose value |
+|----------|------------------------|
+| `POSTGRES_CONNECTION_STRING` | `postgresql://ledgeindex:ledgeindex@postgres:5432/ledgeindex` |
+| `LEDGEINDEX_VECTOR_BACKEND` | `pgvector` |
+| `LEDGEINDEX_RERANK_BACKEND` | `cohere-auto` (override in `.env`) |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Required for embeddings |
+| `COHERE_API_KEY` | Optional; without it Cohere rerank falls back to local BGE |
+
+`LEDGEINDEX_DATA_DIR` still holds Mastra workflow LibSQL and other runtime files; **source metadata and vectors** live in Postgres for this stack.
+
+## CLI against Docker Postgres
+
+The CLI defaults to the **light stack** (`~/.ledgeindex/data` + LibSQL + FastEmbed). It does **not** use Gemini embeddings unless you point it at Postgres:
+
+```bash
+export POSTGRES_CONNECTION_STRING=postgresql://ledgeindex:ledgeindex@localhost:5432/ledgeindex
+export LEDGEINDEX_VECTOR_BACKEND=pgvector
+export GOOGLE_GENERATIVE_AI_API_KEY=...
+export COHERE_API_KEY=...   # optional
+
+ledgeindex crawl https://docs.example.com --provider google
+ledgeindex ask <source-id> "your question"
+```
+
+Use the **same** `POSTGRES_CONNECTION_STRING` and `LEDGEINDEX_VECTOR_BACKEND` as the API if you want CLI and web to share indexes. Crawl via CLI, ask via UI (or the reverse) — as long as both hit the same Postgres + vector backend.
+
+See [Set up CLI](/guides/setup-cli) for the default local-only path.
+
+## MCP
+
+With `LEDGEINDEX_AUTH_REQUIRED=0`:
+
+```json
+{
+  "mcpServers": {
+    "ledgeindex": {
+      "url": "http://localhost:3010/mcp"
+    }
+  }
+}
+```
+
+## Related
+
+- [Set up web](/guides/setup-web) — run API + UI without Docker
+- [Set up CLI](/guides/setup-cli) — terminal crawl/ask (default: FastEmbed + LibSQL)
+- [Set up desktop](/guides/setup-desktop)

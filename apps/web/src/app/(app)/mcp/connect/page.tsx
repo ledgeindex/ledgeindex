@@ -119,8 +119,9 @@ function McpConfigExample() {
       {isDesktop ? (
         <p className="text-xs leading-relaxed text-muted-foreground">
           Keep the desktop app running so the sidecar stays up. Local MCP skips
-          cloud OAuth and uses your desktop user id for{" "}
-          <span className="font-mono">list_personal_sources</span> /{" "}
+          cloud OAuth and uses your source sets for{" "}
+          <span className="font-mono">list_source_sets</span> /{" "}
+          <span className="font-mono">get_source_set</span> /{" "}
           <span className="font-mono">ask_source</span>. Restart your MCP client
           after saving mcp.json.
         </p>

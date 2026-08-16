@@ -1,0 +1,64 @@
+# CLI
+
+The **`ledgeindex`** npm package is a terminal front-end on top of [`@ledgeindex/sdk`](/docs/sdk). Crawl docs, ask indexed sources, and run site profiles — **no HTTP server**, no UI, no MCP.
+
+**Repository sources:** index via the [API + helper script](/guides/setup-repo), then `ledgeindex ask <slug> "…"`. A dedicated `index-repo` CLI command is planned.
+
+## When to use it
+
+| Use CLI when… | Use something else when… |
+|---------------|--------------------------|
+| You want the fastest way to try LedgeIndex | You need a browser UI → [Web app](/docs/apps#web-ledgeindexweb) |
+| Scripts, CI, or one-off terminal workflows | You need MCP in Cursor → [Set up MCP](/guides/setup-mcp) (requires API) |
+| Data can live in `~/.ledgeindex/data` | You need the same index as a local web dev clone → share `LEDGEINDEX_DATA_DIR` or use [web](/guides/setup-web) |
+
+## Install
+
+```bash
+npm install -g ledgeindex
+```
+
+From the monorepo: `npm run build -w ledgeindex`, then `node packages/cli/dist/cli.js`.
+
+Full install and keys: [Set up CLI](/guides/setup-cli).
+
+## Commands
+
+| Command | Model key? | What it does |
+|---------|------------|--------------|
+| `ledgeindex crawl <url>` | No (optional `--filter` / `--enrich`) | Crawl + index into `~/.ledgeindex/data` |
+| `ledgeindex ask <source> "…"` | Yes | RAG question over one indexed source |
+| `ledgeindex ask --sources a,b "…"` | Yes | Ask across pinned sources ([askAcross](/reference/sdk/ask-across)) |
+| `ledgeindex ask --all --set <slug> "…"` | Yes | Read every source in a saved set |
+| `ledgeindex profile <url>` | Yes | Site research lenses ([profile](/docs/profile)) |
+| `ledgeindex config show\|set` | — | Keys, provider, data directory |
+
+```bash
+ledgeindex crawl https://docs.example.com --max-pages 20
+ledgeindex config set google <key>
+ledgeindex ask my-source "How do I install?"
+ledgeindex ask --all --sources my-repo,my-repo-docs "How is auth implemented?"
+ledgeindex profile https://example.com --lenses identity,capabilities
+```
+
+## Stack
+
+Same in-process runtime as the SDK:
+
+| Piece | CLI default |
+|-------|-------------|
+| Embeddings | FastEmbed (384-d), no API key |
+| Vectors | LibSQL file under `LEDGEINDEX_DATA_DIR` |
+| Rerank on `ask` | Local BGE, or Cohere if `COHERE_API_KEY` is set |
+| Personal sources owner | `ledgeindex-cli-local` |
+
+Optional Postgres + Gemini stack: [Set up Docker](/guides/setup-docker) or env vars in the CLI guide.
+
+## Related
+
+- [Index documentation](/guides/setup-docs)
+- [Index a repository](/guides/setup-repo)
+- [askAcross](/reference/sdk/ask-across)
+- [SDK](/docs/sdk) — same engine from Node code
+- [@ledgeindex/sdk reference](/reference/sdk) — `createLedgeIndex`, `runWebCrawl`, `runProfile`, …
+- [Getting started](/guides) — pick CLI vs web vs MCP

@@ -1,0 +1,52 @@
+# Health & MCP
+
+## Health
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/health` | API status, package versions, LLM/rerank readiness, Mastra agents/workflows, MCP path hints |
+| `GET` | `/health/packages` | `@ledgeindex/*` versions and active server profiles (from `@ledgeindex/server`) |
+| `GET` | `/health/db` | Postgres migration / connectivity (when using pgvector stack) |
+| `GET` | `/api/profile/health` | Profile profile registered (when `profile` profile enabled) |
+
+### `GET /health` (excerpt)
+
+Returns JSON including:
+
+- `status`, `service`, `timestamp`
+- `hosting.localAvailable` / `cloudAvailable` — where indexes can be created
+- `llm.agentReady` — whether a chat model key is configured
+- `rerank` — active rerank backend description
+- `chat.docsAgent`, `chat.exploreAgent`, … — Mastra HTTP chat route paths
+- `mastra.mcp.url` — MCP HTTP transport path (e.g. `/mcp`)
+- `mastra.mcp.oauth` — OAuth discovery paths for MCP clients
+
+## Mastra chat (HTTP)
+
+Agent routes are mounted by the docs profile (not under `/api/*`):
+
+| Path | Agent |
+|------|--------|
+| `/chat/docsAgent` | Source-grounded docs chat |
+| `/chat/exploreAgent` | Explore / research agent |
+| `/chat/modelTestAgent` | Model connectivity test |
+
+The web UI source chat primarily uses **`POST /api/sources/:id/ask`** (see [Chat & indexing](/reference/api/chat)) rather than calling Mastra routes directly.
+
+## MCP
+
+MCP is **not** a REST JSON API — it is an MCP HTTP transport on the same process:
+
+| Item | Typical path |
+|------|----------------|
+| MCP endpoint | `/mcp` (see `mastra.mcp.url` in `/health`) |
+| OAuth authorization server | `/.well-known/oauth-authorization-server` |
+| Protected resource metadata | `/.well-known/oauth-protected-resource` |
+| OAuth flows | `/oauth/register`, `/oauth/authorize`, `/oauth/token`, … |
+
+Setup for Cursor / Claude: [Set up MCP](/guides/setup-mcp).
+
+## Related
+
+- [HTTP API overview](/reference/api)
+- [Auth](/reference/api/auth)

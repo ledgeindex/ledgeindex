@@ -14,6 +14,8 @@ import {
 } from "../services/api-key-store.js";
 import { getUserRole, isAdminRole } from "../services/user-role.js";
 import { getUserAccessStatus } from "../services/user-access.js";
+import { isPlanLimitsEnabled } from "../services/source-set-limits.js";
+import { getUserPlan } from "../services/user-plan.js";
 
 const createApiKeySchema = z.object({
   name: z
@@ -51,11 +53,17 @@ export async function apiKeyRoutes(fastify: FastifyInstance) {
     const user = await requireFirebaseUser(request, reply);
     if (!user) return;
 
-    const [role, accessStatus] = await Promise.all([
+    const [role, accessStatus, plan] = await Promise.all([
       getUserRole(user.uid),
       getUserAccessStatus(user.uid),
+      getUserPlan(user.uid),
     ]);
-    return { role, accessStatus };
+    return {
+      role,
+      accessStatus,
+      plan,
+      planLimitsEnabled: isPlanLimitsEnabled(),
+    };
   });
 
   fastify.get("/api/auth/api-keys", async (request, reply) => {

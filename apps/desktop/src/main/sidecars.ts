@@ -249,7 +249,7 @@ function buildSidecarEnv(): NodeJS.ProcessEnv {
     // Do not inherit web's NEXT_PUBLIC_* API URL (usually :3010).
     NEXT_PUBLIC_LEDGEINDEX_API_URL: origin,
     NEXT_PUBLIC_KNOWLEDGEINDEX_API_URL: origin,
-    // Hosted / Public corpus for list_platform_sources + ask_source proxy.
+    // Hosted API: source sets + ask_source proxy (no global catalog listing).
     ...(remoteApi
       ? {
           LEDGEINDEX_REMOTE_API_URL: remoteApi,

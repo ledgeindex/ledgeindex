@@ -1,0 +1,41 @@
+{
+  "name": "ledgeindex",
+  "version": "0.1.11",
+  "description": "LedgeIndex CLI — crawl docs and ask questions from the terminal",
+  "type": "module",
+  "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
+  "author": "LedgeIndex",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ledgeindex/ledgeindex.git",
+    "directory": "ledgeindex/packages/cli"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "bin": {
+    "ledgeindex": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build",
+    "build": "tsup",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@ledgeindex/sdk": "^0.1.11"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2"
+  },
+  "main": "./dist/cli.js",
+  "module": "./dist/cli.js"
+}

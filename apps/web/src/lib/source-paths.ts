@@ -71,6 +71,29 @@ export function pathOptionsFromStartUrls(
   return options;
 }
 
+/** Whether two URLs share the same host (www-insensitive). */
+export function sourcePathHostsMatch(a: string, b: string): boolean {
+  try {
+    const ah = new URL(a).hostname.replace(/^www\./i, "").toLowerCase();
+    const bh = new URL(b).hostname.replace(/^www\./i, "").toLowerCase();
+    return ah === bh;
+  } catch {
+    return false;
+  }
+}
+
+/** First pathname segment for a crawl root, e.g. /docs → docs */
+export function pathRootSegment(pathStartUrl: string): string {
+  try {
+    const parts = new URL(normalizeSourcePathStartUrl(pathStartUrl)).pathname
+      .split("/")
+      .filter(Boolean);
+    return parts[0]?.toLowerCase() ?? "";
+  } catch {
+    return "";
+  }
+}
+
 /** Whether a page URL belongs under a crawl path root. */
 export function urlBelongsToSourcePath(
   pageUrl: string,
@@ -81,15 +104,47 @@ export function urlBelongsToSourcePath(
   try {
     const page = new URL(pageUrl);
     const base = new URL(root);
-    const pageHost = page.hostname.replace(/^www\./i, "").toLowerCase();
-    const baseHost = base.hostname.replace(/^www\./i, "").toLowerCase();
-    if (pageHost !== baseHost) return false;
+    if (!sourcePathHostsMatch(pageUrl, root)) return false;
     const pagePath = page.pathname.replace(/\/+$/, "") || "/";
     const rootPath = base.pathname.replace(/\/+$/, "") || "/";
     if (rootPath === "/") return true;
     return pagePath === rootPath || pagePath.startsWith(`${rootPath}/`);
   } catch {
     return pageUrl.startsWith(root);
+  }
+}
+
+export type SourcePathPageHints = {
+  crawlRoot?: string | null;
+  category?: string | null;
+};
+
+/**
+ * Match a catalog page to a crawl root — URL prefix, stored crawlRoot, or category segment.
+ */
+export function pageBelongsToSourcePath(
+  pageUrl: string,
+  pathStartUrl: string,
+  hints?: SourcePathPageHints,
+): boolean {
+  if (urlBelongsToSourcePath(pageUrl, pathStartUrl)) return true;
+
+  const normRoot = normalizeSourcePathStartUrl(pathStartUrl);
+  const hintRoot = hints?.crawlRoot?.trim()
+    ? normalizeSourcePathStartUrl(hints.crawlRoot)
+    : "";
+  if (hintRoot && hintRoot === normRoot) return true;
+
+  const rootSeg = pathRootSegment(pathStartUrl);
+  if (!rootSeg || !sourcePathHostsMatch(pageUrl, pathStartUrl)) return false;
+
+  if (hints?.category?.toLowerCase() === rootSeg) return true;
+
+  try {
+    const pageSeg = new URL(pageUrl).pathname.split("/").filter(Boolean)[0]?.toLowerCase();
+    return pageSeg === rootSeg;
+  } catch {
+    return false;
   }
 }
 

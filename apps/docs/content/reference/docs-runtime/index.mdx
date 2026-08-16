@@ -1,6 +1,29 @@
 # @ledgeindex/docs
 
-Docs **runtime**: ingest workflow (crawl → parse → enrich → embed → store), RAG agents, and MCP tools. Composes `@ledgeindex/core`.
+`@ledgeindex/docs` implements documentation **sources**, the **indexing** workflow, **source chat** (answers with citations), and **MCP** tools. The web app, desktop app, CLI, and SDK all run on top of it.
+
+It composes `@ledgeindex/core` into Mastra workflows and Fastify routes. Most users never import this package directly — only when building a [custom server](/reference/server).
+
+## What you get
+
+| Capability | What it means |
+|------------|----------------|
+| **Sources** | Create, update, and delete indexed doc sites (personal or global) |
+| **Ingest** | Full crawl workflow with review steps, progress, cancel, and resume |
+| **Refresh** | Re-crawl and apply changes to an existing index |
+| **Source chat** | RAG over a source — rewrite, retrieve, rerank, answer with chunk citations |
+| **MCP** | HTTP transport + OAuth so Cursor / Claude can query your sources |
+| **Example catalog** | Optional enrich step for code/setup snippets (planner/builder flows) |
+
+## When to use it
+
+| Situation | What to use instead |
+|-----------|---------------------|
+| Terminal or Node script, no server | [SDK](/reference/sdk) or [CLI](/guides/setup-cli) — bundles docs runtime in-process |
+| Call an API that is already running | [@ledgeindex/client](/reference/client) — HTTP only |
+| Custom crawl/embed pipeline only | [@ledgeindex/core](/reference/core) — skip docs entirely |
+| Site research JSON (pricing, identity, …) | [@ledgeindex/profile](/reference/profile) — different job than search/chat |
+| Ship your own Fastify API | [@ledgeindex/server](/reference/server) with `profiles: ["docs"]` — mounts this package |
 
 ## Install
 
@@ -8,17 +31,19 @@ Docs **runtime**: ingest workflow (crawl → parse → enrich → embed → stor
 npm install @ledgeindex/docs
 ```
 
+Usually pulled in transitively by `@ledgeindex/server` or `@ledgeindex/sdk`. Install explicitly when wiring a custom host.
+
 ## Package exports
 
 | Export | Purpose |
 |--------|---------|
-| `registerDocsProfile` | Fastify routes for docs ingest / sources |
+| `registerDocsProfile` | Fastify routes for sources, ingest, chat, MCP |
 | `setRegisterDocsProfile` | Wire implementation at bootstrap |
 | `createDocsMastraContribution` | Agents, workflows, MCP for Mastra mount |
 | `registerHostedInngest` | Hosted Inngest registration |
 | `LEDGEINDEX_DOCS_VERSION` | Version constant |
 
-## Setup
+## Setup (custom host)
 
 ```ts
 import {
@@ -27,35 +52,36 @@ import {
 } from "@ledgeindex/docs";
 ```
 
-Usually mounted via `@ledgeindex/server` with `profiles: ["docs"]` — you rarely call these directly unless building a custom host.
+Mount via `@ledgeindex/server` with `profiles: ["docs"]` — see [createLedgeIndexServer](/reference/server/create-server). Narrative overview: [Sources, chat & MCP](/docs/docs-profile). HTTP routes: [HTTP API](/reference/api).
 
-## Ingest pipeline (primitives in order)
+## Ingest pipeline (what happens when you index)
+
+When you index a source, this package orchestrates:
 
 ```text
-crawl-review → parse-review → enrich → embed → store
+discover URLs → (optional review) → parse to markdown → (optional enrich) → chunk → embed → store
 ```
 
-| Step | Core primitives used |
-|------|----------------------|
-| Crawl | `discoverUrls`, `preflightStartUrl`, … |
-| Parse | `parsePage` |
-| Enrich | `enrichPage` (skips if no examples / no LLM) |
-| Embed | `prepareChunksForPages` / example drafts + `embedTexts` |
-| Store | `storePreparedChunks`, example catalog save |
+| Step | What happens |
+|------|----------------|
+| Crawl | Discover pages from sitemap/links; optional LLM URL cleanup |
+| Parse | HTML → markdown per page |
+| Enrich | Optional — extract code/setup examples into an example catalog |
+| Embed | Chunk text, embed vectors, write to LibSQL or pgvector |
+| Store | Source metadata, page catalog, chunk index |
 
-Disable enrich: `LEDGEINDEX_ENRICH_EXAMPLES=0`.
+Disable enrich globally: `LEDGEINDEX_ENRICH_EXAMPLES=0`.
 
 ## MCP tools
 
-| Tool | Backed by | Use when |
-|------|-----------|----------|
-| `ask_knowledge_source` | `kapaRetrieve` | Prose Q&A |
-| `find_examples` | `findExamples` / `queryExamples` | Code / setup / usage snippets |
-| `list_*_sources` / sets | source registry | Discover slugs before asking |
+| Tool | Use when |
+|------|----------|
+| `list_source_sets` / `get_source_set` | Find which sources an agent may query |
+| `ask_source` | Retrieve grounded chunks from a source (hits, not a full chat answer) |
 
-Prefer source **slugs** over UUIDs.
+Setup: [Set up MCP](/guides/setup-mcp).
 
-## Example — contribution only
+## Example — Mastra contribution only
 
 ```ts
 import { createDocsMastraContribution } from "@ledgeindex/docs";
@@ -69,6 +95,7 @@ await mountMastraOnFastify(app, mastra);
 
 ## Related
 
-- [Core](/reference/core)
-- [Query](/reference/core/query)
-- [createLedgeIndexServer](/reference/server/create-server)
+- [Sources, chat & MCP (narrative)](/docs/docs-profile)
+- [HTTP API](/reference/api)
+- [Core](/reference/core) — primitives this package composes
+- [SDK](/reference/sdk) — same product, in-process

@@ -33,6 +33,7 @@ export function AppHeaderSourceChatControls() {
   } = toolbar;
   const sourceName = activeSource?.sourceName ?? "Chat";
   const sourceId = activeSource?.sourceId;
+  const sourceStartUrls = activeSource?.startUrls;
   const canUseTestPrompts =
     (process.env.NODE_ENV === "development" || isAdmin) &&
     testPromptSuggestions.length > 0;
@@ -105,6 +106,7 @@ export function AppHeaderSourceChatControls() {
           <SourceCatalogButton
             sourceId={sourceId}
             sourceName={sourceName}
+            startUrls={sourceStartUrls}
             className="h-8 shrink-0 px-2.5 py-0"
           />
         ) : null}

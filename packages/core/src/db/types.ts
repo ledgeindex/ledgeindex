@@ -1,8 +1,11 @@
 import type { WebCrawlSourceConfig } from "../schemas/source-config.js";
-import type { SourceMetadata } from "../schemas/source-metadata.js";
+import type {
+  SourceContentType,
+  SourceMetadata,
+} from "../schemas/source-metadata.js";
 import type { SourceHosting } from "./source-hosting.js";
 
-export type { SourceMetadata };
+export type { SourceContentType, SourceMetadata };
 
 export type SourceScope = "personal" | "global";
 
@@ -83,6 +86,12 @@ export type SourceSummary = {
   startUrl: string;
   /** All crawl roots for this set (startUrl is the first). */
   startUrls: string[];
+  /**
+   * What kind of corpus this is — `repository` for git checkouts, a docs kind
+   * for crawled sites. Lets a router choose between code and prose before it
+   * retrieves anything.
+   */
+  sourceType: SourceContentType;
   ogImageUrl: string | null;
   faviconUrl: string | null;
   indexedAt: string | null;
@@ -128,6 +137,8 @@ export type SourceSetSummary = {
     slug: string;
     name: string;
     scope: SourceScope;
+    /** Corpus kind, so a set can show which members are code and which are docs. */
+    sourceType: SourceContentType;
   }>;
 };
 

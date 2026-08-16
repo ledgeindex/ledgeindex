@@ -1,13 +1,16 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { askSource } from "../../../services/source-ask.js";
-import { resolveSourceRefForUser } from "../../../services/source-resolve.js";
 import { mergeRequestContextFromMcp } from "../request-context-utils.js";
+import {
+  MCP_SOURCE_SET_ONLY_MESSAGE,
+  remoteResolveSourceViaUserSourceSets,
+  resolveSourceViaUserSourceSets,
+} from "../mcp-source-set-access.js";
 import {
   getRemotePlatformApiBase,
   readAuthTokenFromContext,
   remoteAskSource,
-  remoteResolveGlobalSource,
 } from "../remote-platform-api.js";
 
 const hitSchema = z.object({
@@ -30,12 +33,12 @@ const hitSchema = z.object({
 export const askKnowledgeSourceTool = createTool({
   id: "ask_source",
   description:
-    "Retrieve grounded evidence from a source for a question. Runs vector search + rerank, then returns only chunks that clear the relevance threshold (no answer agent). Pass source slug (preferred) or UUID. Each hit includes the page url + page title (when available), plus sourceName for the knowledge source. Use the hits yourself to reason — count varies with how many chunks are relevant.",
+    "Retrieve grounded evidence from a source that belongs to one of your source sets. Workflow: list_source_sets → get_source_set → ask_source with a member slug. Runs vector search + rerank; returns relevance-pruned hits (no synthesized answer).",
   inputSchema: z.object({
     source: z
       .string()
       .min(1)
-      .describe("Source slug (e.g. mastra) or UUID."),
+      .describe("Member source slug from get_source_set (preferred) or UUID."),
     question: z.string().min(1).describe("Question to retrieve evidence for."),
   }),
   outputSchema: z.object({
@@ -57,7 +60,7 @@ export const askKnowledgeSourceTool = createTool({
       return { ok: false, message: "Authenticate MCP first" };
     }
 
-    const local = await resolveSourceRefForUser(input.source, userId);
+    const local = await resolveSourceViaUserSourceSets(userId, input.source);
     if (local) {
       const result = await askSource(local.id, input.question, {
         mode: "retrieve-only",
@@ -92,7 +95,7 @@ export const askKnowledgeSourceTool = createTool({
     if (!remoteBase) {
       return {
         ok: false,
-        message: `Source not found or not accessible: ${input.source}`,
+        message: MCP_SOURCE_SET_ONLY_MESSAGE,
       };
     }
 
@@ -101,15 +104,18 @@ export const askKnowledgeSourceTool = createTool({
       return {
         ok: false,
         message:
-          "Sign in required to query remote platform sources (Firebase token missing).",
+          "Sign in required to query remote sources (Firebase token missing).",
       };
     }
 
-    const remoteSource = await remoteResolveGlobalSource(token, input.source);
+    const remoteSource = await remoteResolveSourceViaUserSourceSets(
+      token,
+      input.source,
+    );
     if (!remoteSource) {
       return {
         ok: false,
-        message: `Source not found or not accessible: ${input.source}`,
+        message: MCP_SOURCE_SET_ONLY_MESSAGE,
       };
     }
 

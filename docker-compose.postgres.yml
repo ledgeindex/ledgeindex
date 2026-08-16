@@ -1,0 +1,86 @@
+# LedgeIndex OSS — API + Web UI + Postgres/pgvector (cloud retrieval stack locally).
+#
+# Usage:
+#   cp env.example .env
+#   # Required for pgvector embeddings:
+#   #   GOOGLE_GENERATIVE_AI_API_KEY=...
+#   # Optional:
+#   #   COHERE_API_KEY=...          (Cohere rerank on ask/chat)
+#   #   OPENAI_API_KEY / DEEPSEEK_API_KEY (chat / crawl filter)
+#   docker compose -f docker-compose.postgres.yml up --build
+#
+# UI:       http://localhost:3004
+# API:      http://localhost:3010
+# Postgres: localhost:5432  (user/pass/db: ledgeindex)
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: ledgeindex
+      POSTGRES_PASSWORD: ledgeindex
+      POSTGRES_DB: ledgeindex
+    ports:
+      - "5432:5432"
+    volumes:
+      - ledgeindex-pg:/var/lib/postgresql/data
+      - ./docker/postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ledgeindex -d ledgeindex"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    image: node:22-bookworm-slim
+    working_dir: /app/ledgeindex
+    command: >
+      bash -lc "apt-get update -qq && apt-get install -y -qq curl >/dev/null
+      && npm install && npm run build:packages && npm run dev:api"
+    ports:
+      - "3010:3010"
+    environment:
+      PORT: "3010"
+      HOST: "0.0.0.0"
+      LEDGEINDEX_AUTH_REQUIRED: "0"
+      LEDGEINDEX_DATA_DIR: /data
+      LEDGEINDEX_VECTOR_BACKEND: pgvector
+      POSTGRES_CONNECTION_STRING: postgresql://ledgeindex:ledgeindex@postgres:5432/ledgeindex
+      MASTRA_PUBLIC_URL: http://localhost:3010
+      LEDGEINDEX_FRONTEND_URL: http://localhost:3004
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+      LEDGEINDEX_RERANK_BACKEND: ${LEDGEINDEX_RERANK_BACKEND:-cohere-auto}
+    volumes:
+      - ..:/app
+      - ledgeindex-data:/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 180s
+
+  web:
+    image: node:22-bookworm-slim
+    working_dir: /app/ledgeindex
+    command: >
+      bash -lc "npm install && npm run dev:web"
+    ports:
+      - "3004:3004"
+    environment:
+      NEXT_PUBLIC_LEDGEINDEX_API_URL: http://localhost:3010
+    volumes:
+      - ..:/app
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  ledgeindex-pg:
+  ledgeindex-data:

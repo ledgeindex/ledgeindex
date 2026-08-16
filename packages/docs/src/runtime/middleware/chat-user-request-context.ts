@@ -11,7 +11,7 @@ function extractFirebaseBearer(header: string | undefined): string | null {
 
 /**
  * Inject authenticated Fastify user into Mastra chat `requestContext`
- * so MCP-style tools (ask_source, list_platform_sources) see user_id.
+ * so MCP-style tools (ask_source, list_source_sets) see user_id.
  * Also stash the Firebase Bearer as auth_token so desktop tools can proxy
  * global/platform queries to LEDGEINDEX_REMOTE_API_URL.
  */

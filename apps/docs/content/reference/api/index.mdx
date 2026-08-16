@@ -1,0 +1,59 @@
+# HTTP API
+
+REST endpoints served by **`@ledgeindex/server`** when the **docs** and/or **profile** profiles are enabled. The **web UI** (`:3004`) and **desktop sidecar** (`:3015`) call these routes; [`@ledgeindex/client`](/reference/client) wraps the same paths.
+
+There is no OpenAPI/Swagger file yet — this section is the canonical route map. Request/response shapes match the client TypeScript types in `@ledgeindex/client` where noted.
+
+## Base URLs
+
+| Deployment | Default origin | Notes |
+|------------|----------------|-------|
+| Web dev API | `http://127.0.0.1:3010` | `npm run dev:api` / `npm run dev` |
+| Desktop sidecar | `http://127.0.0.1:3015` | Electron Personal tab |
+| Docker compose | `http://127.0.0.1:3010` | See [Set up Docker](/guides/setup-docker) |
+| Your deployment | Your API origin | Set `NEXT_PUBLIC_LEDGEINDEX_API_URL` in the web app |
+
+## Authentication
+
+| Mode | How |
+|------|-----|
+| Local dev (`LEDGEINDEX_AUTH_REQUIRED=0`) | Default — local user id, no token |
+| Auth required (`LEDGEINDEX_AUTH_REQUIRED=1`) | `Authorization: Bearer …` or `X-Api-Key` — see [Auth](/reference/api/auth) |
+
+Details: [Auth](/reference/api/auth) · [Client auth](/reference/client/auth).
+
+## Route map
+
+| Area | Page |
+|------|------|
+| Health, Mastra chat paths, MCP discovery | [Health & MCP](/reference/api/health) |
+| Auth & API keys | [Auth](/reference/api/auth) |
+| Sources, projects, preflight, crawl helpers | [Sources](/reference/api/sources) |
+| Ingest, refresh, crawl runs | [Ingest & crawl](/reference/api/ingest) |
+| Ask, query, catalogs | [Chat & indexing](/reference/api/chat) |
+| Git repo index | [Index repo](/reference/api/index-repo) |
+| Source sets | [Source sets](/reference/api/source-sets) |
+| Site profile & landscape runs | [Profile](/reference/api/profile) |
+
+## Quick probe
+
+```bash
+curl -s http://127.0.0.1:3010/health | jq .
+curl -s http://127.0.0.1:3010/health/packages | jq .
+```
+
+`GET /health` includes LLM readiness, rerank setup, Mastra agent list, and MCP HTTP path hints.
+
+## vs SDK / CLI
+
+| | HTTP API | SDK / CLI |
+|---|----------|-----------|
+| Server | Required (`:3010` / `:3015`) | None |
+| Web UI / MCP | Yes | No |
+| Same crawl/ask logic | Yes (via API) | In-process |
+
+## Related
+
+- [@ledgeindex/client](/reference/client) — typed wrappers for these routes
+- [Sources, chat & MCP](/docs/docs-profile) — what the `docs` profile adds
+- [Set up MCP](/guides/setup-mcp) — MCP tools (not REST, on same API process)

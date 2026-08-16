@@ -53,15 +53,33 @@ export {
 } from "./profile-repo.js";
 
 export {
+  REPO_CODE_EXTENSIONS,
+  REPO_DOC_EXTENSIONS,
   REPO_INDEXABLE_EXTENSIONS,
   REPO_SKIP_DIR_NAMES,
+  isRepoAllowlistedExtension,
+  isRepoCodeFile,
+  isRepoDocFile,
   isRepoIndexableFile,
+  isRepoTestPath,
+  resolveRepoExtensions,
   repoChunkLanguageForFile,
+  repoChunkStrategyForFile,
+  repoPageKind,
+  repoPathFacets,
   contentTypeForRepoFile,
   type RepoChunkLanguage,
+  type RepoChunkStrategy,
+  type RepoPageKind,
+  type RepoPathOptions,
 } from "./indexable-paths.js";
 
-export { listRepoIndexableFiles, type WalkRepoOptions } from "./walk-repo.js";
+export {
+  listRepoIndexableFiles,
+  walkRepoFiles,
+  type WalkRepoOptions,
+  type WalkRepoResult,
+} from "./walk-repo.js";
 
 export {
   repoFileCanonicalUrl,
@@ -70,9 +88,30 @@ export {
 } from "./repo-page-url.js";
 
 export {
+  cloneRepo,
+  parseRepoUrl,
+  repoCheckoutCachePath,
+  CloneRepoError,
+  type CloneRepoInput,
+  type CloneRepoResult,
+} from "./clone-repo.js";
+
+export {
+  analyzeCodeFile,
+  CODE_CHUNK_MAX_CHARS,
+  CODE_CHUNK_MERGE_MAX_CHARS,
+  type CodeChunk,
+  type CodeFileAnalysis,
+  type CodeSymbolKind,
+} from "./ast-chunk-code.js";
+
+export {
   REPO_MAX_FILE_BYTES,
   loadRepoIndexPages,
   indexRepoCheckout,
   type IndexRepoCheckoutInput,
   type LoadRepoIndexPagesResult,
+  type RepoFileSymbols,
+  type RepoIndexProgress,
+  type RepoIndexStats,
 } from "./index-repo-checkout.js";

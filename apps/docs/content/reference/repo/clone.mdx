@@ -1,0 +1,69 @@
+# cloneRepo
+
+Shallow clone or update a **public** HTTPS repository into the LedgeIndex checkout cache.
+
+Uses the **git CLI** (not a JS git library). Requires `git` on `PATH`. Credential prompts are disabled — private repos fail fast instead of hanging.
+
+## `cloneRepo(input)`
+
+```ts
+import { cloneRepo } from "@ledgeindex/repo";
+
+const { checkoutPath, commitSha, reused } = await cloneRepo({
+  repoUrl: "https://github.com/browserbase/stagehand",
+  ref: "main",       // optional
+  fresh: false,      // true = delete cache and re-clone
+});
+```
+
+### `CloneRepoInput`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `repoUrl` | string | `https://host/owner/repo` — `/tree/<ref>` suffix also parsed |
+| `ref` | string? | Branch, tag, or commit |
+| `targetDir` | string? | Override cache location |
+| `fresh` | boolean? | Remove existing checkout before clone |
+
+### `CloneRepoResult`
+
+| Field | Description |
+|-------|-------------|
+| `checkoutPath` | Absolute path to working tree |
+| `repoUrl` | Normalized `https://host/owner/repo` |
+| `ref` | Resolved ref or `null` |
+| `commitSha` | `git rev-parse HEAD` |
+| `reused` | `true` if an existing cache was fetched/reset |
+
+## Cache location
+
+```ts
+import { repoCheckoutCachePath } from "@ledgeindex/repo";
+
+repoCheckoutCachePath("https://github.com/org/repo");
+// → $LEDGEINDEX_DATA_DIR/repo-checkouts/github-com-org-repo
+```
+
+Re-index calls `cloneRepo` internally when `indexRepoCheckout` receives `githubUrl` without `checkoutPath` — subsequent runs update the cache instead of cloning from scratch.
+
+## `parseRepoUrl(input)`
+
+Normalize user-pasted URLs:
+
+```ts
+parseRepoUrl("https://github.com/org/repo/tree/v2.0");
+// → { repoUrl, host, owner, repo, ref: "v2.0" }
+```
+
+Throws `CloneRepoError` for non-HTTPS URLs, unsafe refs, or malformed paths.
+
+## Security
+
+- Only `https://` repository URLs
+- Refs validated against `SAFE_REF` (no `--option` injection)
+- Repo URL passed to `git` as argv, never through a shell
+
+## Related
+
+- [indexRepoCheckout](/reference/repo/index-checkout)
+- [Index repo API](/reference/api/index-repo)

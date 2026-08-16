@@ -23,6 +23,8 @@ export type RetrievalPickedSource = {
   scope?: "personal" | "global";
   /** true when retrieved via LEDGEINDEX_REMOTE_API_URL */
   remote?: boolean;
+  /** "code" for an indexed repository, "docs" for a crawled site. */
+  kind?: "code" | "docs";
 };
 
 export type RetrievalSearchFilter = {

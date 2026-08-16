@@ -1,14 +1,12 @@
-# Server overview
+# HTTP server
 
-Server is the LedgeIndex HTTP entrypoint. It creates a Fastify app, optionally mounts Mastra, and registers capability packs (“profiles”) such as docs ingest/RAG and site research.
-
-You choose which profiles to enable. It wires CORS, shared Mastra contributions, and the matching route plugins. Hosts add auth and logging around that via `beforeProfiles` / `afterProfiles`.
+`@ledgeindex/server` — run LedgeIndex as a **Fastify service**: health checks, docs ingest/chat, profile routes, MCP. Pick which profiles to enable (`docs`, `profile`, …).
 
 ## When to use server
 
 Use `@ledgeindex/server` when you want a **single process** that exposes LedgeIndex over HTTP: health checks, docs ingest/chat, profile landscape routes, without hand-rolling Fastify plugin order.
 
-If you only need library APIs inside another app, import [Core](/docs/core) or [Profile](/docs/profile) directly. Server is for running LedgeIndex as a service.
+If you only need library APIs inside another app, import [Crawl & retrieval](/docs/core) or [Site research](/docs/profile) directly. This package is for running LedgeIndex as a long-lived HTTP process.
 
 ## Quickstart
 
@@ -47,14 +45,10 @@ Default profiles are `["docs", "profile"]`. Each id mounts a pack:
 
 | Profile id | Registers |
 |------------|-----------|
-| `docs` | Docs ingest / RAG / MCP routes + Mastra contribution ([Docs profile](/docs/docs-profile)) |
+| `docs` | Docs ingest / RAG / MCP routes + Mastra contribution ([Sources, chat & MCP](/docs/docs-profile)) |
 | `profile` | Landscape / research routes from `@ledgeindex/profile` |
 
 Legacy env value `company` still maps to `profile`.
-
-## Access gate
-
-After `beforeProfiles` (where hosts install auth), the server always registers the approved-access middleware from `@ledgeindex/docs`. It is a no-op unless API auth is required. On cloud installs, pending users cannot hit most routes until approved.
 
 ## Health
 
@@ -71,7 +65,7 @@ Hosted wrappers typically parse `LEDGEINDEX_PROFILES` and pass the array into `p
 | Goal | Start here |
 |------|------------|
 | Full option list and hooks | [Options](/docs/server/options) |
-| Docs ingest / MCP | [Docs profile](/docs/docs-profile) |
+| Docs ingest / MCP | [Sources, chat & MCP](/docs/docs-profile) |
 | What the profile slot does | [Profile](/docs/profile) |
 | Core primitives under the hood | [Core](/docs/core) |
-| Web and desktop | [Apps](/docs/apps) |
+| Web and desktop | [Web & desktop](/docs/apps) |

@@ -1,0 +1,245 @@
+# Set up CLI
+
+The `ledgeindex` CLI crawls docs, answers questions, and runs site profiles from the terminal. It runs **in-process** via `@ledgeindex/sdk` — no Fastify server, no UI, no MCP. Indexes live under your home directory, separate from a web dev clone’s `./.data`.
+
+Not sure this is the right path? See [Getting started](/guides) for other options (SDK, web, MCP, …).
+
+## What you need
+
+- Node.js **22.13+**
+- **Crawl + index:** no model key required (uses local FastEmbed + LibSQL by default)
+- **Ask**, **`--filter`**, **`--enrich`**, or **`profile`:** a model key (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, or `DEEPSEEK_API_KEY`)
+- Optional: `COHERE_API_KEY` for Cohere rerank on `ask` (otherwise local BGE rerank)
+
+## Install
+
+**From npm** (when published):
+
+```bash
+npm install -g ledgeindex
+```
+
+**From a clone** of [ledgeindex/ledgeindex](https://github.com/ledgeindex/ledgeindex):
+
+```bash
+npm install
+npm run build -w ledgeindex
+
+# run without global install:
+node packages/cli/dist/cli.js --help
+```
+
+## Configure keys
+
+Keys can live in a config file or in the environment. Env vars win over the file.
+
+### Config file
+
+| OS | Path |
+|----|------|
+| Windows | `%APPDATA%\ledgeindex\config.json` |
+| Linux / macOS | `~/.config/ledgeindex/config.json` |
+
+```bash
+ledgeindex config set google <gemini-api-key>
+ledgeindex config set openai sk-...
+ledgeindex config set deepseek ...
+ledgeindex config set cohere ...          # optional rerank
+ledgeindex config show
+```
+
+### Environment
+
+| Variable | Used for |
+|----------|----------|
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini chat + crawl filter |
+| `OPENAI_API_KEY` | OpenAI chat + crawl filter |
+| `DEEPSEEK_API_KEY` | DeepSeek chat + crawl filter |
+| `COHERE_API_KEY` | Cohere rerank on `ask` |
+| `POSTGRES_CONNECTION_STRING` | Postgres metadata + pgvector (cloud stack) |
+| `LEDGEINDEX_VECTOR_BACKEND` | `libsql` (default) or `pgvector` |
+| `LEDGEINDEX_DATA_DIR` | Override index data path (default `~/.ledgeindex/data`) |
+| `LEDGEINDEX_PROVIDER` | Force provider: `google`, `openai`, or `deepseek` |
+| `LEDGEINDEX_RERANK_BACKEND` | Override rerank: `cohere`, `cohere-auto`, `local-auto`, … |
+
+### Choose LLM provider
+
+Default is **auto**: Google → DeepSeek → OpenAI (first key that exists).
+
+```bash
+ledgeindex config set provider google     # or openai / deepseek
+ledgeindex config set provider auto       # back to automatic
+
+ledgeindex crawl https://docs.example.com --provider openai
+ledgeindex ask my-source "How do I install?" --provider google
+```
+
+## Commands
+
+### Crawl and index
+
+```bash
+ledgeindex crawl <url> [--name <name>] [--max-pages N] [--filter] [--enrich] [--json]
+```
+
+| Flag | What it does |
+|------|----------------|
+| `--max-pages N` | Cap discovered pages (default 1000) |
+| `--filter` | Opt-in LLM URL cleanup after crawl (requires model key) |
+| `--enrich` | Opt-in **example enrichment** during ingest — see below (requires model key) |
+| `--provider` | `google` \| `openai` \| `deepseek` for this run |
+| `--json` | Print result JSON (source id, page/chunk counts) |
+
+Example:
+
+```bash
+ledgeindex crawl https://docs.astro.build --max-pages 20
+ledgeindex crawl https://docs.astro.build --filter   # optional AI URL cleanup
+```
+
+### Enrich examples (`--enrich`)
+
+**Off by default. Experimental.**
+
+Optional extra ingest step: after each page is parsed to markdown, an LLM extracts **code samples, install steps, config blocks, and API response examples** that are already on the page (nothing invented). Each item is stored as an **example chunk** with its doc section heading — this feeds `queryExamples` / `findExamples` and the example catalog that **planner and builder workflows** use when they need grounded snippets, not just prose.
+
+Plain crawl already indexes full page text for `ask`. Use `--enrich` when automation must pull real SDK/curl/config examples out of the docs.
+
+**When to use:** planner/builder flows, `queryExamples` / MCP `find_examples`, code-heavy API docs. **When to skip (default):** chat-only Q&A, prose docs, no model key, fastest crawl.
+
+- Requires a model key (`--enrich` + `config set google` / etc.)
+- Slower — one LLM pass per page
+- Not in the web UI yet
+- Set `LEDGEINDEX_ENRICH_EXAMPLES=0` to disable globally
+
+Details: [SDK crawl — enrich examples](/reference/sdk/crawl#enrich-examples-enrichexamples).
+
+### Ask an indexed source
+
+```bash
+ledgeindex ask <source-id|slug> "your question" [--provider google|openai|deepseek]
+```
+
+`ask` runs the same RAG stack as source chat in the web UI: query rewrite → vector search → rerank → coverage → agent answer.
+
+| Cohere key? | Rerank on `ask` |
+|-------------|-----------------|
+| No | `local` — in-process BGE |
+| Yes | `cohere` — Cohere Rerank v3.5 |
+
+Set `LEDGEINDEX_RERANK_BACKEND=cohere-auto` for web-like escalation (3.5 → v4-fast, with local fallback).
+
+### Ask across several sources
+
+When a repo and its docs are separate indexes, ask across both with one answer:
+
+```bash
+ledgeindex ask --sources stagehand,stagehand-docs "how does act() work?"
+ledgeindex ask --all --sources stagehand,stagehand-docs "how is act() implemented end to end?"
+ledgeindex ask --set stagehand-stack "how does caching work?"
+```
+
+| Flag | Behavior |
+|------|----------|
+| `--sources a,b` | Pin slug allowlist (comma-separated) |
+| `--set <slug>` | Use a saved [source set](/reference/api/source-sets) |
+| `--picker` (default) | LLM picks which pinned sources to read |
+| `--all` | Always read every pinned source |
+
+Requires a chat key. Full reference: [askAcross](/reference/sdk/ask-across).
+
+### Index a Git repository
+
+Repo indexing is **not** a `ledgeindex crawl` command yet. Use the API (or helper script) once, then ask by slug:
+
+```bash
+node path/to/ledgeindex/scripts/index-repo.mjs https://github.com/org/repo my-repo
+node path/to/ledgeindex/scripts/query-repo.mjs my-repo "what does the act function do?"
+```
+
+Full guide: [Index a repository](/guides/setup-repo).
+
+### Profile a site
+
+```bash
+ledgeindex profile <url> [--lenses identity,capabilities] [--max-pages N] [--pick-only] [--json]
+ledgeindex profile --list-lenses
+```
+
+Runs `@ledgeindex/profile` in-process: crawl site catalog once, then each [research lens](/reference/profile/lenses) (pick → fetch → structured output). **Requires a model key** — same as `ask`. Does not write to your crawl index.
+
+| Flag | What it does |
+|------|----------------|
+| `--lenses` | Comma-separated lens ids (default: all 14) |
+| `--max-pages N` | Cap catalog crawl |
+| `--pick-only` | URL pick only; skip fetch and synth |
+| `--json` | Full `CompanyProfileResult` (default stdout: merged `profile` object) |
+| `--list-lenses` | Print lens ids and labels |
+
+```bash
+ledgeindex config set google <key>
+ledgeindex profile https://example.com --lenses identity,pricing,capabilities
+```
+
+SDK equivalent: [`li.profile`](/reference/sdk/profile) or standalone [`runProfile`](/reference/sdk/profile#standalone-no-mastra-init).
+
+## Retrieval stack (embeddings + storage)
+
+**Default (no extra env):** the CLI uses the **local stack**:
+
+| Piece | Default |
+|-------|---------|
+| Embeddings | **FastEmbed** (`bge-small-en-v1.5`, 384 dimensions, no API key) |
+| Vector store | **LibSQL** file (`~/.ledgeindex/data/ledgeindex-vector.db`) |
+| Rerank | Local BGE (or Cohere if `COHERE_API_KEY` is set) |
+| Source metadata | **FileStore** JSON under `LEDGEINDEX_DATA_DIR` |
+
+LibSQL is wired for **384-d FastEmbed vectors**. The **cloud stack** uses **1536-d Gemini** embeddings in **Postgres/pgvector** — different model and dimension, so you cannot mix indexes between stacks.
+
+**CLI is not limited to FastEmbed forever** — it uses the same `@ledgeindex/core` code as the API. To run the **cloud stack** from the CLI (Gemini embeds + pgvector + optional Cohere):
+
+```bash
+export POSTGRES_CONNECTION_STRING=postgresql://ledgeindex:ledgeindex@localhost:5432/ledgeindex
+export LEDGEINDEX_VECTOR_BACKEND=pgvector
+export GOOGLE_GENERATIVE_AI_API_KEY=...   # required for Gemini embeddings
+export COHERE_API_KEY=...                 # optional; cohere-auto rerank
+```
+
+Then crawl/ask as usual. Easiest way to get Postgres locally: [Set up Docker](/guides/setup-docker) (`docker-compose.postgres.yml`).
+
+### Config
+
+```bash
+ledgeindex config show
+ledgeindex config set <key> <value>
+```
+
+## Data layout
+
+| Path | What |
+|------|------|
+| `~/.ledgeindex/data` | Sources, LibSQL vector store, Mastra workflow state (default) |
+| `~/.config/ledgeindex/config.json` | Keys and preferences |
+
+CLI personal sources use user id `ledgeindex-cli-local`. They do not appear in a web UI pointed at `./.data` unless you share the same `LEDGEINDEX_DATA_DIR`.
+
+## vs web and desktop
+
+| | CLI (default) | CLI + Postgres | Web/Docker (oss) | Docker (postgres) |
+|---|---------------|----------------|------------------|-------------------|
+| Server | None | None | `:3010` API | `:3010` API |
+| Embeddings | FastEmbed | Gemini | FastEmbed | Gemini |
+| Vectors | LibSQL | pgvector | LibSQL | pgvector |
+| Best for | Scripts, CI | Shared DB with web | Quick local UI | Full cloud-like stack |
+
+## Related
+
+- [Index documentation](/guides/setup-docs)
+- [askAcross](/reference/sdk/ask-across)
+- [Index a repository](/guides/setup-repo)
+- [Set up SDK](/guides/setup-sdk) — same stack from Node (`@ledgeindex/sdk`)
+- [Set up MCP](/guides/setup-mcp) — Cursor / Claude Desktop
+- [Set up Docker](/guides/setup-docker) — Postgres + Gemini + Cohere locally
+- [Set up web](/guides/setup-web)
+- [Set up desktop](/guides/setup-desktop)
+- [@ledgeindex/client](/reference/client) — HTTP client when you *do* have a running API

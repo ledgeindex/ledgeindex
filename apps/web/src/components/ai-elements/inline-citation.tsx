@@ -8,21 +8,93 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
+
+const CARD_WIDTH = 320;
+const VIEWPORT_MARGIN = 8;
+const ANCHOR_GAP = 6;
+/** Grace period so the pointer can travel from the trigger into the card. */
+const CLOSE_DELAY_MS = 120;
+
+type CitationHoverContextValue = {
+  open: boolean;
+  anchorEl: HTMLElement | null;
+  setAnchorEl: (el: HTMLElement | null) => void;
+  openNow: () => void;
+  scheduleClose: () => void;
+  cancelClose: () => void;
+};
+
+const CitationHoverContext = createContext<CitationHoverContextValue | null>(
+  null,
+);
 
 export type InlineCitationProps = ComponentProps<"span">;
 
 export function InlineCitation({
   className,
+  children,
   ...props
 }: InlineCitationProps) {
+  const [open, setOpen] = useState(false);
+  const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
+  const closeTimer = useRef<number | null>(null);
+
+  const cancelClose = useCallback(() => {
+    if (closeTimer.current !== null) {
+      window.clearTimeout(closeTimer.current);
+      closeTimer.current = null;
+    }
+  }, []);
+
+  const openNow = useCallback(() => {
+    cancelClose();
+    setOpen(true);
+  }, [cancelClose]);
+
+  const scheduleClose = useCallback(() => {
+    cancelClose();
+    closeTimer.current = window.setTimeout(
+      () => setOpen(false),
+      CLOSE_DELAY_MS,
+    );
+  }, [cancelClose]);
+
+  useEffect(() => cancelClose, [cancelClose]);
+
+  const value = useMemo(
+    () => ({
+      open,
+      anchorEl,
+      setAnchorEl,
+      openNow,
+      scheduleClose,
+      cancelClose,
+    }),
+    [open, anchorEl, openNow, scheduleClose, cancelClose],
+  );
+
   return (
-    <span
-      className={cn("group/citation relative inline items-center gap-1", className)}
-      {...props}
-    />
+    <CitationHoverContext.Provider value={value}>
+      <span
+        className={cn(
+          "group/citation relative inline items-center gap-1",
+          className,
+        )}
+        onMouseEnter={openNow}
+        onMouseLeave={scheduleClose}
+        onFocus={openNow}
+        onBlur={scheduleClose}
+        {...props}
+      >
+        {children}
+      </span>
+    </CitationHoverContext.Provider>
   );
 }
 
@@ -49,7 +121,16 @@ export function InlineCitationCard({
   className,
   ...props
 }: InlineCitationCardProps) {
-  return <span className={cn("relative inline-flex", className)} {...props} />;
+  const ctx = useContext(CitationHoverContext);
+  return (
+    <span
+      ref={(node) => {
+        ctx?.setAnchorEl(node);
+      }}
+      className={cn("relative inline-flex", className)}
+      {...props}
+    />
+  );
 }
 
 function hostnameLabel(url: string): string {
@@ -92,21 +173,87 @@ export function InlineCitationCardTrigger({
 
 export type InlineCitationCardBodyProps = ComponentProps<"div">;
 
+/**
+ * Rendered in a portal with fixed coordinates: the chat message list is a
+ * scroll container, so an absolutely positioned card gets clipped at its edges.
+ */
 export function InlineCitationCardBody({
   className,
+  children,
   ...props
 }: InlineCitationCardBodyProps) {
-  return (
+  const ctx = useContext(CitationHoverContext);
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [coords, setCoords] = useState<{ top: number; left: number } | null>(
+    null,
+  );
+  const [mounted, setMounted] = useState(false);
+
+  const anchorEl = ctx?.anchorEl ?? null;
+  const open = ctx?.open ?? false;
+
+  useEffect(() => setMounted(true), []);
+
+  const position = useCallback(() => {
+    if (!anchorEl) return;
+    const rect = anchorEl.getBoundingClientRect();
+    const height = cardRef.current?.offsetHeight ?? 0;
+    const maxLeft = window.innerWidth - CARD_WIDTH - VIEWPORT_MARGIN;
+    const left = Math.max(VIEWPORT_MARGIN, Math.min(rect.left, maxLeft));
+    const below = rect.bottom + ANCHOR_GAP;
+    const flipAbove =
+      height > 0 && below + height > window.innerHeight - VIEWPORT_MARGIN;
+    const top = flipAbove
+      ? Math.max(VIEWPORT_MARGIN, rect.top - height - ANCHOR_GAP)
+      : below;
+    setCoords({ top, left });
+  }, [anchorEl]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setCoords(null);
+      return;
+    }
+    position();
+  }, [open, position]);
+
+  useEffect(() => {
+    if (!open) return;
+    // Capture phase so the chat list's own scrolling repositions the card too.
+    window.addEventListener("scroll", position, true);
+    window.addEventListener("resize", position);
+    return () => {
+      window.removeEventListener("scroll", position, true);
+      window.removeEventListener("resize", position);
+    };
+  }, [open, position]);
+
+  if (!mounted || !open || !ctx) return null;
+
+  return createPortal(
     <div
+      {...props}
+      ref={cardRef}
+      role="tooltip"
+      onMouseEnter={ctx.cancelClose}
+      onMouseLeave={ctx.scheduleClose}
+      onFocus={ctx.cancelClose}
+      onBlur={ctx.scheduleClose}
+      style={{
+        top: coords?.top ?? 0,
+        left: coords?.left ?? 0,
+        width: CARD_WIDTH,
+        visibility: coords ? "visible" : "hidden",
+        opacity: coords ? 1 : 0,
+      }}
       className={cn(
-        "pointer-events-none invisible absolute top-[calc(100%+0.4rem)] left-0 z-50 w-80 origin-top-left scale-95 rounded-lg border border-border bg-card-solid p-0 opacity-0 shadow-card transition",
-        "group-hover/citation:pointer-events-auto group-hover/citation:visible group-hover/citation:scale-100 group-hover/citation:opacity-100",
-        "group-focus-within/citation:pointer-events-auto group-focus-within/citation:visible group-focus-within/citation:scale-100 group-focus-within/citation:opacity-100",
+        "fixed z-[60] max-h-[min(22rem,calc(100vh-2rem))] overflow-y-auto rounded-lg border border-border bg-card-solid p-0 shadow-card transition-opacity duration-100",
         className,
       )}
-      role="tooltip"
-      {...props}
-    />
+    >
+      {children}
+    </div>,
+    document.body,
   );
 }
 

@@ -1,0 +1,93 @@
+# Sources & ingest
+
+HTTP functions for sources, crawl workflow, indexing, and ask — all against a running API.
+
+Requires [Auth & URLs](/reference/client/auth) configured first.
+
+## Sources
+
+| Export | HTTP | Purpose |
+|--------|------|---------|
+| `listSources` | `GET /api/sources` | List sources (optional scope filter) |
+| `getSource` | `GET /api/sources/:id` | Full source record |
+| `getSourceSummary` | `GET /api/sources/:id/summary` | Stats + indexing summary |
+| `createSource` | `POST /api/sources` | Create web crawl source |
+| `updateSource` | `PUT /api/sources/:id` | Update name, config, metadata |
+| `deleteSource` | `DELETE /api/sources/:id` | Delete source |
+| `checkSourceDuplicates` | `GET /api/sources/duplicates` | Duplicate detection |
+| `getAccountSourceLimits` | `GET /api/sources/limits` | Source count limits |
+| `reorderSources` | `PUT /api/sources/reorder` | Sidebar order |
+
+## Preflight & crawl helpers
+
+| Export | Purpose |
+|--------|---------|
+| `preflightSite` | `POST /api/preflight` — check start URL |
+| `proposeCrawlFilterRemovals` | LLM URL cleanup suggestions |
+| `filterCrawlUrls` | Pattern-based URL filter |
+| `getCrawlProgress` | Live crawl discover progress |
+| `runCrawlPreview` | `POST /api/sources/:id/crawl-preview` |
+
+## Ingest workflow
+
+| Export | Purpose |
+|--------|---------|
+| `startIngestWorkflow` | Start crawl → review → index pipeline |
+| `resumeIngestWorkflow` | Resume after crawl-review or parse-review |
+| `getIngestWorkflowStatus` | Poll pipeline snapshot |
+| `cancelIngestCrawl` | Cancel in-flight crawl |
+
+Typical sequence: `startIngestWorkflow` → wait for `crawl-review-step` → `resumeIngestWorkflow` with selected URLs. See [runWebCrawl](/reference/client/crawl) for the high-level orchestrator.
+
+## Indexing & catalogs
+
+| Export | Purpose |
+|--------|---------|
+| `getMetadataCatalog` | Page metadata catalog |
+| `getExampleCatalog` | Example entries catalog |
+| `getPageChunks` | Chunks for one page URL |
+| `getPageExamples` | Examples for one page URL |
+| `findExamples` | Search examples by query |
+
+## Ask
+
+```ts
+import { askSource } from "@ledgeindex/client";
+
+const result = await askSource(sourceId, "How do I configure auth?", {
+  rerankBackend: "cohere",
+});
+
+console.log(result.answer);
+```
+
+Same RAG stack as the web UI source chat.
+
+## Usage — create and index manually
+
+```ts
+import {
+  preflightSite,
+  createSource,
+  startIngestWorkflow,
+  resumeIngestWorkflow,
+} from "@ledgeindex/client";
+
+const { preflight } = await preflightSite("https://docs.example.com");
+const { source } = await createSource({
+  name: preflight.siteName ?? "Docs",
+  config: { startUrls: ["https://docs.example.com"], maxPages: 50, /* … */ },
+});
+
+const { snapshot } = await startIngestWorkflow(source.id, { config: source.config });
+// poll getIngestWorkflowStatus, then resume with selected URLs…
+```
+
+For a one-liner end-to-end crawl, use [runWebCrawl](/reference/client/crawl) instead.
+
+## Related
+
+- [HTTP API](/reference/api) — REST routes used by web and desktop
+- [runWebCrawl](/reference/client/crawl)
+- [Auth & URLs](/reference/client/auth)
+- [@ledgeindex/sdk crawl](/reference/sdk/crawl) — in-process equivalent

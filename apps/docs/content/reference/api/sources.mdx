@@ -1,0 +1,82 @@
+# Sources
+
+Source CRUD, preflight, and crawl helper endpoints used by the source builder in web and desktop.
+
+## Projects (internal container)
+
+**Not a product feature** — there is no “Projects” page in the web UI. A **project** is a storage row that owns **personal** sources: every personal source has a `projectId` (UUID). Global/public sources use a shared platform project instead.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/projects` | List projects for the current user |
+| `POST` | `/api/projects` | Create a project (`{ name }`) |
+| `GET` | `/api/projects/:id` | Get one project |
+
+**You usually do not call these directly.** The web app auto-creates `"My LedgeIndex project"` on first source and caches the id in `localStorage`. The SDK/CLI pick or create a default project (`"LedgeIndex"`) in-process. When using `POST /api/sources` for a **personal** source, pass `projectId` — or let the client handle it like the web UI does.
+
+```ts
+// Typical personal source create (after one POST /api/projects)
+POST /api/sources
+{ "name": "Docs", "scope": "personal", "projectId": "<uuid>", "config": { … } }
+```
+
+Global sources (`scope: "global"`) omit `projectId`; the API assigns the platform project.
+
+## Sources
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/sources` | List sources (`?scope=personal\|global`, filters) |
+| `POST` | `/api/sources` | Create a web-crawl source |
+| `GET` | `/api/sources/:id` | Full source record + config |
+| `PUT` | `/api/sources/:id` | Update name, config, metadata, scope |
+| `DELETE` | `/api/sources/:id` | Delete source and index data |
+| `GET` | `/api/sources/:id/summary` | Indexing stats summary |
+| `GET` | `/api/sources/duplicates` | Check for duplicate canonical URLs |
+| `GET` | `/api/sources/limits` | Source count limits (`?scope=…`) |
+| `PUT` | `/api/sources/reorder` | Reorder sources in the sidebar |
+| `GET` | `/api/source-categories` | Category counts for catalog UI |
+
+### Source metadata (profile on a source)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `PUT` | `/api/sources/:id/docs-identity` | Attach docs-identity lens output to a source |
+| `PUT` | `/api/sources/:id/site-profile` | Attach merged site profile to a source |
+| `DELETE` | `/api/sources/:id/site-profile` | Clear attached site profile |
+
+## Preflight & crawl helpers
+
+Used during source setup before ingest starts.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/preflight` | HEAD/start URL check — site name, favicon, metadata |
+| `POST` | `/api/crawl/url-filter` | Pattern or LLM-based URL filtering |
+| `POST` | `/api/crawl/url-removals` | Propose URL indexes to remove (LLM) |
+| `POST` | `/api/crawl/sitemap-pages` | Discover URLs from sitemap |
+| `POST` | `/api/crawl/robots-txt` | Fetch and parse robots.txt |
+| `POST` | `/api/crawl/probe-statuses` | HTTP status probe for URL list |
+
+## Previews (no full ingest)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/sources/:id/crawl-preview` | Dry-run crawl discovery → `crawlRun` |
+| `GET` | `/api/crawl-runs/:id` | Poll a crawl preview run |
+| `POST` | `/api/sources/:id/parse-preview` | Parse a single URL to markdown preview |
+
+## Client wrappers
+
+| Client export | Route |
+|---------------|-------|
+| `listSources`, `createSource`, `getSource`, … | See table above |
+| `preflightSite` | `POST /api/preflight` |
+| `runCrawlPreview` | `POST /api/sources/:id/crawl-preview` |
+
+Full mapping: [Client — Sources & ingest](/reference/client/sources).
+
+## Related
+
+- [Ingest & crawl](/reference/api/ingest)
+- [Chat & indexing](/reference/api/chat)

@@ -12,9 +12,22 @@ import type { RateLimitConfig } from "./types.js";
 
 const DEFAULT_PREFIXES = ["/api", "/chat", "/mastra"];
 
+function envFlagOn(raw: string | undefined): boolean {
+  const value = raw?.trim().toLowerCase();
+  return value === "1" || value === "true" || value === "on" || value === "yes";
+}
+
 function envFlagOff(raw: string | undefined): boolean {
   const value = raw?.trim().toLowerCase();
   return value === "0" || value === "false" || value === "off" || value === "no";
+}
+
+/** Off in local dev unless `LEDGEINDEX_RATE_LIMIT=1`. On in production unless `=0`. */
+function isRateLimitEnabled(): boolean {
+  const raw = process.env.LEDGEINDEX_RATE_LIMIT;
+  if (envFlagOff(raw)) return false;
+  if (envFlagOn(raw)) return true;
+  return process.env.NODE_ENV === "production";
 }
 
 function resolveRateLimitKey(
@@ -38,13 +51,14 @@ export type RegisterRateLimitOptions = {
  * Pindown-style `@fastify/rate-limit`: register once, inject `preHandler` via
  * `onRoute` for `/api`, `/chat`, `/mastra`. Health / oauth stay unlimited.
  *
- * Disable with `LEDGEINDEX_RATE_LIMIT=0`.
+ * Disable with `LEDGEINDEX_RATE_LIMIT=0`. Force on locally with `=1`.
+ * Default: enabled in production only (`NODE_ENV=production`).
  */
 const rateLimitPlugin: FastifyPluginAsync<RegisterRateLimitOptions> = async (
   fastify,
   options,
 ) => {
-  if (envFlagOff(process.env.LEDGEINDEX_RATE_LIMIT)) {
+  if (!isRateLimitEnabled()) {
     return;
   }
 

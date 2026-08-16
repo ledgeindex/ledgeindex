@@ -1,0 +1,126 @@
+# ask
+
+RAG question against an indexed source — hybrid search, rerank, optional agent answer with citations.
+
+## Defaults (omit all options)
+
+If you call `li.ask(slug, question)` with an empty options object:
+
+| Piece | Default (SDK / local index) |
+|-------|-----------------------------|
+| **Mode** | `agent` — synthesizes an answer (needs a chat key) |
+| **Embeddings** | FastEmbed `bge-small-en-v1.5` (384-d) in LibSQL under `dataDir` |
+| **Retrieval** | Hybrid dense + lexical (RRF), then rerank |
+| **Rerank** | **`local-auto`** — MiniLM L6 in-process, escalating top hits to L12 when rankings look ambiguous |
+| **Repo / code sources** | **`vector`** — the prose cross-encoder is skipped and the fused dense+lexical order is kept |
+| **Chat model** | First key found: google → deepseek → openai (or `createLedgeIndex({ provider })`) |
+
+Reranking runs on your machine with no API calls. A `COHERE_API_KEY` alone does **not** switch a local index to Cohere — ask for it with `rerankBackend: "cohere-auto"` or `LEDGEINDEX_RERANK_BACKEND`.
+
+Setting `rerankBackend` counts as an explicit choice, which also turns off the automatic `vector` selection on code sources. Leave it unset on repo indexes.
+
+Override any of this on `createLedgeIndex({ rerankBackend: "local-auto", … })` or per ask:
+
+```ts
+await li.ask("stagehand", "…", { rerankBackend: "cohere-auto" });
+```
+
+Env: `LEDGEINDEX_RERANK_BACKEND=local-auto` (see [Options & env](/reference/sdk/options)).
+
+## Minimal example
+
+```ts
+const li = await createLedgeIndex({
+  keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+});
+
+// All defaults — MiniLM rerank locally, or vector order on code sources
+const { answer, chunks, citations, rerankBackend } = await li.ask(
+  "stagehand",
+  "How do I install?",
+);
+
+for (const cite of citations) {
+  console.log(cite.name, cite.url);
+}
+console.log("rerank used:", rerankBackend);
+console.log(answer);
+```
+
+## Retrieval only (no chat key)
+
+```ts
+const { chunks, insufficient } = await li.ask("stagehand", "where is act() defined?", {
+  mode: "retrieve-only",
+});
+// Same hits, deduped for display:
+const { citations } = await li.ask("stagehand", "where is act() defined?", {
+  mode: "retrieve-only",
+});
+```
+
+`citations` is the easy list — `name` + `url` (+ `filePath` / lines for repos). `chunks` still has full passage text.
+
+## LedgeIndexAskOptions
+
+| Option | If omitted | Purpose |
+|--------|------------|---------|
+| `mode` | `"agent"` | `"agent"` = LLM answer; `"retrieve-only"` = hits only, no chat key |
+| `rerankBackend` | auto — `local-auto`, or `vector` on code sources | `local-auto`, `local-mini`, `local-mini-l12`, `cohere-auto`, `vector`, … |
+| `provider` | use `createLedgeIndex({ provider })` | Per-request chat provider (reserved on ask) |
+
+Resolution order for rerank: **`ask` option** → **`createLedgeIndex({ rerankBackend })`** → **`LEDGEINDEX_RERANK_BACKEND`** → **auto** (`vector` on code sources, else `local-auto`).
+
+## SourceAskResult
+
+```ts
+type SourceAskResult = {
+  mode: "agent" | "retrieve-only";
+  answer: string;
+  chunks: Array<{ /* full passage text + scores */ }>;
+  /** Deduped citation list — use this for name + url (not the indexed "source"). */
+  citations: Array<{
+    name: string;
+    url: string;
+    score: number;
+    filePath?: string;
+    startLine?: number;
+    endLine?: number;
+  }>;
+  insufficient: boolean;
+  rerankBackend?: string;
+};
+```
+
+`chunks` = every retrieval hit with passage text. **`citations`** = deduped list for UI or logging (`name` is page title or `path:line` on repos).
+
+## Low-level export
+
+```ts
+import { askQuestion } from "@ledgeindex/sdk";
+
+const result = await askQuestion("stagehand", "What changed in v2?");
+```
+
+Requires `createLedgeIndex()` (or `initRuntime`) first.
+
+## Rerank backends (quick reference)
+
+| Backend | Model | When |
+|---------|-------|------|
+| `local-auto` | MiniLM L6 → L12 | **Default** on prose sources; falls back to vector scores if the CE fails |
+| `local-mini` | `Xenova/ms-marco-MiniLM-L-6-v2` | Pin the fast English CE, no escalation |
+| `local-mini-l12` | `Xenova/ms-marco-MiniLM-L-12-v2` | Pin the stronger English CE |
+| `vector` | none | **Default on code sources**; fused hybrid order, no cross-encoder |
+| `cohere-auto` | Cohere 3.5 → 4 | Opt in; also the web UI default for cloud-hosted indexes |
+| `local-v2` | `onnx-community/bge-reranker-v2-m3-ONNX` | Opt in for non-English corpora |
+
+Every local path — web UI, SDK, CLI — reranks with the same MiniLM pair. The older `local` backend (`Xenova/bge-reranker-base`) has been removed; configs still passing it fall back to the `local-auto` default.
+
+## Related
+
+- [askAcross](/reference/sdk/ask-across) — repo + docs, picker vs `all`
+- [Options & env](/reference/sdk/options) — full stack defaults
+- [Index a repository](/guides/setup-repo)
+- [createLedgeIndex](/reference/sdk/create-ledgeindex)
+- [@ledgeindex/client askSource](/reference/client/sources)

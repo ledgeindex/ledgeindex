@@ -58,14 +58,75 @@ export function filterCatalogByUrlPrefix(
   };
 }
 
+/**
+ * Char budget for the catalog block in the rewrite prompt. A flat catalog of a
+ * few hundred doc pages fits comfortably; a repo checkout does not — Stagehand
+ * produces ~85 KB of file paths, which crowds out the question itself.
+ */
+const CATALOG_CHAR_BUDGET = 28_000;
+const CATALOG_MAX_PAGES_PER_GROUP = 60;
+
+/**
+ * Group pages under their category and cap each group. Used only when the flat
+ * catalog blows the budget, so ordinary doc sources are untouched.
+ */
+function formatGroupedCatalog(
+  pages: MetadataCatalog["pages"],
+  charBudget: number,
+): string {
+  const groups = new Map<string, MetadataCatalog["pages"]>();
+  for (const page of pages) {
+    const key = page.category?.trim() || "other";
+    const bucket = groups.get(key);
+    if (bucket) bucket.push(page);
+    else groups.set(key, [page]);
+  }
+
+  const ordered = [...groups.entries()].sort(
+    (a, b) => b[1].length - a[1].length,
+  );
+  const lines: string[] = [];
+  let used = 0;
+  let shown = 0;
+
+  for (const [name, groupPages] of ordered) {
+    const sorted = [...groupPages].sort(
+      (a, b) => (b.chunkCount ?? 0) - (a.chunkCount ?? 0),
+    );
+    const visible = sorted.slice(0, CATALOG_MAX_PAGES_PER_GROUP);
+    const header = `## ${name} (${groupPages.length} pages)`;
+    const body = visible
+      .map((page) => `- ${page.title.trim() || "Untitled"}`)
+      .join("\n");
+    const hidden = groupPages.length - visible.length;
+    const block =
+      hidden > 0 ? `${header}\n${body}\n- …and ${hidden} more` : `${header}\n${body}`;
+
+    if (used + block.length > charBudget) break;
+    lines.push(block);
+    used += block.length + 1;
+    shown += visible.length;
+  }
+
+  if (lines.length === 0) return "No catalog available.";
+  if (shown < pages.length) {
+    lines.push(`(showing ${shown} of ${pages.length} indexed pages)`);
+  }
+  return lines.join("\n");
+}
+
 /** Full page catalog for the docs agent — titles + keyword hints, no URLs. */
 export function formatCatalogForAgent(
   catalog: MetadataCatalog | null,
+  options?: { charBudget?: number },
 ): string {
+  const charBudget = options?.charBudget ?? CATALOG_CHAR_BUDGET;
   if (catalog?.pages?.length) {
-    return catalog.pages
+    const flat = catalog.pages
       .map((page) => formatCatalogPageForRewrite(page))
       .join("\n");
+    if (flat.length <= charBudget) return flat;
+    return formatGroupedCatalog(catalog.pages, charBudget);
   }
 
   if (!catalog?.categories.length) {

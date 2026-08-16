@@ -17,7 +17,7 @@ export type RefreshChangelog = {
   removed: RefreshPageRef[];
 };
 
-export type RefreshMode = "discover" | "selected";
+export type RefreshMode = "discover" | "selected" | "probe";
 
 export type RefreshRunStatus =
   | "discovering"
@@ -118,8 +118,9 @@ export function createRefreshRun(
     sourceId,
     crawlRunId,
     mode,
-    status: mode === "discover" ? "discovering" : "parsing",
-    phase: mode === "discover" ? "discovering" : "parsing",
+    status:
+      mode === "discover" || mode === "probe" ? "discovering" : "parsing",
+    phase: mode === "discover" || mode === "probe" ? "discovering" : "parsing",
     current: 0,
     total: 0,
   };

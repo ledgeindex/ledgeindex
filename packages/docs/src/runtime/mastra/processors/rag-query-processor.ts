@@ -70,9 +70,17 @@ function formatChunksForContext(chunks: KapaRetrievedChunk[]): string {
     .map((chunk, index) => {
       const heading =
         chunk.section.trim() || chunk.category.trim() || chunk.title.trim();
+      // Code chunks know their exact span, so the answer can cite a line range
+      // instead of a whole file.
+      const location =
+        chunk.filePath && chunk.startLine
+          ? `Location: ${chunk.filePath}:${chunk.startLine}-${chunk.endLine ?? chunk.startLine}${
+              chunk.symbolName ? ` (${chunk.symbolKind ?? "symbol"} ${chunk.symbolName})` : ""
+            }\n`
+          : "";
       return `### Source ${index + 1}: ${chunk.title}
 URL: ${chunk.url}
-Section: ${heading}
+${location}Section: ${heading}
 Score: ${chunk.score.toFixed(2)}
 
 ${chunk.text}`;
@@ -168,11 +176,15 @@ function buildRetrievalMeta(input: {
   coverage: Awaited<ReturnType<typeof assessCoverage>>;
   cascadePassUsed?: boolean;
   cascadeTopScore?: number;
+  rerankBackendUsed?: Awaited<
+    ReturnType<typeof kapaRetrieveMany>
+  >["rerankBackendUsed"];
   timings?: RetrievalMeta["timings"];
 }): RetrievalMeta {
   const { maxChunkScore, avgTop3Score } = scoreSummary(input.chunks);
   const rerankRuntime = describeRerankRuntimeMeta({
     cascadePassUsed: input.cascadePassUsed,
+    effectiveBackend: input.rerankBackendUsed,
   });
 
   return {
@@ -495,6 +507,7 @@ export class RAGQueryProcessor implements Processor {
     const retrieveStrictStarted = performance.now();
     let retrieval = await kapaRetrieveMany({
       queries,
+      question,
       sourceId,
       queryMode,
       catalogUrlFilter,
@@ -524,6 +537,7 @@ export class RAGQueryProcessor implements Processor {
       const retrieveRelaxedStarted = performance.now();
       retrieval = await kapaRetrieveMany({
         queries,
+        question,
         sourceId,
         queryMode,
         catalogUrlFilter,
@@ -581,6 +595,7 @@ export class RAGQueryProcessor implements Processor {
       catalogUrlFilter: retrieval.catalogUrlFilter,
       coverage,
       cascadePassUsed: false,
+      rerankBackendUsed: retrieval.rerankBackendUsed,
       timings: {
         totalMs: elapsedMs(ragStarted),
         steps: timingSteps,

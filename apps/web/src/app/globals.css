@@ -59,6 +59,8 @@
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-muted-strong: var(--muted-strong);
+  /* shadcn-style alias: pasted components expect `muted-foreground` for body gray. */
+  --color-muted-foreground: var(--muted);
   --color-border: var(--border);
   --color-card: var(--card);
   --color-card-solid: var(--card-solid);

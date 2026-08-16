@@ -7,6 +7,10 @@ export type MetadataCatalogPage = {
   url: string;
   title: string;
   chunkCount: number;
+  /** First URL path segment (reference, docs, …) from chunk metadata. */
+  category?: string;
+  /** Crawl root this page was indexed under (multi-path sources). */
+  crawlRoot?: string | null;
 };
 
 export type MetadataCatalogCategory = {

@@ -1,0 +1,261 @@
+# Index a GitHub repository
+
+Index a **public Git repository** (TypeScript/JavaScript monorepos today) into the same vector store as web crawls, then **ask questions by source id or slug** — no re-index on every query.
+
+**Docs crawl** and **repo index** are different ingest paths. Repo indexing uses `@ledgeindex/repo`: AST-aware chunking for code, hybrid dense + lexical retrieval, and citations with **file path and line numbers**.
+
+## What you need
+
+| Step | Model key? | Time (typical) |
+|------|------------|----------------|
+| **Index once** | No (local FastEmbed) | ~2–5 min for a medium monorepo |
+| **Ask / retrieve** | Yes for a full **answer**; no for retrieval-only via API | ~100 ms retrieval + LLM for chat |
+
+Indexes are **persistent**. They live under `LEDGEINDEX_DATA_DIR` (default `~/.ledgeindex/data` for CLI/SDK, `./.data` for a local web dev clone). You do **not** re-embed the whole repo on every question.
+
+## Quick path — SDK scripts
+
+From the monorepo (or your app with `@ledgeindex/sdk` built). No running API required.
+
+```bash
+node scripts/index-repo.mjs https://github.com/browserbase/stagehand stagehand
+node scripts/query-repo.mjs stagehand "what are the primitives"
+```
+
+Data goes to `~/.ledgeindex/data` unless you set `LEDGEINDEX_DATA_DIR`. Index once; query many times.
+
+### SDK in code
+
+```ts
+const li = await createLedgeIndex();
+await li.indexRepo({
+  githubUrl: "https://github.com/browserbase/stagehand",
+  name: "stagehand",
+  extensions: [".ts", ".tsx"], // optional — TypeScript only
+  onProgress: (u) => console.log(u.phase, u),
+});
+const { chunks } = await li.ask("stagehand", "your question", {
+  mode: "retrieve-only",
+});
+```
+
+See [Set up SDK](/guides/setup-sdk). HTTP API indexing is documented below if you use the web app.
+
+## Ask after index
+
+### CLI
+
+Point the CLI at the **same data directory** as the API if you indexed via web:
+
+```bash
+export LEDGEINDEX_DATA_DIR=./.data   # match your API dev clone
+
+ledgeindex ask stagehand "what are implementation details of the act function"
+```
+
+`ask` accepts **source id**, **slug**, or a partial **name** match.
+
+### SDK
+
+```ts
+import { createLedgeIndex } from "@ledgeindex/sdk";
+
+const li = await createLedgeIndex({
+  dataDir: process.env.LEDGEINDEX_DATA_DIR, // same dir as API if you used web
+  keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+});
+
+const { answer, chunks } = await li.ask(
+  "stagehand",
+  "what are implementation details of the act function",
+);
+
+for (const hit of chunks) {
+  // Repo sources include filePath + line range when available
+  const where = hit.filePath
+    ? `${hit.filePath}:${hit.startLine}-${hit.endLine}`
+    : hit.title;
+  console.log(hit.score.toFixed(2), where);
+}
+console.log(answer);
+```
+
+`li.listSources()` and `li.resolveSource("stagehand")` resolve id/slug before `ask`.
+
+### Repo + docs together
+
+Index the repo and docs site as separate sources, then use [`askAcross`](/reference/sdk/ask-across):
+
+```ts
+const { answer, pickedSources } = await li.askAcross(
+  "how is act() implemented from the SDK to the browser click?",
+  { sources: ["stagehand", "stagehand-docs"], sourceMode: "all" },
+);
+```
+
+See [Index documentation](/guides/setup-docs#repo--docs-together).
+
+### HTTP API
+
+```http
+POST /api/sources/:id/ask
+Content-Type: application/json
+
+{
+  "message": "what are implementation details of the act function",
+  "mode": "retrieve-only"
+}
+```
+
+`retrieve-only` returns ranked chunks without calling the chat model. See [Chat & indexing — ask](/reference/api/chat).
+
+Full index contract: [Index repo API](/reference/api/index-repo).
+
+## Index via API (curl)
+
+Create a source, then index the repo:
+
+```bash
+# 1. Create source (personal)
+curl -s -X POST http://localhost:3010/api/sources \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "stagehand",
+    "scope": "personal",
+    "projectId": "<from POST /api/projects>",
+    "config": { "startUrls": ["https://github.com/browserbase/stagehand"] }
+  }'
+
+# 2. Index from GitHub (server clones into checkout cache)
+curl -s -X POST "http://localhost:3010/api/sources/<sourceId>/index-repo" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "githubUrl": "https://github.com/browserbase/stagehand",
+    "maxFiles": 5000
+  }'
+```
+
+Or index from a **local checkout** the API process can read:
+
+```json
+{
+  "checkoutPath": "/absolute/path/to/stagehand",
+  "includeTests": false
+}
+```
+
+Response includes `fileCount`, `pageCount`, `chunkCount`, `astChunkedFiles`, `commitSha`, etc.
+
+## What gets indexed
+
+| Included | Excluded by default |
+|----------|---------------------|
+| `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts`, `.cts` | Python, Go |
+| | `.md`, `.mdx` (opt in with `includeReadme: true`) |
+| | `node_modules`, `dist`, `.git`, … |
+| | Test/eval/fixture paths (`**/*.test.ts`, `__tests__`, `e2e`, …) |
+
+Code files use **AST chunking** (functions, classes, methods) with symbol names and line ranges in metadata.
+
+**Markdown in the repo** is skipped by default so answers come from implementation files. Pass `includeReadme: true` on `li.indexRepo()` or `POST …/index-repo` to index READMEs and other `.md`/`.mdx` files.
+
+**File type filter:** pass `extensions: [".ts", ".tsx"]` (or `--extensions ts,tsx` on the script) to index only those types from the default allowlist. Does not add Python/Go — those are still unsupported.
+
+## Retrieval stack (repo sources)
+
+Same store as web crawls, with repo-specific ranking:
+
+| Piece | Behavior |
+|-------|----------|
+| Dense | FastEmbed (local) or Gemini (pgvector stack) |
+| Lexical | FTS on paths, symbols, identifiers (`observeHandler` → `observe` + `handler`) |
+| Fusion | Reciprocal rank fusion before rerank |
+| Code sources | Default backend skips the prose cross-encoder; uses fused order (~100 ms) |
+| Last-mile | Boosts filename/symbol match, demotes duplicate doc versions |
+
+Personal sources on the **Just me** tab use the **local** index; cloud Postgres is only for cloud-hosted sources.
+
+## In-process index (advanced, no HTTP)
+
+`@ledgeindex/sdk` does not yet expose `li.indexRepo()`. For scripts without a server, initialize the SDK runtime and call `@ledgeindex/repo` directly (same as the API route):
+
+```ts
+import { createLedgeIndex } from "@ledgeindex/sdk";
+import { indexRepoCheckout } from "@ledgeindex/repo";
+import { getStore } from "@ledgeindex/docs/runtime/db/index.js";
+
+const li = await createLedgeIndex();
+const store = getStore();
+const project = (await store.listProjects(li.localUserId))[0]
+  ?? await store.createProject("LedgeIndex", li.localUserId);
+
+const source = await store.createSource({
+  projectId: project.id,
+  name: "stagehand",
+  slugOwnerKey: li.localUserId,
+  config: {
+    startUrls: ["https://github.com/browserbase/stagehand"],
+    includePatterns: [],
+    excludePatterns: [],
+    excludeDownloadPatterns: [],
+    patternsAreRegex: false,
+    renderJs: false,
+    useProxy: false,
+    enableSitemap: false,
+    sitemapOnly: false,
+    sitemapUrls: [],
+    fileTypes: ["html"],
+    contentSelectors: [],
+    excludeSelectors: [],
+    maxPages: 1000,
+    userAgent: "ledgeindex",
+  },
+});
+
+await indexRepoCheckout({
+  sourceId: source.id,
+  projectId: project.id,
+  githubUrl: "https://github.com/browserbase/stagehand",
+  sourceSlug: source.slug,
+});
+
+const result = await li.ask(source.slug, "how does act call the LLM?");
+```
+
+`li.indexRepo()` on the public SDK surface is planned so this boilerplate is not required.
+
+## Data layout and re-index
+
+| Path | Contents |
+|------|----------|
+| `LEDGEINDEX_DATA_DIR` | Source metadata (FileStore) |
+| `…/ledgeindex-vector.db` | LibSQL vectors + lexical FTS |
+| `…/repo-checkouts/` | Shallow git clones (reused on re-index) |
+
+- **First index:** clone + embed all chunks (slow).
+- **Later asks:** read from disk (fast).
+- **Re-index:** `POST …/index-repo` again or `--source <id>` on the script; checkout cache is updated, vectors replaced for that source.
+
+Eval scripts under `scripts/eval/` use **throwaway temp dirs** on purpose — do not confuse them with the persistent product path.
+
+## Roadmap
+
+| Item | Status |
+|------|--------|
+| `POST /api/sources/:id/index-repo` | Shipped |
+| `scripts/index-repo.mjs` | Shipped |
+| `ledgeindex index-repo` CLI command | Planned |
+| `li.indexRepo()` on SDK | Shipped |
+| `codeOnly` / skip in-repo markdown | Planned |
+| Web UI “repo source” type | Planned |
+
+## Related
+
+- [Index documentation](/guides/setup-docs) — crawl docs (complements repo index for repo + docs Q&A)
+- [askAcross](/reference/sdk/ask-across)
+- [@ledgeindex/repo](/reference/repo) — package reference
+- [Set up SDK](/guides/setup-sdk) — `createLedgeIndex`, `ask`, `dataDir`
+- [Set up CLI](/guides/setup-cli) — `ledgeindex ask`
+- [Set up web](/guides/setup-web) — API + UI
+- [Index repo API](/reference/api/index-repo)
+- [SDK ask](/reference/sdk/ask)

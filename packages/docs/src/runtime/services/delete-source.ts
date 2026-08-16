@@ -1,5 +1,6 @@
 import { getStore } from "../db/index.js";
 import { logInfo, logVerbose } from "../lib/logger.js";
+import { deleteLexicalChunks } from "../retrieval/lexical-store.js";
 import { deleteMetadataCatalog } from "../retrieval/metadata-catalog-store.js";
 import { LEDGEINDEX_CHUNKS_INDEX } from "../vector/constants.js";
 import { ensureChunksIndex, getVectorStore } from "../vector/store.js";
@@ -32,6 +33,7 @@ export async function deleteSourceWithIndex(sourceId: string): Promise<boolean> 
     });
   }
 
+  await deleteLexicalChunks({ sourceId });
   await deleteMetadataCatalog(sourceId);
   const deleted = await getStore().deleteSource(sourceId);
 

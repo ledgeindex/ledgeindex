@@ -1,26 +1,72 @@
 # Docs overview
 
-Guides for running LedgeIndex and choosing packages. To clone and run the apps, use [Guides](/guides). For a short map of API surfaces, see [Reference](/reference).
+LedgeIndex turns **documentation websites** into indexed knowledge **agents** can query: crawl a docs URL, extract and chunk the pages, embed them in a vector index, and **ask questions that come back with citations** to real pages. You can run that flow from a terminal, a Node script, a browser UI, or an MCP client in Cursor or Claude Desktop.
 
-## What ships today
+On top of indexing, LedgeIndex also does **site research profiles** — structured JSON about a company or docs set (positioning, pricing, capabilities, package guides, and more) via [14 built-in lenses](/reference/profile/lenses). Profile output is separate from the search index: one job is “what does this site say, in typed fields?”; the other is “search and chat over everything we crawled.”
 
-LedgeIndex is an open-core monorepo:
+**New here?** Start with **[SDK](/docs/sdk)** (Node, no server) or **[Guides](/guides)** for step-by-step setup. The sections below are for composing lower-level packages yourself.
 
-- **Packages** under `@ledgeindex/*` (published, currently **0.1.7**)
-- **Apps**: web UI, Electron desktop, this docs site, Expo mobile
-- **Hosts**: cloud/API wrappers and local sidecars that call `@ledgeindex/server`
+## What is available
 
-The usual local stack is API on **3010**, web on **3004**, docs site on **3005**.
+**Indexing & chat**
+
+- **Web crawl** — discover URLs (sitemap, links), extract markdown, optional LLM URL filter and example enrichment
+- **Vector search + rerank** — local FastEmbed + LibSQL by default; Postgres + Gemini for a cloud-like stack
+- **Source chat (RAG)** — query rewrite, retrieval, coverage check, agent answer with chunk citations
+- **Example catalog** — optional ingest step for code samples and setup blocks (feeds planner/builder workflows)
+
+**Research & agents**
+
+- **Profile lenses** — crawl once, run lenses (identity, pricing, `package_usage_examples`, …)
+- **MCP** — `list_source_sets`, `get_source_set`, `ask_source` when an API is running (`/mcp`)
+
+**Surfaces you can use**
+
+| You want… | Where to look |
+|-----------|----------------|
+| **First try in Node (recommended)** | **[SDK](/docs/sdk)** · [Set up SDK](/guides/setup-sdk) |
+| Terminal, no server | [CLI](/docs/cli) (`ledgeindex`) |
+| Browser UI + API + MCP | [Web & desktop → Web](/docs/apps) · [Set up web](/guides/setup-web) · [HTTP API](/reference/api) |
+| Desktop app + local sidecar | [Web & desktop → Desktop](/docs/apps) · [Set up desktop](/guides/setup-desktop) · [HTTP API](/reference/api) |
+| Docker / Postgres stack | [Set up Docker](/guides/setup-docker) |
+| Your own Fastify host | [HTTP server](/docs/server) · [Self-host the API](/docs/getting-started) |
+| HTTP client to an existing API | [Client](/reference/client) · [HTTP API](/reference/api) |
+| Compose crawl/embed/query yourself | [Crawl & retrieval](/docs/core) |
+
+This **Docs** section explains how packages, apps, and hosts fit together. [Reference](/reference) is the package API map; [HTTP API](/reference/api) lists REST routes for web and desktop. [Guides](/guides) are copy-paste setup steps.
+
+## Ways to run (no custom server)
+
+The simplest paths do not use `@ledgeindex/server`:
+
+| Surface | Package | Docs |
+|---------|---------|------|
+| Node scripts / CI (**start here**) | `@ledgeindex/sdk` | [SDK](/docs/sdk) · [Set up SDK](/guides/setup-sdk) |
+| Terminal | `ledgeindex` | [CLI](/docs/cli) · [Set up CLI](/guides/setup-cli) |
+
+Both use FastEmbed + LibSQL by default, store data under `~/.ledgeindex/data`, and run crawl without a model key. Ask, profile, and optional crawl AI features need a chat provider key.
+
+## What ships in the monorepo
+
+LedgeIndex is open-core: published **`@ledgeindex/*`** packages, first-party **apps**, and **hosts** that wire the server.
+
+- **Packages** — `@ledgeindex/core`, `docs`, `profile`, `server`, `sdk`, `client`, … (currently **0.1.9**)
+- **Web & desktop** — browser UI, Electron app, this docs site, Expo mobile ([overview](/docs/apps))
+- **Hosts** — `hosts/api` (`:3010`, MCP at `/mcp`), `hosts/desktop-server` (`:3015`)
+
+Typical local dev ports: API **3010**, web **3004**, docs site **3005**.
 
 ## Packages
 
-| Package | Role | Guide |
-|---------|------|-------|
-| `@ledgeindex/core` | Crawl, extract, enrich, chunk, embed, query | [Core](/docs/core) |
-| `@ledgeindex/docs` | Docs profile: sources, ingest, RAG chat, MCP | [Docs profile](/docs/docs-profile) |
-| `@ledgeindex/profile` | Site research lenses | [Profile](/docs/profile) |
-| `@ledgeindex/server` | Fastify host for docs + profile | [Server](/docs/server) |
-| `@ledgeindex/client` | HTTP client for the API | [Reference](/reference) |
+| Package | Role | Docs |
+|---------|------|------|
+| `ledgeindex` | Terminal crawl, ask, profile | [CLI](/docs/cli) |
+| `@ledgeindex/sdk` | In-process crawl, ask, profile (no server) | [SDK](/docs/sdk) |
+| `@ledgeindex/core` | Low-level crawl, chunk, embed, query primitives | [Crawl & retrieval](/docs/core) |
+| `@ledgeindex/docs` | Sources, indexing, source chat, MCP (the web app backend) | [Sources, chat & MCP](/docs/docs-profile) · [Reference](/reference/docs-runtime) |
+| `@ledgeindex/profile` | Site research lenses — structured JSON, not a search index | [Site research](/docs/profile) |
+| `@ledgeindex/server` | Fastify host for docs + profile | [HTTP server](/docs/server) |
+| `@ledgeindex/client` | HTTP client for the API | [Reference](/reference/client) |
 | `@ledgeindex/model` | Shared model helpers | [Reference](/reference) |
 | `@ledgeindex/repo` | Shared repo/data helpers used by docs | — |
 
@@ -34,6 +80,8 @@ discover → extract → enrich → chunk → embed → store → query
 ```
 
 ## Quickstart (library)
+
+Prefer no custom server code? Use [CLI](/guides/setup-cli) or [SDK](/guides/setup-sdk) instead of the snippet below.
 
 ```bash
 npm i @ledgeindex/core @ledgeindex/docs @ledgeindex/profile @ledgeindex/server
@@ -53,9 +101,12 @@ await startLedgeIndexServer({
 
 | Goal | Page |
 |------|------|
-| Install + env + monorepo scripts | [Getting started](/docs/getting-started) |
+| **Start in Node (recommended)** | **[SDK](/docs/sdk)** · [Set up SDK](/guides/setup-sdk) |
+| Choose a setup path | [Guides → Getting started](/guides) |
+| Terminal (`ledgeindex`) | [CLI](/docs/cli) |
+| Embed server / monorepo env | [Self-host the API](/docs/getting-started) |
 | Run web or desktop | [Guides](/guides) |
-| Web / desktop / docs site (overview) | [Apps](/docs/apps) |
-| Ingest, chat, MCP | [Docs profile](/docs/docs-profile) |
-| Core composition | [Core](/docs/core) |
-| API map | [Reference](/reference) |
+| Web / desktop overview | [Web & desktop](/docs/apps) |
+| Ingest, chat, MCP | [Sources, chat & MCP](/docs/docs-profile) |
+| Low-level pipeline | [Crawl & retrieval](/docs/core) |
+| API map | [Reference](/reference) · [HTTP API](/reference/api) |

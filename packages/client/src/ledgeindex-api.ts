@@ -199,6 +199,8 @@ export type SourceSummary = {
   hasSiteProfile?: boolean;
   /** Lens count on the saved site profile (0 when none). */
   siteProfileLensCount?: number;
+  /** "repository" for an indexed checkout; a docs kind for a crawled site. */
+  sourceType?: string;
 };
 
 export type SourceDuplicateMatch = {
@@ -217,12 +219,31 @@ export type SourceAskResult = {
     url: string;
     title: string;
     score: number;
+    filePath?: string;
+    startLine?: number;
+    endLine?: number;
+    symbolName?: string;
+    symbolKind?: string;
+  }>;
+  citations: Array<{
+    name: string;
+    url: string;
+    score: number;
+    filePath?: string;
+    startLine?: number;
+    endLine?: number;
   }>;
   insufficient: boolean;
-  rerankBackend?: "cohere" | "local" | "vector" | "llm-batch" | "cohere-mastra";
+  rerankBackend?:
+    | "cohere"
+    | "cohere-auto"
+    | "local-auto"
+    | "vector"
+    | "llm-batch"
+    | "cohere-mastra";
 };
 
-export type DocsAskRerankBackend = "cohere" | "local" | "vector";
+export type DocsAskRerankBackend = "cohere" | "local-auto" | "vector";
 
 export type DocsAskModelSelection = {
   backend: string;
@@ -385,6 +406,19 @@ export const LedgeIndexApiError = KnowledgeIndexApiError;
 let authTokenGetter: ((forceRefresh?: boolean) => Promise<string | null>) | null =
   null;
 
+let configuredApiKey: string | null = null;
+
+export function setLedgeIndexApiKey(key: string | null) {
+  configuredApiKey = key?.trim() || null;
+}
+
+export function resolveLedgeIndexApiKey(): string | null {
+  if (configuredApiKey) return configuredApiKey;
+  if (typeof process === "undefined") return null;
+  const fromEnv = process.env.LEDGEINDEX_API_KEY?.trim();
+  return fromEnv || null;
+}
+
 export function setApiAuthTokenGetter(
   getter: ((forceRefresh?: boolean) => Promise<string | null>) | null,
 ) {
@@ -397,6 +431,22 @@ async function resolveAuthToken(forceRefresh = false): Promise<string | null> {
     if (token) return token;
   }
   return null;
+}
+
+async function resolveAuthorizationHeader(
+  forceRefresh = false,
+): Promise<string | null> {
+  const firebaseToken = await resolveAuthToken(forceRefresh);
+  if (firebaseToken) return `Bearer ${firebaseToken}`;
+
+  const apiKey = resolveLedgeIndexApiKey();
+  if (!apiKey) return null;
+
+  if (apiKey.startsWith("live_") || apiKey.startsWith("ki_live_")) {
+    return `Bearer ${apiKey}`;
+  }
+
+  return `ApiKey ${apiKey}`;
 }
 
 /** Fetch wrapper that attaches Firebase auth (for AI SDK streaming chat). */
@@ -413,9 +463,9 @@ export async function authenticatedFetch(
     }
 
     if (!headers.has("Authorization")) {
-      const token = await resolveAuthToken(forceRefresh);
-      if (token) {
-        headers.set("Authorization", `Bearer ${token}`);
+      const authorization = await resolveAuthorizationHeader(forceRefresh);
+      if (authorization) {
+        headers.set("Authorization", authorization);
       }
     }
 
@@ -454,9 +504,11 @@ async function fetchWithAuth(
   }
 
   if (!headers.has("Authorization")) {
-    const token = await resolveAuthToken(options?.retried ?? false);
-    if (token) {
-      headers.set("Authorization", `Bearer ${token}`);
+    const authorization = await resolveAuthorizationHeader(
+      options?.retried ?? false,
+    );
+    if (authorization) {
+      headers.set("Authorization", authorization);
     }
   }
 
@@ -486,7 +538,7 @@ async function fetchWithAuth(
   }
 
   if (response.status === 401 && !options?.retried) {
-    const refreshed = await resolveAuthToken(true);
+    const refreshed = await resolveAuthorizationHeader(true);
     if (refreshed) {
       return fetchWithAuth(path, init, { ...options, retried: true });
     }
@@ -977,16 +1029,31 @@ export async function deleteSource(id: string) {
   });
 }
 
+export async function getAccountSourceLimits(scope: SourceScope = "personal") {
+  return api<{ limits: AccountSourceLimits }>(
+    `/api/sources/limits?scope=${encodeURIComponent(scope)}`,
+  );
+}
+
 export async function listProjects() {
   return api<{ projects: { id: string; name: string }[] }>("/api/projects");
 }
 
+export type AccountSourceLimits = {
+  apply: boolean;
+  scope: SourceScope;
+  maxSources: number | null;
+  currentSourceCount: number;
+  canCreate: boolean;
+};
+
 export async function listSources(scope?: SourceScope | "all") {
   const query =
     scope && scope !== "all" ? `?scope=${encodeURIComponent(scope)}` : "";
-  const primary = await api<{ sources: SourceSummary[] }>(
-    `/api/sources${query}`,
-  );
+  const primary = await api<{
+    sources: SourceSummary[];
+    meta?: { limits: AccountSourceLimits };
+  }>(`/api/sources${query}`);
 
   // Local API base: also pull Just-me cloud rows from the hosted API (HTTP),
   // so desktop/local web does not need Cloud SQL proxy for personal cloud.
@@ -1090,6 +1157,8 @@ export type MetadataCatalogPage = {
   url: string;
   title: string;
   chunkCount: number;
+  category?: string;
+  crawlRoot?: string | null;
 };
 
 export type MetadataCatalogCategory = {
@@ -1440,7 +1509,7 @@ export type RefreshChangelog = {
   removed: RefreshPageRef[];
 };
 
-export type RefreshMode = "discover" | "selected";
+export type RefreshMode = "discover" | "selected" | "probe";
 
 export type RefreshRunStatus =
   | "discovering"
@@ -1580,7 +1649,35 @@ export async function ensurePlaygroundApiKey() {
 }
 
 export async function getAuthMe() {
-  return api<{ role: "user" | "admin" }>("/api/auth/me");
+  return api<{
+    role: "user" | "admin";
+    accessStatus?: "pending" | "approved" | "denied";
+    plan?: "free" | "pro";
+    planLimitsEnabled?: boolean;
+  }>("/api/auth/me");
+}
+
+export type PaddleCheckoutConfig = {
+  clientToken: string;
+  environment: "sandbox" | "production";
+  prices: {
+    monthly: string;
+    annual: string;
+  };
+};
+
+export type BillingConfigResponse = {
+  enabled: boolean;
+  plan: "free" | "pro";
+  limits: {
+    maxSourceSets: number;
+    maxSourcesPerSet: number;
+  };
+  checkout: PaddleCheckoutConfig | null;
+};
+
+export async function getBillingConfig() {
+  return api<BillingConfigResponse>("/api/billing/config");
 }
 
 export async function listApiKeys() {
@@ -1625,6 +1722,8 @@ export type SourceSetMember = {
   slug: string;
   name: string;
   scope: SourceScope;
+  /** "repository" for an indexed checkout; a docs kind for a crawled site. */
+  sourceType?: string;
 };
 
 export type SourceSetSummary = {
@@ -1636,6 +1735,14 @@ export type SourceSetSummary = {
   sources: SourceSetMember[];
 };
 
+export type SourceSetLimits = {
+  apply: boolean;
+  maxSourceSets: number | null;
+  maxSourcesPerSet: number | null;
+  currentSourceSetCount: number;
+  canCreate: boolean;
+};
+
 export function getMastraApiBaseUrl(): string {
   return (
     process.env.NEXT_PUBLIC_KNOWLEDGEINDEX_MASTRA_URL ??
@@ -1645,7 +1752,10 @@ export function getMastraApiBaseUrl(): string {
 }
 
 export async function listSourceSets() {
-  return api<{ sourceSets: SourceSetSummary[] }>("/api/source-sets");
+  return api<{
+    sourceSets: SourceSetSummary[];
+    meta?: { limits: SourceSetLimits };
+  }>("/api/source-sets");
 }
 
 export async function getSourceSet(idOrSlug: string) {

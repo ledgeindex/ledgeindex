@@ -1,0 +1,38 @@
+# Source sets
+
+Group sources for MCP, the web UI **Source sets** page, and **routed asks** (`li.askAcross` / `ledgeindex ask --set`).
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/source-sets` | List source sets for the current user |
+| `POST` | `/api/source-sets` | Create a source set (name, member source ids) |
+| `GET` | `/api/source-sets/:id` | Get one set with members |
+| `PUT` | `/api/source-sets/:id` | Update name or membership |
+| `DELETE` | `/api/source-sets/:id` | Delete the set (not the sources) |
+
+MCP `ask_source` requires the target source to belong to a set owned by the user.
+
+## SDK — save and ask
+
+```ts
+await li.saveSourceSet({
+  name: "Stagehand stack",
+  slug: "stagehand-stack",
+  sources: ["stagehand", "stagehand-docs"],
+});
+
+await li.askAcross("how does act() work?", {
+  sourceSet: "stagehand-stack",
+  sourceMode: "all",
+});
+```
+
+`saveSourceSet` upserts by slug. `listSourceSets()` returns members with `sourceType` (`repository` vs documentation).
+
+Full routed-ask options: [askAcross](/reference/sdk/ask-across).
+
+## Related
+
+- [askAcross](/reference/sdk/ask-across)
+- [Set up MCP](/guides/setup-mcp)
+- [HTTP API overview](/reference/api)

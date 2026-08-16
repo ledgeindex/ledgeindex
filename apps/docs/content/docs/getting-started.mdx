@@ -1,32 +1,32 @@
-# Getting started
+# Self-host the API
 
-LedgeIndex is a pipeline: **discover → extract → chunk → embed → store → query**. Core owns those steps. The docs profile and profile package build products on top. Server is how you expose them over HTTP.
+**Want crawl/ask without writing server code?** Use [CLI](/docs/cli), [SDK](/docs/sdk), or [Guides](/guides).
 
-To run the **web UI** or **desktop app** from a git clone, use the Guides tab:
+This page is for **running `startLedgeIndexServer` in your own process** — a custom Fastify host, a worker, or hacking on the monorepo.
 
-- [Set up web](/guides/setup-web)
-- [Set up desktop](/guides/setup-desktop)
+## Packages
 
-## When to use which package
+| Package | Role |
+|---------|------|
+| `@ledgeindex/core` | Crawl, extract, enrich, chunk, embed, query |
+| `@ledgeindex/repo` | Git checkout index, AST chunking, clone — [reference](/reference/repo) |
+| `@ledgeindex/docs` | Sources, indexing, chat, MCP — powers web/desktop/SDK | [Sources, chat & MCP](/docs/docs-profile) |
+| `@ledgeindex/profile` | Site research lenses (`profileSite`) |
+| `@ledgeindex/server` | Fastify host wiring docs + profile routes |
+| `@ledgeindex/sdk` | In-process crawl, ask, profile — **no server** ([guide](/guides/setup-sdk)) |
+| `@ledgeindex/client` | HTTP client when an API is already running ([reference](/reference/client)) |
 
-| You want… | Use |
-|-----------|-----|
-| Library APIs for crawl / index / retrieve | `@ledgeindex/core` |
-| Ingest, RAG chat, MCP for doc sources | `@ledgeindex/docs` (via server `docs` profile) |
-| Typed research output for a website | `@ledgeindex/profile` |
-| A process that serves those routes | `@ledgeindex/server` with `profiles: ["docs", "profile"]` |
+For a decision tree (CLI vs web vs MCP vs core-only), see [Guides → When to use what](/guides#when-to-use-what).
 
-For predetermined multi-step flows you control in your own code, call core primitives. For “figure out what’s on this site and fill these lenses,” use profile. For a deployable API, use server.
-
-## Install (npm, as a library)
+## Install (npm)
 
 ```bash
 npm i @ledgeindex/core @ledgeindex/docs @ledgeindex/profile @ledgeindex/server
 ```
 
-To develop this monorepo, clone [ledgeindex/ledgeindex](https://github.com/ledgeindex/ledgeindex) and `npm install` from that repo root.
+Monorepo development: clone [ledgeindex/ledgeindex](https://github.com/ledgeindex/ledgeindex), `npm install` from the repo root.
 
-## First server (code)
+## First server
 
 ```ts
 import { startLedgeIndexServer } from "@ledgeindex/server";
@@ -38,13 +38,13 @@ await startLedgeIndexServer({
 });
 ```
 
-Then hit `GET /health/packages` to confirm versions and active profiles.
+Confirm with `GET /health/packages` (versions and active profiles).
 
-The in-repo host is `hosts/api` (`npm run dev:api`). See [Set up web](/guides/setup-web).
+The in-repo dev host is `hosts/api` (`npm run dev:api`). For the full web UI stack, use [Set up web](/guides/setup-web).
 
 ## Environment (API process)
 
-Minimal:
+Minimal local `.env`:
 
 ```bash
 LEDGEINDEX_PROFILES=docs,profile
@@ -53,19 +53,29 @@ LEDGEINDEX_AUTH_REQUIRED=0
 LEDGEINDEX_DATA_DIR=./.data
 ```
 
-You also need at least one model provider key (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, or `DEEPSEEK_API_KEY`) for ingest and chat. Optional: `COHERE_API_KEY` for rerank, `LEDGEINDEX_VECTOR_BACKEND=libsql|pgvector`.
+You need at least one chat/embed provider key for ingest and chat (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, or `DEEPSEEK_API_KEY`). Optional: `COHERE_API_KEY` (rerank), `LEDGEINDEX_VECTOR_BACKEND=libsql|pgvector`, `POSTGRES_CONNECTION_STRING` for pgvector.
 
-`LEDGEINDEX_PROFILES` is usually parsed by the host and passed into `createLedgeIndexServer({ profiles })`. Legacy value `company` maps to `profile`.
+`LEDGEINDEX_PROFILES` is parsed by the host and passed to `createLedgeIndexServer({ profiles })`. Legacy value `company` maps to `profile`.
 
-Hosted cloud installs can require Firebase auth. When auth is required, signed-in users stay pending until an admin approves them. Local desktop sidecars that run without that auth mode are not gated the same way.
+For local development, keep **`LEDGEINDEX_AUTH_REQUIRED=0`** unless you are testing your own auth integration.
+
+## Composition vs products
+
+| Approach | When |
+|----------|------|
+| Call **core** primitives in your own pipeline | You control every step (discover, chunk, store, query) |
+| Use **profile** (`profileSite` or SDK `runProfile`) | Structured site research, not a searchable doc index |
+| Run **server** with `docs` profile | Deployable API: sources, ingest, chat, MCP |
+| Use **SDK / CLI** | Scripts and CI — no HTTP, no UI |
 
 ## Next steps
 
-| Goal | Start here |
-|------|------------|
+| Goal | Page |
+|------|------|
+| Terminal or Node without a server | [CLI](/docs/cli) · [SDK](/docs/sdk) · [Guides](/guides) |
 | Web UI + MCP | [Set up web](/guides/setup-web) |
-| Electron app | [Set up desktop](/guides/setup-desktop) |
-| Sources, ingest, chat, MCP internals | [Docs profile](/docs/docs-profile) |
+| Sources, ingest, chat internals | [Sources, chat & MCP](/docs/docs-profile) |
 | Core pipeline | [Core](/docs/core) |
-| `profileSite` and lenses | [Profile](/docs/profile) |
+| Lenses and `profileSite` | [Profile](/docs/profile) |
 | Server options | [Server](/docs/server) |
+| API surface map | [Reference](/reference) |

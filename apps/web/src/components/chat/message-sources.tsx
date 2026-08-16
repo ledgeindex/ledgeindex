@@ -109,6 +109,18 @@ function groupSourcesByCatalog(
     .filter((group) => group.sources.length > 0 || Boolean(group.picked));
 }
 
+function dedupeSourcesByTitle(sources: CitationSource[]): CitationSource[] {
+  const seen = new Set<string>();
+  const kept: CitationSource[] = [];
+  for (const source of sources) {
+    const key = source.title.trim().toLowerCase();
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    kept.push(source);
+  }
+  return kept;
+}
+
 function SourceLinks({
   sources,
   as = "p",
@@ -117,9 +129,10 @@ function SourceLinks({
   as?: "p" | "span";
 }) {
   const Tag = as;
+  const unique = dedupeSourcesByTitle(sources);
   return (
     <Tag className="min-w-0 text-xs leading-relaxed break-words text-muted">
-      {sources.map((source, index) => (
+      {unique.map((source, index) => (
         <span key={source.url}>
           {index > 0 ? <span className="text-muted">, </span> : null}
           <a

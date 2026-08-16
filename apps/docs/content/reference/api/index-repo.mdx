@@ -1,0 +1,121 @@
+# Index repo
+
+Index a **Git repository** into an existing source’s vector store. Used for codebase Q&A with AST chunking, hybrid retrieval, and **file:line** citations on code hits.
+
+Requires a source created via `POST /api/sources` (web-crawl type is fine — repo ingest replaces page content from the checkout).
+
+## Endpoint
+
+```
+POST /api/sources/:id/index-repo
+```
+
+Auth: same as other source write routes (`requireUser`).
+
+## Request body
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `githubUrl` | string | One of `githubUrl` or `checkoutPath` | `https://github.com/owner/repo` — shallow-cloned into server checkout cache |
+| `checkoutPath` | string | One of `githubUrl` or `checkoutPath` | Absolute path to a local git checkout readable by the API process |
+| `ref` | string | No | Branch, tag, or commit when cloning from `githubUrl` |
+| `maxFiles` | number | No | Cap files indexed (max 5000) |
+| `includeTests` | boolean | No | Default `false` — skip test/eval/fixture paths |
+| `includeReadme` | boolean | No | Default `false` — skip `.md` / `.mdx` |
+| `extensions` | string[] | No | Optional allowlist (e.g. `["ts","tsx"]`) — narrows the default JS/TS set |
+
+### Clone from GitHub
+
+```json
+{
+  "githubUrl": "https://github.com/browserbase/stagehand",
+  "ref": "main",
+  "maxFiles": 5000,
+  "includeTests": false
+}
+```
+
+### Local checkout
+
+```json
+{
+  "checkoutPath": "C:/repos/stagehand",
+  "includeTests": false
+}
+```
+
+## Response
+
+```json
+{
+  "fileCount": 376,
+  "pageCount": 376,
+  "chunkCount": 2154,
+  "astChunkedFiles": 210,
+  "astFallbackFiles": 0,
+  "exportedSymbolCount": 842,
+  "importEdgeCount": 1204,
+  "skippedTests": 142,
+  "skippedExtension": 89,
+  "checkoutPath": "/path/to/cache/github-com-browserbase-stagehand",
+  "commitSha": "0af36da9…"
+}
+```
+
+Vectors and lexical rows are written for `sourceId`. Re-posting to the same source replaces chunks for that source (full re-index of the checkout).
+
+## What is indexed
+
+**Code:** `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts`, `.cts` — AST chunks with `filePath`, `startLine`, `endLine`, `symbolName`, `symbolKind` in chunk metadata.
+
+**Excluded by default:** `.md`, `.mdx`, Python, Go, `node_modules`, build output, and test/eval/fixture paths. Opt back in with `includeReadme: true` or `includeTests: true`. Pass `extensions` to index only selected types (e.g. TypeScript only).
+
+## After index — ask
+
+```http
+POST /api/sources/:id/ask
+Content-Type: application/json
+
+{
+  "message": "what are implementation details of the act function"
+}
+```
+
+Repo hits may include:
+
+```json
+{
+  "text": "…",
+  "url": "https://github.com/owner/repo/blob/HEAD/packages/…/actService.ts",
+  "title": "packages/extension/services/actService.ts",
+  "score": 0.89,
+  "filePath": "packages/extension/services/actService.ts",
+  "startLine": 48,
+  "endLine": 185,
+  "symbolName": "act",
+  "symbolKind": "function"
+}
+```
+
+Use `"mode": "retrieve-only"` for chunks without an LLM answer.
+
+## Checkout cache
+
+Clones are stored under `LEDGEINDEX_DATA_DIR/repo-checkouts/` (see `@ledgeindex/repo` `cloneRepo`). Re-index fetches into the cache instead of cloning from scratch when possible.
+
+## Helper script
+
+From the monorepo (API must be running):
+
+```bash
+node scripts/index-repo.mjs https://github.com/browserbase/stagehand stagehand
+```
+
+See [Set up repo](/guides/setup-repo).
+
+## Related
+
+- [@ledgeindex/repo](/reference/repo) — `indexRepoCheckout`, `cloneRepo`, AST chunking
+- [Chat & indexing](/reference/api/chat) — `ask`, `query`
+- [Sources](/reference/api/sources) — create source first
+- [Set up repo](/guides/setup-repo) — CLI, SDK, persistence

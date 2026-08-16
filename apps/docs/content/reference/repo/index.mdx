@@ -1,0 +1,128 @@
+# @ledgeindex/repo
+
+`@ledgeindex/repo` indexes **local or GitHub git checkouts** into the same vector store as web crawls. It walks the tree, AST-chunks TypeScript/JavaScript, embeds through `@ledgeindex/core`, and writes chunks with **file path, line range, and symbol metadata** for code-aware retrieval.
+
+Used by:
+
+- `POST /api/sources/:id/index-repo` ([API](/reference/api/index-repo))
+- [Index a repository](/guides/setup-repo) guide (script + ask flow)
+- `@ledgeindex/docs` indexing routes
+
+The public **SDK** does not wrap this yet (`li.indexRepo()` planned). Call `indexRepoCheckout` in-process or use the HTTP API.
+
+## Install
+
+```bash
+npm install @ledgeindex/repo
+```
+
+Requires **Node 22.13+** and **git** on `PATH` when cloning from a URL.
+
+## Primitive map
+
+| Area | Exports | Page |
+|------|---------|------|
+| Index checkout | `indexRepoCheckout`, `loadRepoIndexPages` | [indexRepoCheckout](/reference/repo/index-checkout) |
+| Clone | `cloneRepo`, `parseRepoUrl`, `repoCheckoutCachePath` | [cloneRepo](/reference/repo/clone) |
+| Walker & allowlist | `walkRepoFiles`, `isRepoIndexableFile`, `repoPageKind`, … | [Paths & walker](/reference/repo/paths) |
+| AST chunking | `analyzeCodeFile`, `CodeChunk`, … | [AST chunking](/reference/repo/ast-chunking) |
+| Repo profile | `profileRepo`, `exploreRepoExamples` | [profileRepo](/reference/repo/profile) |
+| Agents / tools | `createRepoExploreAgent`, `createRepoFsTools`, … | Below |
+
+## Quick start
+
+```ts
+import { createLedgeIndex } from "@ledgeindex/sdk";
+import { indexRepoCheckout } from "@ledgeindex/repo";
+import { getStore } from "@ledgeindex/docs/runtime/db/index.js";
+
+const li = await createLedgeIndex();
+const store = getStore();
+const project =
+  (await store.listProjects(li.localUserId))[0] ??
+  (await store.createProject("LedgeIndex", li.localUserId));
+
+const source = await store.createSource({
+  projectId: project.id,
+  name: "my-lib",
+  slugOwnerKey: li.localUserId,
+  config: {
+    startUrls: ["https://github.com/org/my-lib"],
+    includePatterns: [],
+    excludePatterns: [],
+    excludeDownloadPatterns: [],
+    patternsAreRegex: false,
+    renderJs: false,
+    useProxy: false,
+    enableSitemap: false,
+    sitemapOnly: false,
+    sitemapUrls: [],
+    fileTypes: ["html"],
+    contentSelectors: [],
+    excludeSelectors: [],
+    maxPages: 1000,
+    userAgent: "ledgeindex",
+  },
+});
+
+const stats = await indexRepoCheckout({
+  sourceId: source.id,
+  projectId: project.id,
+  githubUrl: "https://github.com/org/my-lib",
+  sourceSlug: source.slug,
+});
+
+console.log(stats.chunkCount, "chunks");
+
+const { answer, chunks } = await li.ask(
+  source.slug,
+  "what are implementation details of the act function",
+);
+```
+
+Indexes persist under `LEDGEINDEX_DATA_DIR` — index once, ask many times.
+
+## What gets indexed
+
+| Included | Excluded by default |
+|----------|---------------------|
+| `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts`, `.cts` | Python, Go |
+| `.md`, `.mdx` in the repo | `node_modules`, `dist`, `.git`, … |
+| | Test/eval/fixture paths (`includeTests: true` to opt in) |
+
+See [Paths & walker](/reference/repo/paths).
+
+## Retrieval after index
+
+Repo chunks carry metadata used by `@ledgeindex/core` hybrid retrieval and last-mile ranking:
+
+- `filePath`, `startLine`, `endLine`
+- `symbolName`, `symbolKind`, `symbolPath`
+- `pageKind` — `source`, `docs`, `test`, `example`, `config`
+
+Ask via SDK, CLI, or API — [SDK ask](/reference/sdk/ask), [Index repo API](/reference/api/index-repo).
+
+## Agents & exploration (optional)
+
+Higher-level Mastra agents for **repo profiling** and **usage-example discovery** (not required for index + ask):
+
+| Export | Purpose |
+|--------|---------|
+| `createRepoExploreAgent` | Agent that explores a checkout for usage examples |
+| `exploreRepoExamples` | Run exploration, return structured examples |
+| `createRepoProfilerExploreAgent` | Profiler-oriented explore agent |
+| `profileRepo` | Full repo profile + example mapping |
+| `createRepoFsTools` | Read-only filesystem tools for agents |
+
+Details: [profileRepo](/reference/repo/profile).
+
+## Version
+
+`LEDGEINDEX_REPO_VERSION` is exported as a string constant (package version).
+
+## Related
+
+- [Index a repository](/guides/setup-repo) — end-to-end setup
+- [Index repo API](/reference/api/index-repo)
+- [@ledgeindex/core query](/reference/core/query) — `kapaRetrieve`, hybrid search
+- [@ledgeindex/sdk](/reference/sdk)

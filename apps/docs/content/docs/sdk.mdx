@@ -1,0 +1,135 @@
+# SDK
+
+**`@ledgeindex/sdk`** runs LedgeIndex **in-process** in Node: crawl, index, ask, and profile without starting Fastify or Next.js. The [`ledgeindex`](/docs/cli) CLI is a thin wrapper around this package.
+
+For **GitHub repositories**, see [Index a repository](/guides/setup-repo) — `li.indexRepo()` then `li.ask(slug, question)`.
+
+## When to use it
+
+| Use SDK when… | Use something else when… |
+|---------------|--------------------------|
+| Workers, scripts, tests, or CI need crawl/ask/profile | You already have an API running → [`@ledgeindex/client`](/reference/client) |
+| You want programmatic control (progress callbacks, options objects) | You only want the terminal → [CLI](/docs/cli) |
+| No server to deploy or maintain | You need MCP or a web UI → [Web & desktop](/docs/apps) + [Guides](/guides) |
+
+`runProfile` / `li.profile()` do **not** require `initRuntime` — only model keys. `crawl` and `ask` use the docs Mastra runtime (initialized by `createLedgeIndex`).
+
+## Install
+
+```bash
+npm install @ledgeindex/sdk
+```
+
+Step-by-step keys, env, and retrieval stack: [Set up SDK](/guides/setup-sdk).
+
+## API surface
+
+### Create a handle
+
+```ts
+import { createLedgeIndex } from "@ledgeindex/sdk";
+
+const li = await createLedgeIndex({
+  keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+});
+```
+
+### Crawl a docs site
+
+```ts
+const { sourceId } = await li.crawl({
+  url: "https://docs.example.com",
+  maxPages: 20,
+});
+```
+
+→ [crawl](/reference/sdk/crawl)
+
+### Ask a source
+
+```ts
+const { answer, chunks } = await li.ask(sourceId, "How do I install?");
+```
+
+→ [ask](/reference/sdk/ask)
+
+### Ask across sources (repo + docs)
+
+```ts
+const { answer, pickedSources } = await li.askAcross(
+  "how is act() implemented end to end?",
+  { sources: ["stagehand", "stagehand-docs"], sourceMode: "all" },
+);
+```
+
+→ [askAcross](/reference/sdk/ask-across)
+
+### Index a GitHub repo
+
+```ts
+await li.indexRepo({
+  githubUrl: "https://github.com/org/repo",
+  name: "my-repo",
+  onProgress: (u) => console.log(u.phase, u),
+});
+
+const { chunks } = await li.ask("my-repo", "where is auth handled?", {
+  mode: "retrieve-only",
+});
+```
+
+→ [Index a repository](/guides/setup-repo)
+
+### Profile a site (on the handle)
+
+```ts
+const { profile } = await li.profile("https://example.com", {
+  lenses: ["identity", "capabilities"],
+});
+```
+
+→ [profile](/reference/sdk/profile)
+
+### Profile only (no index store)
+
+```ts
+import { runProfile } from "@ledgeindex/sdk";
+
+const { profile } = await runProfile(
+  "https://example.com",
+  { lenses: ["pricing"] },
+  { keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY } },
+);
+```
+
+Use `runProfile` when you only need research output — no `createLedgeIndex`, no crawl index.
+
+| Method / export | Needs model key? | Page |
+|-----------------|------------------|------|
+| `li.crawl` | Only if `autoFilter` or `enrichExamples` | [crawl](/reference/sdk/crawl) |
+| `li.ask` | Yes (use `mode: "retrieve-only"` for hits only) | [ask](/reference/sdk/ask) |
+| `li.askAcross` | Yes | [askAcross](/reference/sdk/ask-across) |
+| `li.saveSourceSet` / `li.listSourceSets` | No | [askAcross](/reference/sdk/ask-across#pin-sources-ahead-of-time-source-sets) |
+| `li.indexRepo` | No for index; yes for full `ask` answer | [Index a repository](/guides/setup-repo) |
+| `li.profile` / `runProfile` | Yes | [profile](/reference/sdk/profile) |
+| `runWebCrawl`, `askQuestion` | Same as above | [Reference](/reference/sdk) |
+| `askAcrossSources`, `saveSourceSet` | Yes for askAcross | [askAcross](/reference/sdk/ask-across) |
+
+## vs other packages
+
+| Package | Server | Best for |
+|---------|--------|----------|
+| `@ledgeindex/sdk` | None | Scripts, workers, CLI |
+| `ledgeindex` (CLI) | None | Terminal |
+| `@ledgeindex/client` | `:3010` / `:3015` | Remote or shared API |
+| `@ledgeindex/core` | None | Custom pipelines only |
+| `@ledgeindex/server` | You run it | Deployable HTTP + MCP |
+
+## Related
+
+- [Index documentation](/guides/setup-docs)
+- [Index a repository](/guides/setup-repo)
+- [askAcross](/reference/sdk/ask-across)
+- [CLI](/docs/cli)
+- [@ledgeindex/sdk reference](/reference/sdk)
+- [Getting started](/guides)

@@ -1,0 +1,68 @@
+# AST chunking
+
+Symbol-bounded chunking for TypeScript and JavaScript using `@babel/parser`.
+
+## `analyzeCodeFile(input)`
+
+```ts
+import { analyzeCodeFile } from "@ledgeindex/repo";
+
+const analysis = analyzeCodeFile({
+  relativePath: "packages/sdk/src/act.ts",
+  text: fileContents,
+  pageKind: "source",
+});
+
+for (const chunk of analysis.chunks) {
+  console.log(chunk.symbolName, chunk.startLine, chunk.endLine);
+}
+```
+
+### `CodeFileAnalysis`
+
+| Field | Description |
+|-------|-------------|
+| `chunks` | `CodeChunk[]` ready for `IndexPageInput.chunks` |
+| `imports` | Resolved import specifiers |
+| `exports` | Exported symbol names |
+| `parseFailed` | `true` → caller should use recursive text splitter |
+
+### `CodeChunk`
+
+| Field | Description |
+|-------|-------------|
+| `text` | Full chunk text (includes self-describing header) |
+| `body` | Raw source span |
+| `startLine` / `endLine` | 1-based line range in file |
+| `symbolName` / `symbolPath` | Primary symbol |
+| `symbolKind` | `function`, `class`, `method`, `interface`, … |
+| `exported` | Whether symbol is exported |
+| `partIndex` / `partCount` | When a symbol was split across parts |
+
+Headers look like:
+
+```
+// packages/sdk/src/act.ts:48-185
+// act — function, exported, part 1 of 2
+export async function act(…) { … }
+```
+
+These fields flow into vector + lexical metadata (`filePath`, `symbolName`, …) for retrieval and citations.
+
+## Size limits
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `CODE_CHUNK_MAX_CHARS` | per-chunk ceiling | Split oversized symbols |
+| `CODE_CHUNK_MERGE_MAX_CHARS` | merge threshold | Combine small adjacent units |
+
+Oversized declarations are split by line windows with overlap, or by recursing into class members.
+
+## Fallback
+
+If parsing fails, `indexRepoCheckout` uses `@ledgeindex/core` **recursive** splitter (512-token windows) instead of AST chunks. Counted in `astFallbackFiles` on the index result.
+
+## Related
+
+- [indexRepoCheckout](/reference/repo/index-checkout)
+- [@ledgeindex/core chunk](/reference/core/chunk)

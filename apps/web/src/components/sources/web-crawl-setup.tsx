@@ -17,6 +17,7 @@ import {
 import { SourceHostingToggle } from "@/components/sources/source-hosting-toggle";
 import { IndexLocationInfo } from "@/components/sources/index-location-info";
 import { useAuth } from "@/lib/auth-context";
+import { usePlanBilling } from "@/contexts/plan-billing-context";
 import {
   syncApiBaseForHosting,
   syncDesktopApiBaseForScope,
@@ -461,6 +462,7 @@ export function WebCrawlSetup() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isAdmin } = useAuth();
+  const { showPlanLimit } = usePlanBilling();
   const hostingCaps = useHostingCapabilities();
   const initialUrl = normalizeStartUrl(searchParams.get("url") ?? "");
   const initialExcludesParam = searchParams.get("excludes") ?? "";
@@ -1519,9 +1521,16 @@ export function WebCrawlSetup() {
     };
 
     if (sourceScope === "global") {
-      const { source } = await createSource(createInput);
-      setSourceId(source.id);
-      return source.id;
+      try {
+        const { source } = await createSource(createInput);
+        setSourceId(source.id);
+        return source.id;
+      } catch (error) {
+        if (error instanceof KnowledgeIndexApiError && error.status === 403) {
+          showPlanLimit(error.message);
+        }
+        throw error;
+      }
     }
 
     let resolvedProjectId = getDevProjectId();
@@ -1540,6 +1549,10 @@ export function WebCrawlSetup() {
       setSourceId(source.id);
       return source.id;
     } catch (error) {
+      if (error instanceof KnowledgeIndexApiError && error.status === 403) {
+        showPlanLimit(error.message);
+        throw error;
+      }
       if (
         error instanceof KnowledgeIndexApiError &&
         error.status === 404 &&

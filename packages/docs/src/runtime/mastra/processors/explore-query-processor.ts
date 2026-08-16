@@ -24,6 +24,8 @@ import {
   resolveRewriteModelConfig,
 } from "../../llm/chat-model-config.js";
 import { listGlobalSourceSummaries, listSourceSummariesForOwner } from "../../services/source-summary.js";
+import { getStore } from "../../db/index.js";
+import type { SourceContentType } from "../../db/types.js";
 import { logVerbose, logWarn } from "../../lib/logger.js";
 import {
   getRemotePlatformApiBase,
@@ -42,10 +44,14 @@ import {
   routeExploreIntentWaterfall,
 } from "../../retrieval/explore-intent-classifier.js";
 import { tryCascadeRetrieve } from "../../retrieval/cascade-retrieve.js";
-import { describeRerankRuntimeMeta } from "../../retrieval/rerank-backend.js";
+import {
+  describeRerankRuntimeMeta,
+  type RerankBackend,
+} from "../../retrieval/rerank-backend.js";
 
 const MAX_PICKED_SOURCES = 3;
 const MAX_HISTORY_TURNS = 6;
+const AGENT_CHUNK_BUDGET = 24;
 
 type ExploreSource = {
   id: string;
@@ -55,6 +61,8 @@ type ExploreSource = {
   hosting: "local" | "cloud";
   /** True only when this source came from LEDGEINDEX_REMOTE_API_URL (needs Bearer). */
   remote: boolean;
+  /** Corpus kind, so the picker can route code questions apart from prose ones. */
+  sourceType: SourceContentType;
   pageCount: number;
   chunkCount: number;
   faviconUrl?: string | null;
@@ -112,6 +120,46 @@ function readAuthToken(requestContext: ProcessInputArgs["requestContext"]): stri
   return typeof token === "string" ? token.trim() : "";
 }
 
+/** Set id or slug chosen ahead of the turn; empty means the whole catalog. */
+function readSourceSetRef(
+  requestContext: ProcessInputArgs["requestContext"],
+): string {
+  if (typeof requestContext?.get !== "function") return "";
+  const raw =
+    requestContext.get("source_set_id") ??
+    requestContext.get("source_set_slug") ??
+    "";
+  return typeof raw === "string" ? raw.trim() : "";
+}
+
+/**
+ * Inline allowlist of slugs, for callers that pin sources per call instead of
+ * saving a set (SDK/CLI). Accepts an array or a comma-separated string.
+ */
+function readSourceSlugs(
+  requestContext: ProcessInputArgs["requestContext"],
+): string[] {
+  if (typeof requestContext?.get !== "function") return [];
+  const raw = requestContext.get("explore_source_slugs");
+  const values = Array.isArray(raw)
+    ? raw
+    : typeof raw === "string"
+      ? raw.split(",")
+      : [];
+  return values
+    .map((value) => String(value).trim().toLowerCase())
+    .filter(Boolean);
+}
+
+/** `picker` = LLM chooses subset; `all` = read every allowed source. */
+function readSourceMode(
+  requestContext: ProcessInputArgs["requestContext"],
+): "picker" | "all" {
+  if (typeof requestContext?.get !== "function") return "picker";
+  const raw = requestContext.get("explore_source_mode");
+  return raw === "all" ? "all" : "picker";
+}
+
 function readUserId(requestContext: ProcessInputArgs["requestContext"]): string {
   if (typeof requestContext?.get !== "function") return "";
   const raw =
@@ -131,12 +179,17 @@ function personalOwnerIds(primaryUserId: string): string[] {
   return [...ids];
 }
 
+/** What the picker sees: "code" for a checkout, "docs" for anything crawled. */
+function describeKind(sourceType: SourceContentType): "code" | "docs" {
+  return sourceType === "repository" ? "code" : "docs";
+}
+
 function formatCatalog(sources: ExploreSource[]): string {
   if (sources.length === 0) return "(no sources indexed)";
   return sources
     .map((source) => {
       const origin = source.remote ? "remote" : "local";
-      return `- ${source.name} (slug: ${source.slug}, scope: ${source.scope}, origin: ${origin}, pages: ${source.pageCount}, chunks: ${source.chunkCount})`;
+      return `- ${source.name} (slug: ${source.slug}, kind: ${describeKind(source.sourceType)}, scope: ${source.scope}, origin: ${origin}, pages: ${source.pageCount}, chunks: ${source.chunkCount})`;
     })
     .join("\n");
 }
@@ -197,15 +250,52 @@ function hitToChunk(
   };
 }
 
+function chunkKey(chunk: KapaRetrievedChunk): string {
+  return `${chunk.url}::${chunk.text.slice(0, 120)}`;
+}
+
 function dedupeChunks(chunks: KapaRetrievedChunk[]): KapaRetrievedChunk[] {
   const seen = new Set<string>();
   const out: KapaRetrievedChunk[] = [];
   for (const chunk of chunks) {
-    const key = `${chunk.url}::${chunk.text.slice(0, 120)}`;
+    const key = chunkKey(chunk);
     if (seen.has(key)) continue;
     seen.add(key);
     out.push(chunk);
   }
+  return out;
+}
+
+/**
+ * Take from each picked source in turn, by that source's own rank.
+ *
+ * Scores are only comparable inside one source: a code source ranks on cosine
+ * while a prose source ranks on cross-encoder output, so sorting the union by
+ * score hands the whole budget to whichever side happens to score hotter.
+ * Rank is the one ordering every source agrees on.
+ */
+function mergeAcrossSources(
+  groups: KapaRetrievedChunk[][],
+  limit: number,
+): KapaRetrievedChunk[] {
+  const queues = groups.filter((group) => group.length > 0).map((group) => [...group]);
+  const seen = new Set<string>();
+  const out: KapaRetrievedChunk[] = [];
+
+  while (out.length < limit) {
+    let tookOne = false;
+    for (const queue of queues) {
+      let next = queue.shift();
+      while (next && seen.has(chunkKey(next))) next = queue.shift();
+      if (!next) continue;
+      seen.add(chunkKey(next));
+      out.push(next);
+      tookOne = true;
+      if (out.length >= limit) break;
+    }
+    if (!tookOne) break;
+  }
+
   return out;
 }
 
@@ -231,6 +321,7 @@ async function loadPersonalSources(
         scope: "personal",
         hosting: item.hosting === "cloud" ? "cloud" : "local",
         remote: false,
+        sourceType: item.sourceType,
         pageCount: item.pageCount,
         chunkCount: item.chunkCount,
         faviconUrl: item.faviconUrl ?? null,
@@ -250,6 +341,7 @@ async function loadLocalGlobalSources(): Promise<ExploreSource[]> {
     scope: "global" as const,
     hosting: "cloud" as const,
     remote: false,
+    sourceType: item.sourceType,
     pageCount: item.pageCount,
     chunkCount: item.chunkCount,
     faviconUrl: item.faviconUrl ?? null,
@@ -281,6 +373,7 @@ async function loadPlatformSources(
         scope: "global" as const,
         hosting: "cloud" as const,
         remote: true,
+        sourceType: item.sourceType ?? "unknown",
         pageCount: item.pageCount,
         chunkCount: item.chunkCount,
         faviconUrl: item.faviconUrl ?? null,
@@ -292,18 +385,73 @@ async function loadPlatformSources(
   return { sources: await loadLocalGlobalSources() };
 }
 
+/**
+ * A source set is the ahead-of-time answer to "which corpora may this question
+ * touch" — pin a repo and its docs to a set, and the picker chooses within it
+ * instead of the whole catalog.
+ */
+async function resolveSourceSetScope(input: {
+  sourceSetRef: string;
+  userId: string;
+}): Promise<{ name: string; sourceIds: Set<string> } | null> {
+  const store = getStore();
+  const set =
+    (await store.getSourceSet(input.sourceSetRef)) ??
+    (input.userId
+      ? await store.getSourceSetBySlug(input.userId, input.sourceSetRef)
+      : null);
+  if (!set) return null;
+  if (input.userId && set.ownerUserId !== input.userId) return null;
+  return { name: set.name, sourceIds: new Set(set.sourceIds) };
+}
+
 /** Personal (always local) + platform (remote only with auth, else local). */
 async function loadExploreSources(input: {
   authToken: string;
   userId: string;
-}): Promise<{ sources: ExploreSource[]; platformError?: string }> {
+  /** Set id or slug. When given, the picker only sees this set's members. */
+  sourceSetRef: string;
+  /** Inline slug allowlist, applied on top of any set scope. */
+  sourceSlugs: string[];
+}): Promise<{
+  sources: ExploreSource[];
+  platformError?: string;
+  sourceSetName?: string;
+  sourceSetError?: string;
+}> {
   const [personal, platform] = await Promise.all([
     loadPersonalSources(input.userId),
     loadPlatformSources(input.authToken),
   ]);
+  let sources = [...personal, ...platform.sources];
+
+  if (input.sourceSlugs.length > 0) {
+    const allowed = new Set(input.sourceSlugs);
+    sources = sources.filter((source) =>
+      allowed.has(source.slug.toLowerCase()),
+    );
+  }
+
+  if (!input.sourceSetRef) {
+    return { sources, platformError: platform.error };
+  }
+
+  const scope = await resolveSourceSetScope({
+    sourceSetRef: input.sourceSetRef,
+    userId: input.userId,
+  });
+  if (!scope) {
+    return {
+      sources: [],
+      platformError: platform.error,
+      sourceSetError: `Source set "${input.sourceSetRef}" was not found.`,
+    };
+  }
+
   return {
-    sources: [...personal, ...platform.sources],
+    sources: sources.filter((source) => scope.sourceIds.has(source.id)),
     platformError: platform.error,
+    sourceSetName: scope.name,
   };
 }
 
@@ -363,11 +511,15 @@ async function loadSourceCatalogText(input: {
 async function retrieveSourceHits(input: {
   source: ExploreSource;
   queries: string[];
+  /** Original user question — reranked against, not the keyword rewrites. */
+  question: string;
   authToken: string;
 }): Promise<{
   chunks: KapaRetrievedChunk[];
   insufficient: boolean;
   relaxedPassUsed: boolean;
+  /** Undefined for a remote source, which does not report its backend back. */
+  rerankBackendUsed?: string;
   byQuery: Array<{ query: string; chunkCount: number; insufficient: boolean }>;
 }> {
   const queries =
@@ -430,6 +582,7 @@ async function retrieveSourceHits(input: {
     let relaxedPassUsed = false;
     let retrieval = await kapaRetrieveMany({
       queries,
+      question: input.question,
       sourceId: input.source.id,
       queryMode: queries.length > 1 ? "merge_all" : "short_circuit",
     });
@@ -437,6 +590,7 @@ async function retrieveSourceHits(input: {
     if (retrieval.merged.length === 0) {
       retrieval = await kapaRetrieveMany({
         queries,
+        question: input.question,
         sourceId: input.source.id,
         queryMode: queries.length > 1 ? "merge_all" : "short_circuit",
         relevanceThreshold: RELAXED_RELEVANCE_THRESHOLD,
@@ -454,6 +608,7 @@ async function retrieveSourceHits(input: {
       chunks,
       insufficient: chunks.length === 0,
       relaxedPassUsed,
+      rerankBackendUsed: retrieval.rerankBackendUsed,
       byQuery: retrieval.byQuery.map((entry) => ({
         query: entry.query,
         chunkCount: entry.rawPrunedCount ?? entry.prunedCount ?? 0,
@@ -567,7 +722,17 @@ async function pickSources(input: {
     id: "explore-source-picker-agent",
     name: "Explore Source Picker",
     instructions: `Pick up to ${MAX_PICKED_SOURCES} source slugs that are most likely to answer the user's question.
-Only use slugs from the provided catalog (personal and/or global). Prefer fewer sources when one is clearly enough.`,
+Only use slugs from the provided catalog (personal and/or global). Prefer fewer sources when one is clearly enough.
+
+Each source has a kind:
+- "code" is an indexed repository — actual implementation, function bodies, types, internal helpers, tests.
+- "docs" is an indexed site — public API surface, guides, configuration, examples, concepts.
+
+Routing rules:
+- "How do I use / configure / get started / what does this option mean" → prefer docs.
+- "How is it implemented / why does it behave this way / what does this function do internally / where is X defined / is this a bug" → prefer code.
+- Pick both a code and a docs source when the question spans documented behaviour and its implementation, when the docs may be incomplete or stale, or when you cannot tell which side holds the answer.
+- Never pick a second source just to be thorough. One is right when the question clearly belongs to one side.`,
     model: resolveRewriteModelConfig(input.requestContext),
   });
 
@@ -641,9 +806,27 @@ export class ExploreQueryProcessor implements Processor {
 
     const authToken = readAuthToken(requestContext);
     const userId = readUserId(requestContext);
+    const sourceSetRef = readSourceSetRef(requestContext);
+    const sourceSlugs = readSourceSlugs(requestContext);
     const history = buildHistory(messages);
-    const loaded = await loadExploreSources({ authToken, userId });
+    const loaded = await loadExploreSources({
+      authToken,
+      userId,
+      sourceSetRef,
+      sourceSlugs,
+    });
     const catalogText = formatCatalog(loaded.sources);
+
+    if (loaded.sourceSetError) {
+      return {
+        messages,
+        systemMessages: appendSystem(
+          systemMessages,
+          `${loaded.sourceSetError}
+Tell the user the selected source set is unavailable and that they should pick another set or ask without one.`,
+        ),
+      };
+    }
 
     // Remote global needs sign-in — but still continue if personal sources exist.
     if (
@@ -661,12 +844,21 @@ Tell the user they need to sign in to explore remote global sources, or index a 
       };
     }
 
-    const routed = await routeExploreIntent({
-      question,
-      history,
-      catalogText,
-      requestContext,
-    });
+    const sourceMode = readSourceMode(requestContext);
+    const forceRetrieve =
+      sourceMode === "all" || sourceSlugs.length > 0 || Boolean(sourceSetRef);
+
+    const routed = forceRetrieve
+      ? {
+          intent: "retrieve" as const,
+          reason: "Pinned sources — skip chat routing.",
+        }
+      : await routeExploreIntent({
+          question,
+          history,
+          catalogText,
+          requestContext,
+        });
 
     logVerbose("Explore router decided", "ExploreQuery", {
       question,
@@ -675,6 +867,8 @@ Tell the user they need to sign in to explore remote global sources, or index a 
       sourceCount: loaded.sources.length,
       personalCount: loaded.sources.filter((s) => s.scope === "personal").length,
       platformError: loaded.platformError,
+      sourceMode,
+      forceRetrieve,
       modelId: primaryAuxiliaryModelId(requestContext),
     });
 
@@ -690,6 +884,16 @@ Answer helpfully. If useful, mention they can ask about available sources (perso
     }
 
     if (loaded.sources.length === 0) {
+      if (loaded.sourceSetName) {
+        return {
+          messages,
+          systemMessages: appendSystem(
+            systemMessages,
+            `The source set "${loaded.sourceSetName}" has no indexed sources in it.
+Tell the user to add a source to that set, or to ask without a set selected.`,
+          ),
+        };
+      }
       return {
         messages,
         systemMessages: appendSystem(
@@ -719,12 +923,15 @@ ${catalogText}${platformNote}`,
       };
     }
 
-    const pickedSlugs = await pickSources({
-      question,
-      history,
-      sources: loaded.sources,
-      requestContext,
-    });
+    const pickedSlugs =
+      readSourceMode(requestContext) === "all"
+        ? loaded.sources.slice(0, MAX_PICKED_SOURCES).map((s) => s.slug)
+        : await pickSources({
+            question,
+            history,
+            sources: loaded.sources,
+            requestContext,
+          });
     const picked = pickedSlugs
       .map((slug) =>
         loaded.sources.find((s) => s.slug.toLowerCase() === slug.toLowerCase()),
@@ -735,6 +942,10 @@ ${catalogText}${platformNote}`,
     logVerbose("Explore sources picked", "ExploreQuery", {
       question,
       slugs: picked.map((s) => s.slug),
+      kinds: picked.map((s) => describeKind(s.sourceType)),
+      sourceSet: loaded.sourceSetName ?? null,
+      sourceMode: readSourceMode(requestContext),
+      candidateCount: loaded.sources.length,
     });
 
     // Per picked source (in parallel): cascade peek on the raw question first;
@@ -765,6 +976,8 @@ ${catalogText}${platformNote}`,
               chunks,
               insufficient: chunks.length === 0,
               relaxedPassUsed: false,
+              // The cascade answers from cached chunks without a rerank pass.
+              rerankBackendUsed: undefined as string | undefined,
               cascadePassUsed: true as const,
               cascadeTopScore: cascade.topScore as number | undefined,
               byQuery: [
@@ -788,6 +1001,7 @@ ${catalogText}${platformNote}`,
         const result = await retrieveSourceHits({
           source,
           queries: rewrite.queries,
+          question,
           authToken,
         });
         return {
@@ -800,10 +1014,10 @@ ${catalogText}${platformNote}`,
       }),
     );
 
-    const merged = dedupeChunks(
-      perSource.flatMap((entry) => entry.chunks),
-    ).sort((a, b) => b.score - a.score);
-    const agentChunks = merged.slice(0, 24);
+    const agentChunks = mergeAcrossSources(
+      perSource.map((entry) => entry.chunks),
+      AGENT_CHUNK_BUDGET,
+    );
     const insufficient = agentChunks.length === 0;
     const relaxedPassUsed = perSource.some((entry) => entry.relaxedPassUsed);
     const cascadePassUsed = perSource.some((entry) => entry.cascadePassUsed);
@@ -837,7 +1051,22 @@ ${catalogText}${platformNote}`,
       perSource[0]?.rewrite.rewriteModelId ??
       primaryAuxiliaryModelId(requestContext);
 
-    const rerankRuntime = describeRerankRuntimeMeta({ cascadePassUsed });
+    // Sources can rank differently — a code source skips the cross-encoder — so
+    // only claim a specific backend when every source used the same one.
+    const backendsUsed = [
+      ...new Set(
+        perSource
+          .map((entry) => entry.rerankBackendUsed)
+          .filter((backend): backend is string => Boolean(backend)),
+      ),
+    ];
+    const rerankRuntime = describeRerankRuntimeMeta({
+      cascadePassUsed,
+      effectiveBackend:
+        backendsUsed.length === 1
+          ? (backendsUsed[0] as RerankBackend)
+          : undefined,
+    });
 
     const meta: RetrievalMeta = {
       question,
@@ -870,6 +1099,7 @@ ${catalogText}${platformNote}`,
         startUrl: source.startUrl ?? null,
         scope: source.scope,
         remote: source.remote,
+        kind: describeKind(source.sourceType),
       })),
       searchAttempts: perSource.flatMap((entry) =>
         entry.byQuery.map((attempt) => ({
@@ -903,8 +1133,13 @@ ${catalogText}${platformNote}`,
       coverage.coverageReason,
     );
     const pickedLine = `Selected sources: ${picked
-      .map((s) => `${s.name} (${s.slug})`)
+      .map((s) => `${s.name} (${s.slug}, ${describeKind(s.sourceType)})`)
       .join(", ")}.`;
+    // Docs describe intent, code describes behaviour, and stale docs are common.
+    const mixedKindNote =
+      new Set(picked.map((s) => describeKind(s.sourceType))).size > 1
+        ? "This evidence spans both documentation and repository code. Where they disagree, describe what the code does and say the docs differ."
+        : "";
     const sourceBlock =
       coverage.answerMode === "none"
         ? ""
@@ -914,7 +1149,7 @@ ${catalogText}${platformNote}`,
       messages,
       systemMessages: appendSystem(
         systemMessages,
-        [retrievalInstruction, pickedLine, sourceBlock]
+        [retrievalInstruction, pickedLine, mixedKindNote, sourceBlock]
           .map((part) => part.trim())
           .filter(Boolean)
           .join("\n\n"),

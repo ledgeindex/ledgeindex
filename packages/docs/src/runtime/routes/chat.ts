@@ -10,7 +10,6 @@ const rerankBackendSchema = z.enum([
   "cohere",
   "cohere-auto",
   "cohere-v4-fast",
-  "local",
   "local-v2",
   "local-auto",
   "local-mini",

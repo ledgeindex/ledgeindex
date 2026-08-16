@@ -1,9 +1,23 @@
 export default {
   index: "Overview",
-  "getting-started": "Getting started",
-  apps: "Apps",
-  "docs-profile": "Docs profile",
-  core: "Core",
-  profile: "Profile",
-  server: "Server",
+  "---start": {
+    type: "separator",
+    title: "Start here",
+  },
+  sdk: "SDK",
+  cli: "CLI",
+  "---run": {
+    type: "separator",
+    title: "Self-host",
+  },
+  apps: "Web & desktop",
+  "docs-profile": "Sources, chat & MCP",
+  "getting-started": "Self-host the API",
+  "---compose": {
+    type: "separator",
+    title: "Compose packages",
+  },
+  core: "Crawl & retrieval",
+  profile: "Site research",
+  server: "HTTP server",
 };

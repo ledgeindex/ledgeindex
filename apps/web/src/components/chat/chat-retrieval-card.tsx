@@ -556,7 +556,7 @@ function TimingBreakdown({
                 <div
                   className={cn(
                     "h-full rounded-full",
-                    isSubstep ? "bg-muted-foreground/35" : "bg-accent/70",
+                    isSubstep ? "bg-muted/55" : "bg-accent/70",
                   )}
                   style={{ width: `${widthPct}%` }}
                 />

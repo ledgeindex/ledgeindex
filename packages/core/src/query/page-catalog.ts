@@ -6,21 +6,34 @@ import type {
 export function buildPageCatalogFromMetadata(
   metadata: Record<string, unknown>[],
 ): MetadataCatalogPage[] {
-  const byUrl = new Map<string, { title: string; chunkCount: number }>();
+  const byUrl = new Map<
+    string,
+    { title: string; chunkCount: number; category?: string; crawlRoot?: string | null }
+  >();
 
   for (const item of metadata) {
     const url = String(item.url ?? "").trim();
     if (!url) continue;
 
     const title = String(item.title ?? "").trim() || url;
+    const category =
+      typeof item.category === "string" && item.category.trim()
+        ? item.category.trim()
+        : undefined;
+    const crawlRoot =
+      typeof item.crawlRoot === "string" && item.crawlRoot.trim()
+        ? item.crawlRoot.trim()
+        : null;
     const existing = byUrl.get(url);
     if (existing) {
       existing.chunkCount += 1;
       if (title.length > existing.title.length) {
         existing.title = title;
       }
+      if (!existing.category && category) existing.category = category;
+      if (!existing.crawlRoot && crawlRoot) existing.crawlRoot = crawlRoot;
     } else {
-      byUrl.set(url, { title, chunkCount: 1 });
+      byUrl.set(url, { title, chunkCount: 1, category, crawlRoot });
     }
   }
 
@@ -29,6 +42,8 @@ export function buildPageCatalogFromMetadata(
       url,
       title: data.title,
       chunkCount: data.chunkCount,
+      ...(data.category ? { category: data.category } : {}),
+      ...(data.crawlRoot ? { crawlRoot: data.crawlRoot } : {}),
     }))
     .sort((a, b) => a.title.localeCompare(b.title));
 }

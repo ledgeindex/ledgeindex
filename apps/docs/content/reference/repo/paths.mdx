@@ -1,0 +1,94 @@
+# Paths & walker
+
+File allowlist, test detection, and directory walking for repo indexing.
+
+## Extensions
+
+| Constant | Values |
+|----------|--------|
+| `REPO_CODE_EXTENSIONS` | `.ts`, `.tsx`, `.js`, `.jsx`, `.mjs`, `.cjs`, `.mts`, `.cts` |
+| `REPO_DOC_EXTENSIONS` | `.md`, `.mdx` |
+| `REPO_INDEXABLE_EXTENSIONS` | Code + doc extensions |
+
+**Not indexed by default:** Python, Go, and other languages (by design — avoids burying TS source under SDK ports).
+
+Optional **`extensions`** filter narrows the default allowlist further, e.g. `[".ts", ".tsx"]` or `["ts", "tsx"]`. Unknown values are ignored; if nothing supported remains, indexing throws. Markdown still requires `includeReadme: true`.
+
+## Skip directories
+
+`REPO_SKIP_DIR_NAMES` — `node_modules`, `dist`, `.git`, `coverage`, `.next`, `target`, `.venv`, and similar (30+ entries). Applied during walk.
+
+## Test / eval exclusion
+
+`isRepoTestPath(relativePath)` — `true` when path matches test conventions:
+
+- Directory segments: `test`, `tests`, `__tests__`, `spec`, `e2e`, `eval`, `fixtures`, …
+- Filename patterns: `*.test.ts`, `*.spec.js`, `*.eval.ts`, …
+
+Default: **skipped**. Pass `includeTests: true` to `indexRepoCheckout` / `walkRepoFiles` to include them.
+
+## Page kind
+
+`repoPageKind(relativePath)` → `RepoPageKind`:
+
+| Kind | Typical paths |
+|------|----------------|
+| `source` | Implementation code |
+| `test` | Test / spec / eval |
+| `example` | `examples/`, `demo/`, sample apps |
+| `docs` | `.md`, `.mdx`, `docs/` trees |
+| `config` | Config / tooling files |
+
+Stored on chunk metadata as `pageKind` for query-time weighting.
+
+## Facets
+
+`repoPathFacets(relativePath)` → `{ category, section }` from meaningful directory segments (strips `packages`, `src`, `apps`, …).
+
+## Chunk strategy
+
+| Helper | Returns |
+|--------|---------|
+| `repoChunkLanguageForFile(path)` | Chunker language id |
+| `repoChunkStrategyForFile(path)` | `recursive` for code, `semantic-markdown` for docs |
+| `contentTypeForRepoFile(path)` | MIME hint for metadata |
+| `isRepoCodeFile` / `isRepoDocFile` / `isRepoIndexableFile` | Predicates |
+
+## `walkRepoFiles(checkoutPath, options?)`
+
+```ts
+import { walkRepoFiles } from "@ledgeindex/repo";
+
+const result = walkRepoFiles("/path/to/repo", {
+  maxFiles: 5000,
+  includeTests: false,
+  extensions: [".ts", ".tsx"], // optional — TypeScript only
+});
+
+console.log(result.files.length);       // indexable relative paths
+console.log(result.skippedTests);       // count excluded as tests
+console.log(result.skippedExtension);   // unsupported extensions
+console.log(result.truncated);          // hit maxFiles
+```
+
+`listRepoIndexableFiles` is a thin wrapper returning only `files[]`.
+
+## Canonical URLs
+
+```ts
+import { repoFileCanonicalUrl } from "@ledgeindex/repo";
+
+repoFileCanonicalUrl({
+  githubUrl: "https://github.com/org/repo",
+  relativePath: "packages/sdk/src/index.ts",
+  sourceSlug: "my-repo",
+});
+// → https://github.com/org/repo/blob/HEAD/packages/sdk/src/index.ts
+```
+
+Used as chunk `url` so citations link to the file in the remote repo.
+
+## Related
+
+- [indexRepoCheckout](/reference/repo/index-checkout)
+- [AST chunking](/reference/repo/ast-chunking)

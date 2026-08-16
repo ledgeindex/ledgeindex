@@ -10,6 +10,7 @@ export function CloudLocalToggle({
   disabled = false,
   className,
   size = "default",
+  label,
   ariaLabel = "Where docs are processed",
   localTitle = "Process and store docs on this device",
   cloudTitle = "Process and store docs in LedgeIndex cloud",
@@ -19,6 +20,12 @@ export function CloudLocalToggle({
   disabled?: boolean;
   className?: string;
   size?: "default" | "compact";
+  /**
+   * Names what Local/Cloud applies to. Required in practice wherever this
+   * control does not mean index hosting, since the same Local/Cloud wording is
+   * used for storage on New source.
+   */
+  label?: string;
   ariaLabel?: string;
   localTitle?: string;
   cloudTitle?: string;
@@ -36,6 +43,19 @@ export function CloudLocalToggle({
         className,
       )}
     >
+      {label ? (
+        <span
+          aria-hidden
+          className={cn(
+            "hidden shrink-0 select-none font-mono tracking-[0.1em] text-muted uppercase sm:inline",
+            compact
+              ? "pr-0.5 pl-1 text-[0.5rem]"
+              : "pr-1 pl-1.5 text-[0.5625rem]",
+          )}
+        >
+          {label}
+        </span>
+      ) : null}
       <ToggleOption
         active={value === "local"}
         disabled={disabled}

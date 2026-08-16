@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, Square } from "lucide-react";
+import { RefreshCw, SearchCheck, Square } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import type { KnowledgeSetScope } from "@/components/sources/knowledge-set-scope-toggle";
 import { IngestPipelineFlow } from "@/components/sources/ingest-pipeline-flow";
@@ -149,7 +149,9 @@ type RowStatus =
   | "idle"
   | "queued"
   | "running"
+  | "checking"
   | "up-to-date"
+  | "changes-found"
   | "updated"
   | "error"
   | "cancelled";
@@ -189,8 +191,12 @@ function statusLabel(status: RowStatus): string {
       return "Queued";
     case "running":
       return "Updating…";
+    case "checking":
+      return "Checking…";
     case "up-to-date":
       return "Up to date";
+    case "changes-found":
+      return "Changes found";
     case "updated":
       return "Updated";
     case "error":
@@ -352,6 +358,7 @@ function CrawlFiltersBadge({ source }: { source: SourceSummary }) {
 type RunCounts = {
   updated: number;
   upToDate: number;
+  changesFound: number;
   error: number;
   cancelled: number;
   queued: number;
@@ -367,6 +374,7 @@ function countRunStatuses(
   const counts: RunCounts = {
     updated: 0,
     upToDate: 0,
+    changesFound: 0,
     error: 0,
     cancelled: 0,
     queued: 0,
@@ -378,13 +386,18 @@ function countRunStatuses(
     const status = rowStatus[id] ?? "idle";
     if (status === "updated") counts.updated += 1;
     else if (status === "up-to-date") counts.upToDate += 1;
+    else if (status === "changes-found") counts.changesFound += 1;
     else if (status === "error") counts.error += 1;
     else if (status === "cancelled") counts.cancelled += 1;
     else if (status === "queued") counts.queued += 1;
-    else if (status === "running") counts.running += 1;
+    else if (status === "running" || status === "checking") counts.running += 1;
   }
   counts.done =
-    counts.updated + counts.upToDate + counts.error + counts.cancelled;
+    counts.updated +
+    counts.upToDate +
+    counts.changesFound +
+    counts.error +
+    counts.cancelled;
   return counts;
 }
 
@@ -425,7 +438,8 @@ function RunOverview({
           status === "error" ||
           status === "cancelled" ||
           status === "queued" ||
-          status === "running"
+          status === "running" ||
+          status === "checking"
         );
       })
     : runIds;
@@ -443,6 +457,11 @@ function RunOverview({
           {counts.upToDate > 0 ? (
             <span className="rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-emerald-700/80 uppercase dark:text-emerald-300/80">
               {counts.upToDate} up to date
+            </span>
+          ) : null}
+          {counts.changesFound > 0 ? (
+            <span className="rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-amber-800 uppercase dark:text-amber-300">
+              {counts.changesFound} with changes
             </span>
           ) : null}
           {counts.error > 0 ? (
@@ -601,6 +620,9 @@ function ChangesSidePanel({
   running,
   errorMessage,
   hasLastRun,
+  onApply,
+  onDismiss,
+  actionBusy = false,
 }: {
   source: SourceSummary | null;
   changelog: RefreshChangelog | null;
@@ -608,6 +630,9 @@ function ChangesSidePanel({
   running: boolean;
   errorMessage?: string;
   hasLastRun: boolean;
+  onApply?: () => void;
+  onDismiss?: () => void;
+  actionBusy?: boolean;
 }) {
   if (!source) {
     return (
@@ -618,7 +643,7 @@ function ChangesSidePanel({
         <p className="mt-1 max-w-[16rem] text-xs leading-5 text-muted">
           {hasLastRun
             ? "Click a set in the finished run list (or on the left) to open its page diff report."
-            : "Select a set on the left. While it updates, added / updated / removed pages show up here."}
+            : "Select a set on the left. Run Check to compare pages, or Update to apply changes."}
         </p>
       </div>
     );
@@ -639,8 +664,10 @@ function ChangesSidePanel({
     !running &&
     (status === "updated" ||
       status === "up-to-date" ||
+      status === "changes-found" ||
       status === "error" ||
       status === "cancelled");
+  const isChecking = running || status === "checking";
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-border bg-card-solid">
@@ -673,6 +700,8 @@ function ChangesSidePanel({
             <p className="text-sm font-medium text-foreground">
               {status === "up-to-date"
                 ? "Up to date"
+                : status === "changes-found"
+                  ? "Changes found"
                 : status === "updated"
                   ? "Update finished"
                   : status === "error"
@@ -681,7 +710,11 @@ function ChangesSidePanel({
             </p>
             <p className="mt-0.5 text-[0.6875rem] leading-5 text-muted">
               {status === "up-to-date"
-                ? "Refresh found no page changes to apply."
+                ? "No page changes since the last index."
+                : status === "changes-found"
+                  ? hasDiff
+                    ? "Review the diff below, then apply or dismiss."
+                    : "Check finished — no diff details."
                 : status === "updated"
                   ? hasDiff
                     ? pathBuckets.length > 1
@@ -692,6 +725,26 @@ function ChangesSidePanel({
                     ? errorMessage || "Something went wrong during refresh."
                     : "This set was stopped before it finished."}
             </p>
+            {status === "changes-found" && onApply && onDismiss ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  disabled={actionBusy}
+                  onClick={() => onApply()}
+                  className="inline-flex h-7 items-center rounded-md border border-foreground/15 bg-foreground px-2.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-background uppercase disabled:opacity-50"
+                >
+                  Apply changes
+                </button>
+                <button
+                  type="button"
+                  disabled={actionBusy}
+                  onClick={() => onDismiss()}
+                  className="inline-flex h-7 items-center rounded-md border border-border bg-card-solid px-2.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-muted uppercase hover:text-foreground disabled:opacity-50"
+                >
+                  Dismiss
+                </button>
+              </div>
+            ) : null}
           </section>
         ) : null}
 
@@ -753,8 +806,8 @@ function ChangesSidePanel({
           </section>
         )}
 
-        {running && status === "running" && !changelog ? (
-          <p className="text-xs text-muted">Checking for page changes…</p>
+        {isChecking && (status === "checking" || status === "running") && !changelog ? (
+          <p className="text-xs text-muted">Discovering and comparing pages…</p>
         ) : null}
 
         {changelog?.baselineCaptured ? (
@@ -808,7 +861,8 @@ function ChangesSidePanel({
 
         {!running && !changelog && status === "idle" ? (
           <p className="text-xs leading-5 text-muted">
-            Run an update to see the page diff for this set.
+            Run Check to compare live pages with the index, or Update to apply
+            changes automatically.
           </p>
         ) : null}
       </div>
@@ -1605,9 +1659,10 @@ export default function AdminSourceUpdaterPage() {
   const [focusSourceId, setFocusSourceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
-  const [runningMode, setRunningMode] = useState<"refresh" | "catalog-crawl">(
-    "refresh",
-  );
+  const [runningMode, setRunningMode] = useState<
+    "refresh" | "check" | "catalog-crawl"
+  >("refresh");
+  const [panelActionBusy, setPanelActionBusy] = useState(false);
   const [stopping, setStopping] = useState(false);
   const [currentSourceId, setCurrentSourceId] = useState<string | null>(null);
   const [snapshot, setSnapshot] = useState<RefreshRunSnapshot | null>(null);
@@ -1957,7 +2012,9 @@ export default function AdminSourceUpdaterPage() {
         maxPages: 1000,
       });
     }
-    return pipelineFromRefreshSnapshot(snapshot);
+    return pipelineFromRefreshSnapshot(snapshot, {
+      checkOnly: runningMode === "check",
+    });
   }, [
     running,
     runningMode,
@@ -2006,8 +2063,25 @@ export default function AdminSourceUpdaterPage() {
     }
     if (!running) {
       return selected.size > 0
-        ? `${selected.size} selected — ready to update`
-        : "Select sources to update";
+        ? `${selected.size} selected — check or update`
+        : "Select sources to check or update";
+    }
+    if (runningMode === "check") {
+      const pathBit =
+        snapshot?.activePath &&
+        snapshot.pathTotal &&
+        snapshot.pathTotal > 1
+          ? ` · ${snapshot.activePath} (${snapshot.pathIndex}/${snapshot.pathTotal})`
+          : "";
+      if (snapshot?.status === "ready") {
+        return focusSource
+          ? `${focusSource.name} — compared${pathBit}`
+          : `Compared ${queueIndex + 1} / ${queueTotal}${pathBit}`;
+      }
+      if (!focusSource) {
+        return `Checking ${queueIndex + 1} / ${queueTotal}${pathBit}`;
+      }
+      return `Checking ${focusSource.name} · ${queueIndex + 1} / ${queueTotal}${pathBit}`;
     }
     const pathBit =
       snapshot?.activePath &&
@@ -2215,6 +2289,200 @@ export default function AdminSourceUpdaterPage() {
         }
       }
       await sleep(POLL_MS);
+    }
+  }
+
+  async function checkOne(sourceId: string): Promise<RowStatus> {
+    setCurrentSourceId(sourceId);
+    currentSourceIdRef.current = sourceId;
+    setFocusSourceId(sourceId);
+    setSnapshot(null);
+    setRowStatus((prev) => ({ ...prev, [sourceId]: "checking" }));
+
+    const { snapshot: started } = await startSourceRefreshCheck(
+      sourceId,
+      "discover",
+    );
+    setSnapshot(started);
+    rememberChangelog(sourceId, started);
+
+    const ready = await pollUntilSettled(
+      sourceId,
+      (snap) => snap.status === "ready" || snap.status === "done",
+    );
+
+    if (ready.status === "failed") {
+      throw new Error(ready.error || "Refresh check failed");
+    }
+    if (ready.status === "cancelled") {
+      return "cancelled";
+    }
+    if (ready.status === "done") {
+      return "up-to-date";
+    }
+
+    if (!refreshHasChanges(ready)) {
+      rememberChangelog(sourceId, ready);
+      await dismissSourceRefresh(sourceId).catch(() => undefined);
+      return "up-to-date";
+    }
+
+    rememberChangelog(sourceId, ready);
+    return "changes-found";
+  }
+
+  async function applyOne(sourceId: string): Promise<RowStatus> {
+    setCurrentSourceId(sourceId);
+    currentSourceIdRef.current = sourceId;
+    setFocusSourceId(sourceId);
+    setRowStatus((prev) => ({ ...prev, [sourceId]: "running" }));
+
+    const { snapshot: applying } = await applySourceRefresh(sourceId);
+    setSnapshot(applying);
+    rememberChangelog(sourceId, applying);
+
+    const finished = await pollUntilSettled(
+      sourceId,
+      (snap) => snap.status === "done",
+    );
+    if (finished.status === "failed") {
+      throw new Error(finished.error || "Apply failed");
+    }
+    if (finished.status === "cancelled") {
+      return "cancelled";
+    }
+    return "updated";
+  }
+
+  async function startCheckQueue() {
+    if (running || selected.size === 0 || !sources) return;
+    const queue = sources
+      .filter((source) => selected.has(source.id))
+      .map((s) => s.id);
+    if (queue.length === 0) return;
+
+    abortRef.current = false;
+    setRunning(true);
+    setRunningMode("check");
+    setStopping(false);
+    setError(null);
+    setQueueTotal(queue.length);
+    setQueueIndex(0);
+    setLastRunIds(queue);
+    setFocusSourceId(queue[0] ?? null);
+    setRowError({});
+    setRowStatus((prev) => {
+      const next = { ...prev };
+      for (const id of queue) next[id] = "queued";
+      return next;
+    });
+
+    syncDesktopApiBaseForScope(scope);
+
+    let lastCompletedId: string | null = null;
+
+    for (let i = 0; i < queue.length; i += 1) {
+      if (abortRef.current) {
+        setRowStatus((prev) => {
+          const next = { ...prev };
+          for (let j = i; j < queue.length; j += 1) {
+            const id = queue[j]!;
+            if (next[id] === "queued" || next[id] === "checking") {
+              next[id] = "cancelled";
+            }
+          }
+          return next;
+        });
+        break;
+      }
+
+      const sourceId = queue[i]!;
+      setQueueIndex(i);
+      try {
+        const result = await checkOne(sourceId);
+        lastCompletedId = sourceId;
+        if (abortRef.current && result === "cancelled") {
+          setRowStatus((prev) => {
+            const next: Record<string, RowStatus> = {
+              ...prev,
+              [sourceId]: "cancelled",
+            };
+            for (let j = i + 1; j < queue.length; j += 1) {
+              const id = queue[j]!;
+              if (next[id] === "queued" || next[id] === "checking") {
+                next[id] = "cancelled";
+              }
+            }
+            return next;
+          });
+          break;
+        }
+        setRowStatus((prev) => ({ ...prev, [sourceId]: result }));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : "Check failed";
+        lastCompletedId = sourceId;
+        if (abortRef.current || message === "Cancelled") {
+          setRowStatus((prev) => {
+            const next: Record<string, RowStatus> = {
+              ...prev,
+              [sourceId]: "cancelled",
+            };
+            for (let j = i + 1; j < queue.length; j += 1) {
+              const id = queue[j]!;
+              if (next[id] === "queued" || next[id] === "checking") {
+                next[id] = "cancelled";
+              }
+            }
+            return next;
+          });
+          break;
+        }
+        setRowStatus((prev) => ({ ...prev, [sourceId]: "error" }));
+        setRowError((prev) => ({ ...prev, [sourceId]: message }));
+      }
+    }
+
+    setRunning(false);
+    setStopping(false);
+    setCurrentSourceId(null);
+    currentSourceIdRef.current = null;
+    setFocusSourceId(lastCompletedId ?? queue[0] ?? null);
+  }
+
+  async function applyFocusedChanges() {
+    if (!activeFocusId || panelActionBusy || running) return;
+    setPanelActionBusy(true);
+    setError(null);
+    try {
+      const result = await applyOne(activeFocusId);
+      setRowStatus((prev) => ({ ...prev, [activeFocusId]: result }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Apply failed";
+      setRowStatus((prev) => ({ ...prev, [activeFocusId]: "error" }));
+      setRowError((prev) => ({ ...prev, [activeFocusId]: message }));
+    } finally {
+      setPanelActionBusy(false);
+    }
+  }
+
+  async function dismissFocusedChanges() {
+    if (!activeFocusId || panelActionBusy || running) return;
+    setPanelActionBusy(true);
+    try {
+      await dismissSourceRefresh(activeFocusId);
+      setRowStatus((prev) => ({ ...prev, [activeFocusId]: "idle" }));
+      setChangelogs((prev) => {
+        const next = { ...prev };
+        delete next[activeFocusId];
+        return next;
+      });
+      if (snapshot?.sourceId === activeFocusId) {
+        setSnapshot(null);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to dismiss");
+    } finally {
+      setPanelActionBusy(false);
     }
   }
 
@@ -2950,7 +3218,17 @@ export default function AdminSourceUpdaterPage() {
             <FilterBadge
               active={selected.size > 0 && !running}
               disabled={running || selected.size === 0}
+              onClick={() => void startCheckQueue()}
+              title="Discover and compare pages — does not index until you apply"
+            >
+              <SearchCheck className="size-3" aria-hidden />
+              Check {selected.size > 0 ? selected.size : ""} selected
+            </FilterBadge>
+            <FilterBadge
+              active={selected.size > 0 && !running}
+              disabled={running || selected.size === 0}
               onClick={() => void startQueue()}
+              title="Check for changes, then apply automatically"
             >
               <RefreshCw className="size-3" aria-hidden />
               Update {selected.size > 0 ? selected.size : ""} selected
@@ -2963,7 +3241,11 @@ export default function AdminSourceUpdaterPage() {
                 className="border-red-500/40 text-red-700 hover:border-red-500/50 hover:text-red-700 dark:text-red-300"
               >
                 <Square className="size-2.5 fill-current" aria-hidden />
-                {stopping ? "Stopping…" : "Stop sync"}
+                {stopping
+                  ? "Stopping…"
+                  : runningMode === "check"
+                    ? "Stop check"
+                    : "Stop sync"}
               </FilterBadge>
             ) : null}
           </>
@@ -3274,11 +3556,15 @@ export default function AdminSourceUpdaterPage() {
                                 "shrink-0 rounded-md border px-2 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] uppercase",
                                 status === "running" &&
                                   "border-accent/40 bg-accent/10 text-accent",
+                                status === "checking" &&
+                                  "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
                                 status === "queued" &&
                                   "border-border bg-surface-alt text-muted",
                                 (status === "updated" ||
                                   status === "up-to-date") &&
                                   "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+                                status === "changes-found" &&
+                                  "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300",
                                 status === "error" &&
                                   "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
                                 status === "cancelled" &&
@@ -3308,6 +3594,19 @@ export default function AdminSourceUpdaterPage() {
                   activeFocusId ? rowError[activeFocusId] : undefined
                 }
                 hasLastRun={lastRunIds.length > 0}
+                onApply={
+                  activeFocusId &&
+                  rowStatus[activeFocusId] === "changes-found"
+                    ? () => void applyFocusedChanges()
+                    : undefined
+                }
+                onDismiss={
+                  activeFocusId &&
+                  rowStatus[activeFocusId] === "changes-found"
+                    ? () => void dismissFocusedChanges()
+                    : undefined
+                }
+                actionBusy={panelActionBusy}
               />
             </div>
           </div>
@@ -3318,7 +3617,7 @@ export default function AdminSourceUpdaterPage() {
               headline={headline}
               variant="banner"
               bannerSize="strip"
-              animate={running}
+              animate={running && runningMode !== "catalog-crawl"}
               className="w-full"
             />
           </div>

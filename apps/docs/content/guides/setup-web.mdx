@@ -2,6 +2,8 @@
 
 Run the Next.js UI against a local Fastify API. MCP is on that API process, not in Next.js.
 
+For simpler setups (terminal only), see [Getting started](/guides). This guide assumes you want the **browser UI** and optional **MCP**.
+
 ## What you need
 
 - Node.js 20+
@@ -35,7 +37,9 @@ Copy from `env.example` at the repo root.
 | `LEDGEINDEX_FRONTEND_URL` | `http://localhost:3004` | Browser origin for MCP OAuth (`/mcp/connect`) |
 | `GOOGLE_GENERATIVE_AI_API_KEY` / `OPENAI_API_KEY` / `DEEPSEEK_API_KEY` | unset | Models |
 | `COHERE_API_KEY` | unset | Rerank (optional) |
-| `LEDGEINDEX_VECTOR_BACKEND` | `libsql` | `libsql` or `pgvector` |
+| `LEDGEINDEX_VECTOR_BACKEND` | `libsql` | `libsql` or `pgvector` (needs `POSTGRES_CONNECTION_STRING`) |
+
+For Postgres + Gemini + Cohere locally, use [Set up Docker](/guides/setup-docker) (`docker-compose.postgres.yml`).
 
 ### Web UI (`apps/web/.env.local`)
 
@@ -87,6 +91,10 @@ Set `NEXT_PUBLIC_LEDGEINDEX_API_URL` to your hosted API at **build** time (Next 
 
 ## Related
 
+- [Set up MCP](/guides/setup-mcp) — Cursor / Claude Desktop config
+- [Set up Docker](/guides/setup-docker)
+- [Set up CLI](/guides/setup-cli)
+- [Set up SDK](/guides/setup-sdk)
 - [Set up desktop](/guides/setup-desktop)
-- [Docs profile / MCP](/docs/docs-profile)
-- [Apps](/docs/apps)
+- [Sources, chat & MCP](/docs/docs-profile)
+- [Web & desktop](/docs/apps)

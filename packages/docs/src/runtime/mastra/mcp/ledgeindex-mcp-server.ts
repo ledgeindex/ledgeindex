@@ -4,16 +4,12 @@ import { getMcpAuthContext } from "./mcp-auth-context.js";
 import { resolveMcpBearerUser } from "./oauth/resolve-mcp-bearer.js";
 import { askKnowledgeSourceTool } from "./tools/ask-knowledge-source-tool.js";
 import { getSourceSetTool } from "./tools/get-source-set-tool.js";
-import { listPersonalSourcesTool } from "./tools/list-personal-sources-tool.js";
-import { listPlatformSourcesTool } from "./tools/list-platform-sources-tool.js";
 import { listSourceSetsTool } from "./tools/list-source-sets-tool.js";
 
 export const ledgeindexMcpTools = {
-  list_personal_sources: listPersonalSourcesTool,
-  list_platform_sources: listPlatformSourcesTool,
-  ask_source: askKnowledgeSourceTool,
   list_source_sets: listSourceSetsTool,
   get_source_set: getSourceSetTool,
+  ask_source: askKnowledgeSourceTool,
 };
 
 export function createLedgeindexMcpServer() {
@@ -22,9 +18,9 @@ export function createLedgeindexMcpServer() {
     name: "LedgeIndex",
     version: "1.0.0",
     description:
-      "LedgeIndex RAG API. Workflow: (1) list_source_sets / get_source_set to pick a member source, (2) ask_source for relevance-pruned evidence hits from that source. Prefer slugs over UUIDs.",
+      "LedgeIndex RAG API. Discover sources only through source sets, then retrieve evidence from a member source.",
     instructions:
-      "Prefer source/set slugs over UUIDs. To query a grouped stack: list_source_sets → get_source_set (see member sources) → ask_source with the chosen source slug. ask_source returns score-pruned retrieval hits (url, title, score, chunk text) — no synthesized answer; reason over the hits yourself. Use list_personal_sources / list_platform_sources when not using a set.",
+      "Do not list the full personal or global catalog. Workflow: list_source_sets → get_source_set (member sources) → ask_source with a member slug. ask_source only works for sources in your sets. Returns score-pruned retrieval hits — reason over them yourself.",
     tools: ledgeindexMcpTools,
     mapAuthInfoToUser: async ({ authInfo }) => {
       const stored = getMcpAuthContext();

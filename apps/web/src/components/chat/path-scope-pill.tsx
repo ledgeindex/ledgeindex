@@ -24,6 +24,8 @@ type PathScopePillProps = {
   onPathScopeChange: (scope: string) => void;
   disabled?: boolean;
   className?: string;
+  /** Optional counts per scope id (`all` + each path id). */
+  pathCounts?: ReadonlyMap<string, number>;
 };
 
 function ScopeOptionButton({
@@ -60,6 +62,7 @@ export function PathScopePills({
   onPathScopeChange,
   disabled = false,
   className,
+  pathCounts,
 }: PathScopePillProps) {
   const entries = useMemo(
     () => buildPathScopeEntries(pathOptions),
@@ -80,6 +83,7 @@ export function PathScopePills({
       >
         {entries.map((entry) => {
           const selected = entry.id === pathScope;
+          const count = pathCounts?.get(entry.id);
           return (
             <button
               key={entry.id}
@@ -89,14 +93,26 @@ export function PathScopePills({
               disabled={disabled}
               onClick={() => onPathScopeChange(entry.id)}
               className={cn(
-                "inline-flex h-7 items-center rounded-full border px-2.5 text-[0.68rem] font-medium transition-colors",
+                "inline-flex h-7 items-center gap-1 rounded-full border px-2.5 text-[0.68rem] font-medium transition-colors",
                 "disabled:cursor-not-allowed disabled:opacity-50",
                 selected
                   ? "border-foreground/20 bg-foreground/10 text-foreground"
                   : "border-border bg-card-solid text-muted hover:border-foreground/15 hover:text-foreground",
               )}
             >
-              {entry.label}
+              <span>{entry.label}</span>
+              {typeof count === "number" ? (
+                <span
+                  className={cn(
+                    "font-mono text-[0.5625rem] tabular-nums opacity-70",
+                    count === 0 &&
+                      !selected &&
+                      "text-amber-700 dark:text-amber-400",
+                  )}
+                >
+                  {count}
+                </span>
+              ) : null}
             </button>
           );
         })}

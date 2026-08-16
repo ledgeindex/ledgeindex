@@ -16,6 +16,7 @@ export async function toSourceSetSummary(
       slug: source.slug,
       name: source.name,
       scope: source.scope ?? "personal",
+      sourceType: source.sourceMetadata?.sourceType ?? "unknown",
     });
   }
 

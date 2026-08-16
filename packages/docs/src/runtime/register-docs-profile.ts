@@ -19,6 +19,7 @@ import { accessRoutes } from "./routes/access.js";
 import { chatRoutes } from "./routes/chat.js";
 import { crawlFilterRoutes } from "./routes/crawl-filter.js";
 import { sourceSetRoutes } from "./routes/source-sets.js";
+import { billingRoutes } from "./routes/billing.js";
 import { repoProfileRoutes } from "./routes/repo-profile.js";
 
 /**
@@ -42,6 +43,7 @@ export async function registerDocsProfile(fastify: FastifyInstance): Promise<voi
   await fastify.register(chatRoutes);
   await fastify.register(crawlFilterRoutes);
   await fastify.register(sourceSetRoutes);
+  await fastify.register(billingRoutes);
   await fastify.register(repoProfileRoutes);
 }
 

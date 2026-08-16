@@ -1,27 +1,64 @@
 # Reference
 
-This tab is the map for **package APIs**. How to run web and desktop is under [Guides](/guides). Longer package guides live under [Docs](/docs).
+Package APIs for integrating LedgeIndex. **New here?** Start with [Guides → Getting started](/guides) (what to run and when). **How to run** web, CLI, Docker, and MCP is there; this section is API surfaces.
 
-## Packages
+## Which package?
 
-| Package | Start here |
-|---------|------------|
-| `@ledgeindex/core` | [Core overview](/docs/core), [Pipeline](/docs/core/pipeline) |
-| `@ledgeindex/docs` | [Docs profile](/docs/docs-profile) |
-| `@ledgeindex/profile` | [Profile](/docs/profile), [API & lenses](/docs/profile/api) |
-| `@ledgeindex/server` | [Server](/docs/server), [Options](/docs/server/options) |
-| `@ledgeindex/client` | HTTP client for the running API |
-| `@ledgeindex/model` | Shared model helpers |
-| `@ledgeindex/repo` | Shared persistence helpers used by docs |
+| You want to… | Package | Needs a server? |
+|--------------|---------|-----------------|
+| Crawl + ask + profile from a Node script or worker | [`@ledgeindex/sdk`](/reference/sdk) | No — in-process |
+| Call a running API (`:3010` web, `:3015` desktop) | [`@ledgeindex/client`](/reference/client) | Yes |
+| Terminal crawl, ask, profile | `ledgeindex` (CLI) | No — uses SDK |
+| MCP in Cursor / Claude Desktop | Running API `/mcp` | Yes — see [Set up MCP](/guides/setup-mcp) |
+| Host your own Fastify API | [`@ledgeindex/server`](/reference/server) | You run it |
+| Low-level crawl / chunk / embed / query only | [`@ledgeindex/core`](/reference/core) | No — compose yourself |
+| **Git repo index** — AST chunking, clone, walk | [`@ledgeindex/repo`](/reference/repo) | No — via SDK init + `indexRepoCheckout` |
+| **Sources, indexing, chat, MCP** (what the web app does) | [`@ledgeindex/docs`](/reference/docs-runtime) | Via server, SDK, or CLI |
+| Site research lenses (pricing, identity, …) | [`@ledgeindex/profile`](/reference/profile) or SDK [`profile`](/reference/sdk/profile) | In-process via SDK/CLI; HTTP via server |
+
+**Rule of thumb:** start with **SDK** (no server) or **Client** (server already running). Reach for **Core** only when you need custom pipelines.
+
+## HTTP API (web & desktop)
+
+The web UI and desktop app talk to Fastify on **`:3010`** (web) or **`:3015`** (desktop). Route reference:
+
+| Area | Page |
+|------|------|
+| Overview, base URLs, auth | [HTTP API](/reference/api) |
+| Sources, ingest, ask, profile, … | [Route map](/reference/api#route-map) |
+
+No OpenAPI spec yet — use [HTTP API](/reference/api) + [`@ledgeindex/client`](/reference/client) types.
+
+## Integrations
+
+| Package | Reference |
+|---------|-----------|
+| `@ledgeindex/sdk` | [Overview](/reference/sdk) · [createLedgeIndex](/reference/sdk/create-ledgeindex) · [crawl](/reference/sdk/crawl) · [ask](/reference/sdk/ask) · [askAcross](/reference/sdk/ask-across) · [profile](/reference/sdk/profile) · [Options](/reference/sdk/options) |
+| `@ledgeindex/client` | [Overview](/reference/client) · [HTTP API routes](/reference/api) · [Sources & ingest](/reference/client/sources) · [runWebCrawl](/reference/client/crawl) · [Auth](/reference/client/auth) |
+| `@ledgeindex/repo` | [Overview](/reference/repo) · [indexRepoCheckout](/reference/repo/index-checkout) · [cloneRepo](/reference/repo/clone) · [AST chunking](/reference/repo/ast-chunking) |
+| `ledgeindex` (CLI) | [Set up CLI](/guides/setup-cli) · [Index a repository](/guides/setup-repo) |
+
+## Primitives & hosting
+
+| Package | Reference |
+|---------|-----------|
+| `@ledgeindex/core` | [Core](/reference/core) — crawl, chunk, embed, query |
+| `@ledgeindex/repo` | [Repo](/reference/repo) — git index, AST chunking, clone |
+| `@ledgeindex/docs` | [Docs](/reference/docs-runtime) — sources, chat, MCP |
+| `@ledgeindex/profile` | [Profile](/reference/profile) — site research lenses |
+| `@ledgeindex/server` | [Server](/reference/server) — Fastify host |
+| `@ledgeindex/model` | [Model](/reference/model) |
 
 ## Install versions
 
-Published packages are versioned together (currently **0.1.7**). Prefer matching versions across `@ledgeindex/*` in an app.
+Published `@ledgeindex/*` packages are versioned together. Prefer matching versions in one app.
 
 ## Runtime check
+
+When an API is running:
 
 ```http
 GET /health/packages
 ```
 
-Returns `@ledgeindex/core` / `@ledgeindex/server` versions and the active profile list.
+Returns installed `@ledgeindex/*` versions and active profiles.

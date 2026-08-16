@@ -99,9 +99,9 @@ async function localSidecarBatchRerank(input: {
 }
 
 /**
- * Local BGE cross-encoder rerank.
+ * Local cross-encoder rerank.
  *
- * Default: in-process (`@huggingface/transformers`, Xenova/bge-reranker-base).
+ * Default: in-process (`@huggingface/transformers`, Xenova/ms-marco-MiniLM-L-6-v2).
  * Optional fallback: HTTP sidecar (`LEDGEINDEX_LOCAL_RERANK_URL`, default :8080).
  * Force sidecar-only with `LEDGEINDEX_LOCAL_RERANK_MODE=sidecar`.
  */

@@ -59,7 +59,13 @@ function parseIconSize(sizes: string | undefined): number {
   return Math.max(Number(match[1]), Number(match[2])) || 0;
 }
 
-function extractFaviconUrl($: CheerioAPI, pageUrl: string): string | undefined {
+type FaviconExtraction = {
+  url?: string;
+  /** True when a `<link rel="icon">` (or similar) tag was found on the page. */
+  hasLinkTag: boolean;
+};
+
+function extractFaviconUrl($: CheerioAPI, pageUrl: string): FaviconExtraction {
   const candidates: { url: string; score: number }[] = [];
 
   $("link[rel]").each((_, el) => {
@@ -78,10 +84,199 @@ function extractFaviconUrl($: CheerioAPI, pageUrl: string): string | undefined {
 
   if (candidates.length > 0) {
     candidates.sort((a, b) => b.score - a.score);
-    return candidates[0]!.url;
+    return { url: candidates[0]!.url, hasLinkTag: true };
   }
 
-  return resolveAbsoluteUrl(pageUrl, "/favicon.ico");
+  return {
+    url: resolveAbsoluteUrl(pageUrl, "/favicon.ico"),
+    hasLinkTag: false,
+  };
+}
+
+function extractOgImage($: CheerioAPI, pageUrl: string): string | undefined {
+  return (
+    resolveAbsoluteUrl(pageUrl, $('meta[property="og:image"]').attr("content")) ||
+    resolveAbsoluteUrl(pageUrl, $('meta[name="twitter:image"]').attr("content")) ||
+    resolveAbsoluteUrl(
+      pageUrl,
+      $('meta[name="twitter:image:src"]').attr("content"),
+    )
+  );
+}
+
+const BRANDING_ASSET_TIMEOUT_MS = 10_000;
+
+function isImageContentType(contentType: string): boolean {
+  const normalized = contentType.toLowerCase();
+  if (!normalized) return true;
+  return (
+    normalized.startsWith("image/") ||
+    normalized.includes("svg") ||
+    normalized.includes("icon")
+  );
+}
+
+async function isReachableBrandingAsset(
+  url: string | undefined,
+  userAgent: string,
+): Promise<boolean> {
+  if (!url) return false;
+
+  const request = async (method: "HEAD" | "GET", headers?: Record<string, string>) => {
+    const response = await fetch(url, {
+      method,
+      headers: { "User-Agent": userAgent, ...headers },
+      redirect: "follow",
+      signal: AbortSignal.timeout(BRANDING_ASSET_TIMEOUT_MS),
+    });
+    return response;
+  };
+
+  try {
+    let response = await request("HEAD");
+
+    if (response.status === 405 || response.status === 501) {
+      response = await request("GET", { Range: "bytes=0-0" });
+    }
+
+    if (!response.ok) return false;
+
+    return isImageContentType(response.headers.get("content-type") ?? "");
+  } catch {
+    return false;
+  }
+}
+
+async function validateBrandingAsset(
+  url: string | undefined,
+  userAgent: string,
+): Promise<string | undefined> {
+  if (!url) return undefined;
+  return (await isReachableBrandingAsset(url, userAgent)) ? url : undefined;
+}
+
+function isSiteRootUrl(url: string): boolean {
+  try {
+    const pathname = new URL(url).pathname.replace(/\/+$/, "") || "/";
+    return pathname === "/";
+  } catch {
+    return false;
+  }
+}
+
+function siteRootUrl(url: string): string {
+  return new URL("/", url).href;
+}
+
+/** Common multi-part public suffixes (best-effort; not a full PSL). */
+const MULTI_PART_PUBLIC_SUFFIXES = new Set([
+  "co.uk",
+  "org.uk",
+  "ac.uk",
+  "gov.uk",
+  "com.au",
+  "net.au",
+  "org.au",
+  "co.jp",
+  "co.nz",
+  "co.za",
+]);
+
+function registrableDomain(hostname: string): string {
+  const host = hostname.replace(/^www\./i, "").toLowerCase();
+  const parts = host.split(".").filter(Boolean);
+  if (parts.length <= 2) return host;
+
+  const lastTwo = parts.slice(-2).join(".");
+  if (MULTI_PART_PUBLIC_SUFFIXES.has(lastTwo) && parts.length >= 3) {
+    return parts.slice(-3).join(".");
+  }
+
+  return lastTwo;
+}
+
+function apexOriginUrl(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    const hostname = parsed.hostname.toLowerCase();
+    const domain = registrableDomain(hostname);
+    const hostWithoutWww = hostname.replace(/^www\./i, "");
+
+    if (hostWithoutWww === domain) return undefined;
+
+    return `${parsed.protocol}//${domain}/`;
+  } catch {
+    return undefined;
+  }
+}
+
+function brandingFallbackUrls(startUrl: string): string[] {
+  const urls: string[] = [];
+  const seenOrigins = new Set<string>();
+
+  const add = (candidate: string | undefined) => {
+    if (!candidate) return;
+    try {
+      const origin = new URL(candidate).origin;
+      if (seenOrigins.has(origin)) return;
+      seenOrigins.add(origin);
+      urls.push(new URL("/", candidate).href);
+    } catch {
+      // ignore invalid URLs
+    }
+  };
+
+  if (!isSiteRootUrl(startUrl)) {
+    add(siteRootUrl(startUrl));
+  }
+
+  add(apexOriginUrl(startUrl));
+
+  return urls;
+}
+
+async function fetchPageBranding(
+  pageUrl: string,
+  userAgent: string,
+): Promise<{ ogImage?: string; faviconUrl?: string }> {
+  try {
+    const { html, contentType } = await fetchPageHtml(pageUrl, userAgent);
+    if (isPdfContentType(contentType)) return {};
+
+    const $ = cheerio.load(html);
+    const favicon = extractFaviconUrl($, pageUrl);
+    const [ogImage, faviconUrl] = await Promise.all([
+      validateBrandingAsset(extractOgImage($, pageUrl), userAgent),
+      validateBrandingAsset(favicon.url, userAgent),
+    ]);
+    return { ogImage, faviconUrl };
+  } catch {
+    return {};
+  }
+}
+
+async function fetchBrandingFallbacks(
+  startUrl: string,
+  userAgent: string,
+  needs: { ogImage: boolean; favicon: boolean },
+): Promise<{ ogImage?: string; faviconUrl?: string }> {
+  let ogImage: string | undefined;
+  let faviconUrl: string | undefined;
+
+  for (const fallbackUrl of brandingFallbackUrls(startUrl)) {
+    const branding = await fetchPageBranding(fallbackUrl, userAgent);
+    if (needs.ogImage && !ogImage && branding.ogImage) {
+      ogImage = branding.ogImage;
+    }
+    if (needs.favicon && !faviconUrl && branding.faviconUrl) {
+      faviconUrl = branding.faviconUrl;
+    }
+    if ((!needs.ogImage || ogImage) && (!needs.favicon || faviconUrl)) {
+      break;
+    }
+  }
+
+  return { ogImage, faviconUrl };
 }
 
 export async function preflightStartUrl(
@@ -113,12 +308,28 @@ export async function preflightStartUrl(
     cleanTitleForSourceName(ogTitle || documentTitle) ||
     hostnameLabel(url);
 
-  const ogImage =
-    resolveAbsoluteUrl(url, $('meta[property="og:image"]').attr("content")) ||
-    resolveAbsoluteUrl(url, $('meta[name="twitter:image"]').attr("content")) ||
-    resolveAbsoluteUrl(url, $('meta[name="twitter:image:src"]').attr("content"));
+  let ogImage = extractOgImage($, url);
 
-  const faviconUrl = extractFaviconUrl($, url);
+  const favicon = extractFaviconUrl($, url);
+  let faviconUrl = favicon.url;
+
+  [ogImage, faviconUrl] = await Promise.all([
+    validateBrandingAsset(ogImage, userAgent),
+    validateBrandingAsset(faviconUrl, userAgent),
+  ]);
+
+  if (!ogImage || !faviconUrl) {
+    const fallbackBranding = await fetchBrandingFallbacks(url, userAgent, {
+      ogImage: !ogImage,
+      favicon: !faviconUrl,
+    });
+    if (!ogImage && fallbackBranding.ogImage) {
+      ogImage = fallbackBranding.ogImage;
+    }
+    if (!faviconUrl && fallbackBranding.faviconUrl) {
+      faviconUrl = fallbackBranding.faviconUrl;
+    }
+  }
 
   const metadata = await classifySource({
     url,

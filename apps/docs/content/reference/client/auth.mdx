@@ -1,0 +1,88 @@
+# Auth & URLs
+
+Configure which API `@ledgeindex/client` talks to and how requests are authenticated.
+
+## API base URL
+
+| Export | Purpose |
+|--------|---------|
+| `resolveApiBaseUrl` | Read from `NEXT_PUBLIC_LEDGEINDEX_API_URL` / env |
+| `getLedgeIndexApiBaseUrl` | Current base URL (after set) |
+| `setLedgeIndexApiBaseUrl` | Override base URL at runtime |
+| `resolveRemoteApiBaseUrl` | Hosted API for desktop Public tab |
+
+```ts
+import {
+  createLedgeIndexClient,
+  resolveApiBaseUrl,
+  setLedgeIndexApiBaseUrl,
+} from "@ledgeindex/client";
+
+setLedgeIndexApiBaseUrl("http://127.0.0.1:3010");
+
+createLedgeIndexClient({
+  apiBaseUrl: resolveApiBaseUrl(),
+});
+```
+
+### Defaults
+
+| Context | Typical URL |
+|---------|-------------|
+| Web dev | `http://localhost:3010` |
+| Desktop Personal | `http://127.0.0.1:3015` |
+| Production | Your hosted API origin |
+
+## Authentication
+
+| Export | Purpose |
+|--------|---------|
+| `setApiAuthTokenGetter` | Async function returning `Authorization` headers (your auth provider) |
+| `setLedgeIndexApiKey` | Static API key for `X-Api-Key` style auth |
+| `resolveLedgeIndexApiKey` | Read configured API key |
+| `authenticatedFetch` | Low-level fetch with auth applied |
+
+### Bearer token
+
+```ts
+import { setApiAuthTokenGetter } from "@ledgeindex/client";
+
+setApiAuthTokenGetter(async () => {
+  const token = await getSessionToken();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+});
+```
+
+### API key
+
+```ts
+import { setLedgeIndexApiKey } from "@ledgeindex/client";
+
+setLedgeIndexApiKey(process.env.LEDGEINDEX_API_KEY!);
+```
+
+Create keys in the web UI under **API keys** when `LEDGEINDEX_AUTH_REQUIRED=1`.
+
+## createLedgeIndexClient
+
+Thin wrapper for arbitrary routes:
+
+```ts
+const client = createLedgeIndexClient({
+  apiBaseUrl: "http://127.0.0.1:3010",
+  getAuthHeaders: async () => ({ Authorization: `Bearer ${token}` }),
+});
+
+await client.getHealth();
+const res = await client.get("/health/packages");
+console.log(await res.json());
+```
+
+## Errors
+
+`LedgeIndexApiError` (alias `KnowledgeIndexApiError`) is thrown on non-2xx API responses with `status` and parsed body when available.
+
+## Related
+
+- [Sources & ingest](/reference/client/sources)
+- [Set up web](/guides/setup-web)

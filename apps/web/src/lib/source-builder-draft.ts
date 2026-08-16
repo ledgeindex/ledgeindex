@@ -262,7 +262,7 @@ export function createSampleDraft(): SourceBuilderDraft {
 - **Sources** — indexed corpora (personal or platform-wide)
 - **Retrieval** — embed → rerank → score-pruned chunks tied to real pages
 - **Ask** — synthesize answers with citations, or retrieve-only for agents
-- **MCP** — \`ask_source\`, \`list_personal_sources\`, \`list_platform_sources\`, source sets
+- **MCP** — \`list_source_sets\`, \`get_source_set\`, \`ask_source\`
 
 ### Who it is for
 
@@ -385,18 +385,17 @@ for (const cite of result.citations ?? []) {
             id: createId("pin"),
             kind: "markdown",
             title: "Connect Cursor or Claude",
-            markdown: `LedgeIndex ships an MCP server so agents can list sources and ask them without a custom tool layer.
+            markdown: `LedgeIndex ships an MCP server so agents can query knowledge through your source sets.
 
 ### Typical tools
 
 | Tool | Purpose |
 | --- | --- |
-| \`list_personal_sources\` | Sources you own |
-| \`list_platform_sources\` | Global / shared corpora |
-| \`list_source_sets\` / \`get_source_set\` | Grouped stacks |
-| \`ask_source\` | Grounded Q&A on a source slug |
+| \`list_source_sets\` | Your configured source groups |
+| \`get_source_set\` | Member sources in a set |
+| \`ask_source\` | Retrieve evidence from a set member |
 
-Flow: list sources or open a set → pick a slug → \`ask_source\`.`,
+Flow: \`list_source_sets\` → \`get_source_set\` → \`ask_source\` with a member slug.`,
           },
           {
             id: createId("pin"),

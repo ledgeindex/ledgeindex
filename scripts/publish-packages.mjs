@@ -28,9 +28,11 @@ const PACKAGES = [
   "@ledgeindex/profile",
   "@ledgeindex/docs",
   "@ledgeindex/client",
+  "@ledgeindex/sdk",
   "@ledgeindex/ag",
   "@ledgeindex/server",
   "@ledgeindex/model",
+  "ledgeindex",
 ];
 
 function argValue(flag) {

@@ -24,7 +24,8 @@ export function SourceHostingToggle({
       onChange={onChange}
       disabled={disabled}
       size={size}
-      ariaLabel="Storage"
+      label="Storage"
+      ariaLabel="Where the index is stored"
       className={cn(className)}
     />
   );

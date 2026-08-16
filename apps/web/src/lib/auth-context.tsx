@@ -122,6 +122,8 @@ type AuthContextValue = {
   isAuthenticated: boolean;
   isAdmin: boolean;
   accessStatus: AccessStatus;
+  /** Mirrors API `LEDGEINDEX_APPLY_PLAN_LIMITS` — single env on the server. */
+  planLimitsEnabled: boolean;
   /** False while an account waits for (or was refused) early-access approval. */
   hasAppAccess: boolean;
   signInWithGoogle: () => Promise<void>;
@@ -135,6 +137,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [serverRole, setServerRole] = useState<UserRole | null>(null);
+  const [planLimitsEnabled, setPlanLimitsEnabled] = useState(false);
   const [loading, setLoading] = useState(isFirebaseConfigured);
 
   const getAuthToken = useCallback(async (forceRefresh = false) => {
@@ -157,6 +160,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!userUid) {
       setServerRole(null);
+      setPlanLimitsEnabled(false);
       return;
     }
 
@@ -165,7 +169,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void (async () => {
       try {
         const response = await getAuthMe();
-        if (!cancelled) setServerRole(response.role);
+        if (!cancelled) {
+          setServerRole(response.role);
+          setPlanLimitsEnabled(Boolean(response.planLimitsEnabled));
+        }
       } catch (error) {
         if (cancelled) return;
         if (error instanceof KnowledgeIndexApiError && error.status === 401) {
@@ -173,14 +180,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (refreshed) {
             try {
               const response = await getAuthMe();
-              if (!cancelled) setServerRole(response.role);
+              if (!cancelled) {
+                setServerRole(response.role);
+                setPlanLimitsEnabled(Boolean(response.planLimitsEnabled));
+              }
               return;
             } catch {
               // fall through
             }
           }
         }
-        if (!cancelled) setServerRole(null);
+        if (!cancelled) {
+          setServerRole(null);
+          setPlanLimitsEnabled(false);
+        }
       }
     })();
 
@@ -253,6 +266,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } else {
         setProfile(null);
         setServerRole(null);
+        setPlanLimitsEnabled(false);
         playgroundEnsuredForUid.clear();
         playgroundEnsureFailedForUid.clear();
       }
@@ -308,6 +322,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: Boolean(user),
         isAdmin,
         accessStatus,
+        planLimitsEnabled,
         hasAppAccess: accessStatus === "approved",
         signInWithGoogle: handleSignInWithGoogle,
         signOut: handleSignOut,

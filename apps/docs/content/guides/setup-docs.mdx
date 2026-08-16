@@ -1,0 +1,187 @@
+# Index documentation
+
+Crawl a **public docs site** (Mintlify, Docusaurus, Astro Starlight, plain HTML, …), chunk and embed the pages, then **ask questions with URL citations** — same persistent store as repo indexing.
+
+**Docs crawl** (`li.crawl`) and **repo index** (`li.indexRepo`) are different ingest paths. Docs use the web crawl pipeline: discover pages → extract markdown → chunk → embed. Citations point at **page URLs and section titles**, not file:line ranges.
+
+## What you need
+
+| Step | Model key? | Time (typical) |
+|------|------------|----------------|
+| **Crawl + index** | No (local FastEmbed) | ~1–10 min depending on `maxPages` |
+| **Ask / retrieve** | Yes for a full **answer**; no for retrieval-only | ~100 ms retrieval + LLM for chat |
+| **`--filter` / `autoFilter`** | Yes (LLM URL cleanup) | Extra pass after crawl |
+| **`--enrich` / `enrichExamples`** | Yes (example extraction) | One LLM pass per page |
+
+Indexes are **persistent** under `LEDGEINDEX_DATA_DIR` (default `~/.ledgeindex/data` for SDK/CLI). Index once; query many times.
+
+## Quick path — SDK script
+
+From the monorepo (or your app with `@ledgeindex/sdk` built). No running API required.
+
+```bash
+node scripts/index-docs.mjs https://docs.stagehand.dev/ stagehand-docs
+node scripts/query-repo.mjs stagehand-docs "how do I use act()"
+```
+
+Optional flags: `--max-pages N`, `--filter` (LLM URL cleanup), `--enrich` (example chunks for planner workflows).
+
+### SDK in code
+
+```ts
+import { createLedgeIndex } from "@ledgeindex/sdk";
+
+const li = await createLedgeIndex({
+  keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+});
+
+const result = await li.crawl({
+  url: "https://docs.stagehand.dev/",
+  name: "stagehand-docs",
+  maxPages: 200,
+  onProgress: (u) => console.log(u.phase, u.detail),
+});
+
+const { answer, citations } = await li.ask(
+  result.sourceId,
+  "how do I call act() from the SDK?",
+);
+console.log(answer);
+```
+
+See [Set up SDK](/guides/setup-sdk). CLI equivalent: `ledgeindex crawl <url>`.
+
+## Ask after index
+
+### CLI
+
+```bash
+ledgeindex ask stagehand-docs "how do I use act()"
+```
+
+`ask` accepts **source id**, **slug**, or partial **name**.
+
+### SDK
+
+```ts
+const { answer, citations, insufficient } = await li.ask(
+  "stagehand-docs",
+  "what is the difference between act and observe?",
+);
+
+for (const cite of citations) {
+  console.log(cite.score.toFixed(2), cite.name);
+  console.log(" ", cite.url);
+}
+```
+
+### HTTP API
+
+```http
+POST /api/sources/:id/ask
+Content-Type: application/json
+
+{
+  "message": "how do I install Stagehand?",
+  "mode": "retrieve-only"
+}
+```
+
+See [Chat & indexing — ask](/reference/api/chat).
+
+## Repo + docs together
+
+Index the **implementation** and the **official docs** as separate sources, then ask across both:
+
+```bash
+node scripts/index-repo.mjs https://github.com/browserbase/stagehand stagehand
+node scripts/index-docs.mjs https://docs.stagehand.dev/ stagehand-docs
+
+# Picker — LLM chooses which source(s) to read
+node scripts/ask-across.mjs stagehand,stagehand-docs "how is act() implemented end to end?"
+
+# Always read every pinned source
+node scripts/ask-across.mjs --all stagehand,stagehand-docs "how is act() implemented end to end?"
+```
+
+SDK:
+
+```ts
+await li.saveSourceSet({
+  slug: "stagehand-stack",
+  name: "Stagehand stack",
+  sources: ["stagehand", "stagehand-docs"],
+});
+
+const { answer, pickedSources } = await li.askAcross(
+  "how is act() implemented from the public API to the browser click?",
+  {
+    sources: ["stagehand", "stagehand-docs"],
+    sourceMode: "all", // or "picker" (default)
+  },
+);
+```
+
+CLI:
+
+```bash
+ledgeindex ask --all --sources stagehand,stagehand-docs "how does act() work?"
+```
+
+Repo sources return **file:line** citations; docs sources return **page URL** citations. The explore pipeline merges hits fairly across sources.
+
+## Index via web UI
+
+1. Start the [web stack](/guides/setup-web) (`:3004` UI, `:3010` API).
+2. **Sources → New** → enter the docs root URL.
+3. Tune `maxPages`, include/exclude patterns, optional JS rendering.
+4. Run crawl; when finished, open **Chat** on that source.
+
+Personal sources on the **Just me** tab use the local LibSQL index by default.
+
+## What gets indexed
+
+| Included | Notes |
+|----------|--------|
+| HTML pages reachable from `startUrls` | Respects `maxPages`, robots, and your include/exclude patterns |
+| Extracted markdown | Headings become section metadata on chunks |
+| Optional example chunks | With `enrichExamples: true` — code, setup, config blocks for `queryExamples` |
+
+| Excluded by default | Override |
+|---------------------|----------|
+| Binary assets, raw JSON APIs | `crawlConfig` patterns |
+| Off-domain links | `includePatterns` / `excludePatterns` |
+| Heavy JS-only content | `renderJs: true` in `crawlConfig` |
+
+Many doc sites expose `llms.txt` — preflight may use it to seed discovery. See [SDK crawl](/reference/sdk/crawl).
+
+## Retrieval stack (docs sources)
+
+Same vector store as repo sources; ranking is tuned for prose:
+
+| Piece | Behavior |
+|-------|----------|
+| Dense | FastEmbed (local) or Gemini (pgvector stack) |
+| Lexical | FTS on titles, headings, body text |
+| Fusion | Reciprocal rank fusion before rerank |
+| Rerank | Local cross-encoder or Cohere when configured |
+| Coverage | Query rewrite + insufficient-context detection before the agent answer |
+
+## Data layout
+
+| Path | Contents |
+|------|----------|
+| `LEDGEINDEX_DATA_DIR` | Source metadata (`dev-store.json`) |
+| `…/ledgeindex-vector.db` | LibSQL vectors + lexical FTS |
+| `…/page-snapshots.json` | Optional page snapshots during crawl |
+
+Re-crawl the same URL to refresh content; vectors for that source are replaced on re-ingest.
+
+## Related
+
+- [Index a repository](/guides/setup-repo) — GitHub code with file:line citations
+- [Set up SDK](/guides/setup-sdk) — `createLedgeIndex`, `crawl`, `ask`, `askAcross`
+- [askAcross](/reference/sdk/ask-across)
+- [Set up CLI](/guides/setup-cli) — `ledgeindex crawl`, `ledgeindex ask`
+- [SDK crawl](/reference/sdk/crawl) — `autoFilter`, `enrichExamples`, `crawlConfig`
+- [SDK ask](/reference/sdk/ask)

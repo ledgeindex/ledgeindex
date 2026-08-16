@@ -1,0 +1,100 @@
+# indexRepoCheckout
+
+Index a git checkout into a LedgeIndex **source**: walk files → chunk → embed → store vectors + lexical rows.
+
+## `indexRepoCheckout(input)`
+
+```ts
+import { indexRepoCheckout } from "@ledgeindex/repo";
+
+const result = await indexRepoCheckout({
+  sourceId: "…",
+  projectId: "…",
+  githubUrl: "https://github.com/org/repo",
+  ref: "main",              // optional branch/tag/commit
+  sourceSlug: "my-repo",    // optional — canonical URLs
+  maxFiles: 5000,           // optional cap
+  includeTests: false,        // default — skip test/eval/fixture paths
+});
+```
+
+Provide **either** `checkoutPath` (absolute local path) **or** `githubUrl` (shallow clone into checkout cache). When only `githubUrl` is set, `cloneRepo` runs first.
+
+### `IndexRepoCheckoutInput`
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `sourceId` | string | Target source (must exist in store) |
+| `projectId` | string | Owning project id |
+| `checkoutPath` | string? | Local git checkout readable by this process |
+| `githubUrl` | string? | `https://github.com/owner/repo` — cloned when no path |
+| `ref` | string? | Branch, tag, or commit (clone only) |
+| `sourceSlug` | string? | Used in canonical page URLs |
+| `maxFiles` | number? | Stop after N indexable files |
+| `includeTests` | boolean? | Include test/eval/fixture files (default `false`) |
+| `includeReadme` | boolean? | Include `.md` / `.mdx` (default `false`) |
+| `extensions` | string[]? | Narrow to these extensions only (e.g. `[".ts", ".tsx"]`) |
+
+### Return value
+
+Extends `IndexPagesResult` from `@ledgeindex/core` plus:
+
+| Field | Description |
+|-------|-------------|
+| `fileCount` | Indexable files processed |
+| `pageCount` | Pages written |
+| `chunkCount` | Chunks stored |
+| `astChunkedFiles` | Code files split by AST chunker |
+| `astFallbackFiles` | Code files that fell back to recursive splitter |
+| `exportedSymbolCount` | Exported symbols across checkout |
+| `importEdgeCount` | Import edges extracted (for future repo map) |
+| `skippedTests` | Test paths skipped |
+| `skippedExtension` | Unsupported extensions skipped |
+| `skippedTooLarge` | Files over `REPO_MAX_FILE_BYTES` (200 KB) |
+| `pageKindCounts` | Counts by `source`, `docs`, `test`, … |
+| `checkoutPath` | Resolved checkout directory |
+| `commitSha` | HEAD when cloned (not set for local-only path) |
+
+Re-running on the same `sourceId` replaces that source’s chunks (full re-index of the checkout).
+
+## `loadRepoIndexPages(input)`
+
+Lower-level: read checkout → `IndexPageInput[]` **without** embedding or store writes. Use when you want custom ingest logic but the same walker + chunker.
+
+```ts
+import { loadRepoIndexPages } from "@ledgeindex/repo";
+
+const { pages, fileSymbols, fileCount, astChunkedFiles } = loadRepoIndexPages({
+  checkoutPath: "/path/to/repo",
+  githubUrl: "https://github.com/org/repo",
+  sourceSlug: "my-repo",
+  includeTests: false,
+  maxFiles: 1000,
+});
+```
+
+`fileSymbols` holds per-file `imports` and `exports` for profiling / future repo-map features.
+
+## Chunking behavior
+
+| File kind | Strategy |
+|-----------|----------|
+| Code (`.ts`, `.js`, …) | AST symbol boundaries via `analyzeCodeFile` — [AST chunking](/reference/repo/ast-chunking) |
+| Docs (`.md`, `.mdx`) | `semantic-markdown` (same as crawled docs) |
+| AST parse failure | Fallback to recursive language splitter |
+
+Each page gets `filePath`, `category`, `section`, and `pageKind` on the `IndexPageInput` row so every chunk inherits repo metadata.
+
+## HTTP equivalent
+
+```http
+POST /api/sources/:id/index-repo
+```
+
+See [Index repo API](/reference/api/index-repo).
+
+## Related
+
+- [cloneRepo](/reference/repo/clone)
+- [Paths & walker](/reference/repo/paths)
+- [Index a repository](/guides/setup-repo)

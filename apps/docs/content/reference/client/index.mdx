@@ -1,6 +1,8 @@
 # @ledgeindex/client
 
-Minimal HTTP client for a running LedgeIndex server.
+HTTP client for a **running** LedgeIndex API (web `:3010`, desktop sidecar `:3015`, or hosted).
+
+**REST route map:** [HTTP API](/reference/api) — every `/api/*` path the web and desktop apps use.
 
 ## Install
 
@@ -8,56 +10,49 @@ Minimal HTTP client for a running LedgeIndex server.
 npm install @ledgeindex/client
 ```
 
-## Exports
+## API map
 
-| Export | Purpose |
-|--------|---------|
-| `createLedgeIndexClient` | `get` / `post` / `getHealth` against `apiBaseUrl` |
-| `resolveApiBaseUrl` | Resolve base URL from env / defaults |
+| Area | Exports | Page |
+|------|---------|------|
+| HTTP wrapper | `createLedgeIndexClient`, `resolveApiBaseUrl` | [Auth & URLs](/reference/client/auth) |
+| Sources | `listSources`, `createSource`, `getSource`, `updateSource`, `deleteSource`, … | [Sources & ingest](/reference/client/sources) |
+| Crawl orchestrator | `runWebCrawl`, `defaultWebCrawlConfig` | [runWebCrawl](/reference/client/crawl) |
+| Ask | `askSource` | [Sources & ingest](/reference/client/sources) |
+| Preflight / crawl helpers | `preflightSite`, `proposeCrawlFilterRemovals`, `getCrawlProgress`, … | [Sources & ingest](/reference/client/sources) |
 
-## Setup
-
-```ts
-import { createLedgeIndexClient, resolveApiBaseUrl } from "@ledgeindex/client";
-```
-
-## Usage
+## Quick start
 
 ```ts
-const client = createLedgeIndexClient({
+import {
+  createLedgeIndexClient,
+  resolveApiBaseUrl,
+  listSources,
+  askSource,
+} from "@ledgeindex/client";
+
+// Point at your API
+createLedgeIndexClient({
   apiBaseUrl: resolveApiBaseUrl() ?? "http://127.0.0.1:3010",
-  getAuthHeaders: async () => ({
-    Authorization: `Bearer ${token}`,
-  }),
 });
 
-const health = await client.getHealth();
-const res = await client.post("/some/route", { hello: "world" });
+const sources = await listSources("personal");
+const answer = await askSource(sources[0]!.id, "How do I install?");
+console.log(answer.answer);
 ```
 
-## Options
+## vs `@ledgeindex/sdk`
 
-```ts
-type LedgeIndexClientOptions = {
-  apiBaseUrl: string;
-  getAuthHeaders?: () => Promise<Record<string, string>>;
-};
-```
+| | Client | SDK |
+|---|--------|-----|
+| Transport | HTTP to Fastify API | In-process (`@ledgeindex/docs`) |
+| Server | Required | Not required |
+| Auth | Bearer / API key | Keys in env / options |
+| Same crawl flow | `runWebCrawl` (HTTP) | `li.crawl` (in-process) |
 
-## Example
-
-```ts
-import { createLedgeIndexClient } from "@ledgeindex/client";
-
-const client = createLedgeIndexClient({
-  apiBaseUrl: "http://127.0.0.1:3010",
-});
-
-console.log(await client.getHealth());
-const packages = await client.get("/health/packages");
-console.log(await packages.json());
-```
+Use **Client** when the UI or a remote API is already running. Use **SDK** for scripts and workers without starting a server.
 
 ## Related
 
-- [createLedgeIndexServer](/reference/server/create-server)
+- [Set up web](/guides/setup-web) — start API on `:3010`
+- [Set up desktop](/guides/setup-desktop) — sidecar on `:3015`
+- [@ledgeindex/sdk](/reference/sdk) — no-server alternative

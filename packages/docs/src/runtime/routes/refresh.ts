@@ -24,7 +24,12 @@ export async function refreshRoutes(fastify: FastifyInstance) {
 
     try {
       const body = (request.body ?? {}) as { mode?: RefreshMode };
-      const mode = body.mode === "selected" ? "selected" : "discover";
+      const mode: RefreshMode =
+        body.mode === "selected"
+          ? "selected"
+          : body.mode === "probe"
+            ? "probe"
+            : "discover";
       const snapshot = await startSourceRefreshCheck(id, { mode });
       return { snapshot };
     } catch (error) {

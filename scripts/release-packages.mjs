@@ -42,10 +42,14 @@ const PACKAGES = [
   "profile",
   "docs",
   "client",
+  "sdk",
   "ag",
   "server",
   "model",
 ];
+
+/** npm name differs from @ledgeindex/<dir> (CLI publishes as `ledgeindex`). */
+const NAMED_PACKAGES = new Map([["ledgeindex", "cli"]]);
 
 /** Private workspace members: npm links these, so a range that merely matches is enough. */
 const WORKSPACE_CONSUMERS = [
@@ -95,12 +99,16 @@ function run(command, cwd) {
   execSync(command, { cwd, stdio: "inherit" });
 }
 
-const packageDirs = new Map(
-  PACKAGES.map((name) => [
+const packageDirs = new Map([
+  ...PACKAGES.map((name) => [
     `@ledgeindex/${name}`,
     path.join(ledgeRoot, "packages", name),
   ]),
-);
+  ...[...NAMED_PACKAGES.entries()].map(([npmName, dirName]) => [
+    npmName,
+    path.join(ledgeRoot, "packages", dirName),
+  ]),
+]);
 
 /** Current version of each publishable package, straight from the workspace. */
 function workspaceVersions() {

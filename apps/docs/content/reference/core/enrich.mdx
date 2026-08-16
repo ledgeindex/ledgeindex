@@ -2,6 +2,8 @@
 
 Analyze page markdown and extract **grounded** code / setup / usage / config examples. Never invents examples — skips when the page has none or no LLM is configured.
 
+Used during ingest when `enrichExamples: true` (CLI `--enrich`, SDK `enrichExamples`) — **off by default, experimental**. Example chunks feed **`queryExamples` / `findExamples`** and the example catalog — what **planner and builder workflows** use when they need grounded code, not just prose RAG. See [SDK crawl — enrich examples](/reference/sdk/crawl#enrich-examples-enrichexamples).
+
 ## Exports
 
 | Export | Purpose |

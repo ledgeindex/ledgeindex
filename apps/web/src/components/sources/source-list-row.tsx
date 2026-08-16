@@ -17,6 +17,10 @@ import {
   SourceVersionSelect,
 } from "@/components/sources/source-version-select";
 import { formatUrlLabel } from "@/components/sources/source-display";
+import {
+  resolveStartUrls,
+  SourceStartUrlsHint,
+} from "@/components/sources/source-start-urls-hint";
 import { cn } from "@/lib/utils";
 import type { SourceSummary } from "@/lib/ledgeindex-api";
 
@@ -71,6 +75,7 @@ export function SourceListRowDragPreview({
   rank?: number;
 }) {
   const path = formatUrlLabel(source.startUrl || source.name);
+  const startUrls = resolveStartUrls(source);
   return (
     <div className="flex h-12 w-[min(36rem,calc(100vw-2rem))] items-center gap-2 rounded-lg border border-accent/40 bg-card-solid px-2.5 shadow-lg">
       <GripVertical className="size-3.5 shrink-0 text-muted" aria-hidden />
@@ -81,7 +86,14 @@ export function SourceListRowDragPreview({
         </p>
         <p className="truncate font-mono text-[0.5625rem] leading-3.5 text-muted">
           <span>{source.slug}</span>
-          {path ? <span className="text-muted/70"> · {path}</span> : null}
+          {startUrls.length > 0 ? (
+            <span className="inline-flex min-w-0 max-w-[min(100%,12rem)] items-center gap-1 align-middle">
+              <span className="text-muted/50"> · </span>
+              <SourceStartUrlsHint urls={startUrls} />
+            </span>
+          ) : path ? (
+            <span className="text-muted/70"> · {path}</span>
+          ) : null}
         </p>
       </div>
       {typeof rank === "number" ? (
@@ -149,6 +161,10 @@ export function SourceListRow({
   const activeSource = useMemo(
     () => resolveSourceVersion(source, selectedVersionId),
     [source, selectedVersionId],
+  );
+  const startUrls = useMemo(
+    () => resolveStartUrls(activeSource),
+    [activeSource],
   );
   const pathLabel = formatUrlLabel(activeSource.startUrl || activeSource.name);
   const canChat = activeSource.chunkCount > 0;
@@ -264,7 +280,7 @@ export function SourceListRow({
             className="max-w-full truncate [&_button]:max-w-full [&_button]:px-0 [&_button]:py-0 [&_button]:hover:border-transparent [&_button]:hover:bg-transparent [&_span]:text-[0.8125rem] [&_span]:leading-4"
           />
         </div>
-        <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
+        <div className="flex min-w-0 flex-wrap items-center gap-1 overflow-hidden">
           <div
             className="min-w-0 shrink truncate"
             onClick={(event) => {
@@ -282,7 +298,18 @@ export function SourceListRow({
               className="max-w-full [&_button]:px-0 [&_button]:py-0 [&_button]:hover:border-transparent [&_button]:hover:bg-transparent"
             />
           </div>
-          {pathLabel ? (
+          {startUrls.length > 0 ? (
+            <div
+              className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
+              <span className="shrink-0 font-mono text-[0.5625rem] text-muted/50">
+                ·
+              </span>
+              <SourceStartUrlsHint urls={startUrls} />
+            </div>
+          ) : pathLabel ? (
             <p className="min-w-0 truncate font-mono text-[0.5625rem] leading-3.5 text-muted/75">
               · {pathLabel}
             </p>

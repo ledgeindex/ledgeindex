@@ -12,6 +12,13 @@ import {
   listSourceSetSummaries,
   validateSourceIdsForUser,
 } from "../services/source-set-summary.js";
+import {
+  assertCanCreateSourceSet,
+  assertSourceIdsWithinSetLimit,
+  ensureDefaultSourceSetForLimitedUser,
+  getSourceSetLimitsForUser,
+  SourceSetLimitError,
+} from "../services/source-set-limits.js";
 
 const createSourceSetBodySchema = z.object({
   name: z.string().min(1).max(200),
@@ -32,8 +39,12 @@ export async function sourceSetRoutes(fastify: FastifyInstance) {
     const userId = await requireUser(request, reply);
     if (!userId) return;
 
-    const sourceSets = await listSourceSetSummaries(userId);
-    return { sourceSets };
+    await ensureDefaultSourceSetForLimitedUser(userId);
+    const [sourceSets, limits] = await Promise.all([
+      listSourceSetSummaries(userId),
+      getSourceSetLimitsForUser(userId),
+    ]);
+    return { sourceSets, meta: { limits } };
   });
 
   fastify.post("/api/source-sets", async (request, reply) => {
@@ -54,7 +65,37 @@ export async function sourceSetRoutes(fastify: FastifyInstance) {
       });
     }
 
+    try {
+      await assertCanCreateSourceSet(userId);
+    } catch (error) {
+      if (error instanceof SourceSetLimitError) {
+        return reply.status(403).send({
+          error: "Source set limit reached",
+          message: error.message,
+          code: error.code,
+          current: error.current,
+          limit: error.limit,
+        });
+      }
+      throw error;
+    }
+
     const sourceIds = await validateSourceIdsForUser(body.data.sourceIds, userId);
+    try {
+      await assertSourceIdsWithinSetLimit(userId, sourceIds);
+    } catch (error) {
+      if (error instanceof SourceSetLimitError) {
+        return reply.status(403).send({
+          error: "Source limit reached",
+          message: error.message,
+          code: error.code,
+          current: error.current,
+          limit: error.limit,
+        });
+      }
+      throw error;
+    }
+
     const sourceSet = await getStore().createSourceSet({
       ownerUserId: userId,
       name: body.data.name,
@@ -114,6 +155,23 @@ export async function sourceSetRoutes(fastify: FastifyInstance) {
       body.data.sourceIds !== undefined
         ? await validateSourceIdsForUser(body.data.sourceIds, userId)
         : undefined;
+
+    if (sourceIds !== undefined) {
+      try {
+        await assertSourceIdsWithinSetLimit(userId, sourceIds);
+      } catch (error) {
+        if (error instanceof SourceSetLimitError) {
+          return reply.status(403).send({
+            error: "Source limit reached",
+            message: error.message,
+            code: error.code,
+            current: error.current,
+            limit: error.limit,
+          });
+        }
+        throw error;
+      }
+    }
 
     const sourceSet = await getStore().updateSourceSet(existing.id, {
       ...body.data,

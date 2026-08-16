@@ -1,0 +1,87 @@
+# Options & env
+
+Configuration for `@ledgeindex/sdk` — options object, environment variables, and retrieval stacks.
+
+## Options vs env
+
+`createLedgeIndex(options)` values override env when both are set. Keys in `options.keys` override the corresponding `*_API_KEY` env vars.
+
+## Model keys
+
+| Key / env | Used for |
+|-----------|----------|
+| `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini chat, crawl URL filter, Gemini embeddings (pgvector stack) |
+| `OPENAI_API_KEY` | OpenAI chat, crawl URL filter |
+| `DEEPSEEK_API_KEY` | DeepSeek chat, crawl URL filter |
+| `COHERE_API_KEY` | Cohere rerank on `ask` |
+
+At least one chat model key is required **only for `ask`**, or when you pass `autoFilter: true` / `enrichExamples: true` on crawl. Plain crawl + index uses local FastEmbed and does not need OpenAI/Gemini/DeepSeek.
+
+## Provider
+
+| `provider` / `LEDGEINDEX_PROVIDER` | Pruner backend |
+|-----------------------------------|----------------|
+| `google` | Gemini |
+| `openai` | OpenAI |
+| `deepseek` | DeepSeek |
+| omitted | Auto: google → deepseek → openai (first key found) |
+
+## Data & identity
+
+| Option / env | Default | Purpose |
+|------------|---------|---------|
+| `dataDir` / `LEDGEINDEX_DATA_DIR` | `~/.ledgeindex/data` | Sources, vectors, workflow state |
+| `localUserId` / `LEDGEINDEX_LOCAL_USER_ID` | `ledgeindex-sdk-local` | Personal source owner id |
+
+## Retrieval stacks
+
+**Default (local)** — no extra config:
+
+| Piece | Value |
+|-------|-------|
+| Embeddings | FastEmbed `bge-small-en-v1.5` (384-d) |
+| Vector store | LibSQL file under `dataDir` |
+| Rerank | Local BGE, or Cohere if key set |
+
+**Cloud (pgvector)** — shares indexes with Docker postgres compose / web when env matches:
+
+```ts
+await createLedgeIndex({
+  vectorBackend: "pgvector",
+  postgresUrl: "postgresql://ledgeindex:ledgeindex@localhost:5432/ledgeindex",
+  keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+});
+```
+
+Or via env:
+
+```bash
+export POSTGRES_CONNECTION_STRING=postgresql://...
+export LEDGEINDEX_VECTOR_BACKEND=pgvector
+export GOOGLE_GENERATIVE_AI_API_KEY=...
+```
+
+Indexes are **not portable** between stacks (384-d FastEmbed vs 1536-d Gemini).
+
+## Rerank
+
+| Option / env | Purpose |
+|--------------|---------|
+| `rerankBackend` / `LEDGEINDEX_RERANK_BACKEND` | `local`, `cohere`, `cohere-auto`, `local-auto`, … |
+
+## resolveOptions
+
+Inspect resolved config without starting the runtime:
+
+```ts
+import { resolveOptions, getDefaultDataDir } from "@ledgeindex/sdk";
+
+console.log(getDefaultDataDir());
+console.log(resolveOptions({ provider: "google", keys: { google: "..." } }));
+```
+
+## Related
+
+- [Set up SDK](/guides/setup-sdk)
+- [Set up Docker](/guides/setup-docker) — Postgres + Gemini stack
+- [createLedgeIndex](/reference/sdk/create-ledgeindex)

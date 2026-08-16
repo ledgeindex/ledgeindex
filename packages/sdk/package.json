@@ -1,0 +1,50 @@
+{
+  "name": "@ledgeindex/sdk",
+  "version": "0.1.11",
+  "description": "In-process LedgeIndex SDK — crawl, index, ask, and profile without a running HTTP server",
+  "type": "module",
+  "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
+  "author": "LedgeIndex",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ledgeindex/ledgeindex.git",
+    "directory": "ledgeindex/packages/sdk"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run clean && npm run build",
+    "build": "tsup",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+  },
+  "dependencies": {
+    "@ledgeindex/core": "^0.1.11",
+    "@ledgeindex/docs": "^0.1.11",
+    "@ledgeindex/profile": "^0.1.11",
+    "@ledgeindex/repo": "^0.1.11",
+    "@mastra/core": "^1.51.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsup": "^8.5.1",
+    "typescript": "^7.0.2"
+  },
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts"
+}

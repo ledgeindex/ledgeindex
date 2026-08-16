@@ -1,0 +1,176 @@
+# Set up SDK
+
+`@ledgeindex/sdk` runs LedgeIndex **in-process** — crawl, index, ask, and profile without a Fastify server. The CLI (`ledgeindex`) is built on this package.
+
+Not sure this is the right path? See [Getting started](/guides) for CLI vs web vs MCP and what LedgeIndex does not cover.
+
+## What you need
+
+- Node.js **22.13+**
+- **Crawl + index:** no model key required (local FastEmbed + LibSQL by default)
+- **Ask**, **`autoFilter: true`**, **`enrichExamples: true`**, or **`profile`:** a model key
+- Optional: `COHERE_API_KEY` for Cohere rerank (otherwise local BGE rerank)
+
+## Install
+
+```bash
+npm install @ledgeindex/sdk
+```
+
+From a clone of [ledgeindex/ledgeindex](https://github.com/ledgeindex/ledgeindex):
+
+```bash
+npm install
+npm run build -w @ledgeindex/sdk
+```
+
+## Quick start
+
+```ts
+import { createLedgeIndex } from "@ledgeindex/sdk";
+
+const li = await createLedgeIndex({
+  keys: {
+    google: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    cohere: process.env.COHERE_API_KEY, // optional
+  },
+  provider: "google", // or omit for auto: google → deepseek → openai
+});
+
+const crawl = await li.crawl({
+  url: "https://docs.example.com",
+  maxPages: 20,
+  onProgress: (update) => console.error(update.phase, update.detail),
+});
+
+const answer = await li.ask(crawl.sourceId, "How do I install?");
+console.log(answer.answer);
+```
+
+## API
+
+### `createLedgeIndex(options?)`
+
+Initializes Mastra, storage, and vector backends once per process. Returns a `LedgeIndex` handle.
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `dataDir` | `~/.ledgeindex/data` | Sources, LibSQL vectors, workflow state |
+| `localUserId` | `ledgeindex-sdk-local` | Owner id for personal sources |
+| `keys` | env vars | `openai`, `google`, `deepseek`, `cohere` |
+| `provider` | auto | Force `google` \| `openai` \| `deepseek` |
+| `vectorBackend` | `libsql` | `libsql` (FastEmbed) or `pgvector` (Gemini) |
+| `postgresUrl` | — | Required for `pgvector` |
+| `rerankBackend` | cohere if key else local | Override rerank on `ask` |
+
+### `li.crawl(options)`
+
+Full web crawl → URL filter → ingest pipeline. Same flow as the CLI and web UI.
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `url` | — | Start URL (required) |
+| `name` | from preflight | Source display name |
+| `maxPages` | 1000 | Cap discovered pages |
+| `autoFilter` | `false` | Opt-in LLM URL cleanup (requires model key) |
+| `enrichExamples` | `false` | Opt-in example extraction during ingest — [what it does](/reference/sdk/crawl#enrich-examples-enrichexamples) |
+| `crawlConfig` | — | Override include/exclude patterns, selectors, `renderJs`, … |
+| `scope` | `personal` | `personal` or `global` |
+| `onProgress` | — | `(update) => void` callback |
+
+Returns `{ sourceId, runId, name, url, pageCount, chunkCount }`.
+
+#### Enrich examples
+
+**Off by default. Experimental.** When `enrichExamples: true`, an LLM pass per page builds **example chunks** (code, setup, config, API responses) for `queryExamples` / `findExamples` — used by **planner and builder workflows** that need copy-pasteable snippets from your docs. See [crawl — enrich examples](/reference/sdk/crawl#enrich-examples-enrichexamples).
+
+**When to use:** builder/planner automation, example catalog retrieval, code-heavy SDK docs. **When to skip (default):** `ask` / chat over prose only, no model key, fastest crawl.
+
+### `li.ask(sourceIdOrSlug, question, options?)`
+
+Runs the same RAG stack as source chat: query rewrite → vector search → rerank → coverage → agent answer.
+
+Accepts **source id**, **slug**, or partial **name** (same as CLI). Indexes are **persistent** under `dataDir` — you index once, then ask many times without re-embedding.
+
+Repo sources return **file path and line numbers** on code chunks when available. See [Index a repository](/guides/setup-repo).
+
+### `li.askAcross(question, options?)`
+
+Ask across **several sources** (repo + docs, multiple packages, …) with one answer. The Explore pipeline picks which sources to read (`sourceMode: "picker"`, default) or reads all pinned sources (`sourceMode: "all"`). **Requires a chat model key** — no retrieve-only mode.
+
+```ts
+await li.saveSourceSet({
+  name: "Stagehand stack",
+  slug: "stagehand-stack",
+  sources: ["stagehand", "stagehand-docs"],
+});
+
+const { answer, pickedSources } = await li.askAcross(
+  "how is act() implemented end to end?",
+  { sourceSet: "stagehand-stack", sourceMode: "all" },
+);
+```
+
+Details: [askAcross reference](/reference/sdk/ask-across) · [Index documentation](/guides/setup-docs#repo--docs-together).
+
+### `li.listSourceSets()` / `li.saveSourceSet(options)`
+
+Pin sources ahead of time for routed asks. `saveSourceSet` upserts by slug.
+
+### `li.listSources()` / `li.resolveSource(token)`
+
+List indexed sources or resolve a slug/name to a source id.
+
+### `li.profile(url, options?)` / `runProfile`
+
+Site research profile via `@ledgeindex/profile` — [14 lenses](/reference/profile/lenses), structured company/docs output. **Requires a model key.** Does not use the index store.
+
+```ts
+const { profile } = await li.profile("https://example.com", {
+  lenses: ["identity", "capabilities"],
+});
+
+// Or without createLedgeIndex:
+import { runProfile } from "@ledgeindex/sdk";
+const result = await runProfile(url, { lenses: ["pricing"] }, { keys: { google: "…" } });
+```
+
+Details: [profile reference](/reference/sdk/profile).
+
+## Retrieval stack
+
+**Default (no extra config):** FastEmbed (384-d) + LibSQL file + local BGE rerank.
+
+**Cloud stack** — Gemini embeddings (1536-d) + Postgres/pgvector:
+
+```ts
+const li = await createLedgeIndex({
+  vectorBackend: "pgvector",
+  postgresUrl: "postgresql://ledgeindex:ledgeindex@localhost:5432/ledgeindex",
+  keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+});
+```
+
+Indexes are **not portable** between stacks (different embedding dimensions). See [Set up Docker](/guides/setup-docker) for a local Postgres compose file.
+
+## Environment variables
+
+Same as the [CLI guide](/guides/setup-cli): `LEDGEINDEX_DATA_DIR`, `LEDGEINDEX_PROVIDER`, `LEDGEINDEX_VECTOR_BACKEND`, `POSTGRES_CONNECTION_STRING`, model keys, etc. Options passed to `createLedgeIndex` override env when both are set.
+
+## vs other packages
+
+| Package | When to use |
+|---------|-------------|
+| `@ledgeindex/sdk` | Scripts, workers, tests — no HTTP server |
+| `ledgeindex` (CLI) | Terminal crawl, ask, profile |
+| `@ledgeindex/client` | HTTP client when API is already running |
+| MCP | Cursor / Claude Desktop — see [Set up MCP](/guides/setup-mcp) |
+
+## Related
+
+- [Index documentation](/guides/setup-docs)
+- [askAcross](/reference/sdk/ask-across)
+- [Index a repository](/guides/setup-repo)
+- [Set up CLI](/guides/setup-cli)
+- [Set up MCP](/guides/setup-mcp)
+- [@ledgeindex/sdk reference](/reference/sdk)

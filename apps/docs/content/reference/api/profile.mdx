@@ -1,0 +1,70 @@
+# Profile
+
+HTTP routes from `@ledgeindex/profile` when the server runs with `profiles` including **`profile`**. Async **site-runs** mirror `profileSite` in-process; **landscape runs** use Exa search.
+
+## Lenses
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/profile/lenses` | List lens ids and labels (14 built-in) |
+| `GET` | `/api/profile/health` | Profile module health |
+
+Lens shapes: [Profile lenses](/reference/profile/lenses).
+
+## Site profile runs
+
+Same engine as SDK [`runProfile`](/reference/sdk/profile) / CLI `ledgeindex profile`, but **async** over HTTP.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/profile/site-runs` | Start run → **202** `{ run }` with `id`, `status` |
+| `GET` | `/api/profile/site-runs/:id` | Poll until `done` — includes merged `profile` object |
+
+### `POST /api/profile/site-runs` body
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `url` | string (URL) | Root URL to profile |
+| `lenses` | string[] | Optional subset; default all 14 |
+| `maxPages` | number | Cap catalog crawl (max 500) |
+| `sitemapOnly` | boolean | Sitemap-only discovery |
+| `seedPages` | `{ url, title, markdown? }[]` | Skip crawl; use seeded catalog |
+| `model` / `backend` / `modelId` | | Chat model selection (same as enrich) |
+
+```bash
+curl -s -X POST http://127.0.0.1:3010/api/profile/site-runs \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com","lenses":["identity","capabilities"]}'
+```
+
+Poll:
+
+```bash
+curl -s http://127.0.0.1:3010/api/profile/site-runs/<runId>
+```
+
+## Landscape runs (Exa)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/profile/runs` | Start Exa landscape search (`EXA_API_KEY` required) |
+| `GET` | `/api/profile/runs/:id` | Get landscape run result |
+
+Returns **503** `exa_not_configured` when `EXA_API_KEY` is unset.
+
+## Per-source profile (docs profile)
+
+Attach profile output to an indexed source (not the async runner above):
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `PUT` | `/api/sources/:id/site-profile` | Save profile on source |
+| `DELETE` | `/api/sources/:id/site-profile` | Clear |
+
+See [Sources](/reference/api/sources).
+
+## Related
+
+- [Profile lenses](/reference/profile/lenses)
+- [SDK profile](/reference/sdk/profile) — in-process, no polling
+- [@ledgeindex/profile](/reference/profile)

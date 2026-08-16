@@ -7,7 +7,17 @@ import {
   formatPlannerCatalogPreview,
   pageCatalogPathLabel,
 } from "@/lib/catalog-view";
-import { getMetadataCatalog, type MetadataCatalog } from "@/lib/ledgeindex-api";
+import { getMetadataCatalog, getSource, type MetadataCatalog } from "@/lib/ledgeindex-api";
+import {
+  pageBelongsToSourcePath,
+  pathOptionsFromStartUrls,
+  pathRootSegment,
+} from "@/lib/source-paths";
+import { PathScopePills } from "@/components/chat/path-scope-pill";
+import {
+  resolveStartUrls,
+  SourceStartUrlsHint,
+} from "@/components/sources/source-start-urls-hint";
 import { cn } from "@/lib/utils";
 
 function formatUpdatedAt(value: string | undefined): string {
@@ -25,19 +35,25 @@ function formatUpdatedAt(value: string | undefined): string {
 export function SourceCatalogDialog({
   sourceId,
   sourceName,
+  startUrls: startUrlsProp,
   open,
   onOpenChange,
 }: {
   sourceId: string;
   sourceName: string;
+  startUrls?: readonly string[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const dialogRef = useRef<HTMLDialogElement>(null);
   const [catalog, setCatalog] = useState<MetadataCatalog | null>(null);
+  const [startUrls, setStartUrls] = useState<string[]>(
+    () => [...(startUrlsProp ?? [])],
+  );
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
+  const [pathScope, setPathScope] = useState("all");
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -52,10 +68,20 @@ export function SourceCatalogDialog({
     let cancelled = false;
     setLoading(true);
     setError(null);
+    setPathScope("all");
 
-    void getMetadataCatalog(sourceId)
-      .then((response) => {
-        if (!cancelled) setCatalog(response.catalog);
+    void Promise.all([getMetadataCatalog(sourceId), getSource(sourceId)])
+      .then(([catalogResponse, sourceResponse]) => {
+        if (cancelled) return;
+        setCatalog(catalogResponse.catalog);
+        const roots =
+          startUrlsProp && startUrlsProp.length > 0
+            ? [...startUrlsProp]
+            : resolveStartUrls({
+                startUrl: sourceResponse.source.config.startUrls?.[0],
+                startUrls: sourceResponse.source.config.startUrls,
+              });
+        setStartUrls(roots);
       })
       .catch((err) => {
         if (!cancelled) {
@@ -69,12 +95,68 @@ export function SourceCatalogDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, sourceId]);
+  }, [open, sourceId, startUrlsProp]);
+
+  const pathOptions = useMemo(
+    () => pathOptionsFromStartUrls(startUrls),
+    [startUrls],
+  );
 
   const pages = catalog?.pages ?? [];
+
+  const pathPageCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    counts.set("all", pages.length);
+    for (const option of pathOptions) {
+      counts.set(
+        option.id,
+        pages.filter((page) =>
+          pageBelongsToSourcePath(page.url, option.startUrl, {
+            crawlRoot: page.crawlRoot,
+            category: page.category,
+          }),
+        ).length,
+      );
+    }
+    return counts;
+  }, [pages, pathOptions]);
+
+  const pagesForPath = useMemo(() => {
+    if (pathScope === "all") return pages;
+    const selected = pathOptions.find((option) => option.id === pathScope);
+    if (!selected) return pages;
+    return pages.filter((page) =>
+      pageBelongsToSourcePath(page.url, selected.startUrl, {
+        crawlRoot: page.crawlRoot,
+        category: page.category,
+      }),
+    );
+  }, [pages, pathOptions, pathScope]);
+
+  const indexedPathSegments = useMemo(() => {
+    const segments = new Map<string, number>();
+    for (const page of pages) {
+      const seg =
+        page.category?.toLowerCase() ||
+        (() => {
+          try {
+            return (
+              new URL(page.url).pathname.split("/").filter(Boolean)[0]?.toLowerCase() ??
+              ""
+            );
+          } catch {
+            return "";
+          }
+        })();
+      if (!seg) continue;
+      segments.set(seg, (segments.get(seg) ?? 0) + 1);
+    }
+    return [...segments.entries()].sort((a, b) => b[1] - a[1]);
+  }, [pages]);
+
   const filteredPages = useMemo(
-    () => filterCatalogPages(pages, filter),
-    [pages, filter],
+    () => filterCatalogPages(pagesForPath, filter),
+    [pagesForPath, filter],
   );
 
   return (
@@ -93,9 +175,21 @@ export function SourceCatalogDialog({
               <h2 className="truncate text-base font-semibold">{sourceName}</h2>
               {catalog ? (
                 <p className="mt-1 text-xs text-muted">
-                  {pages.length} page{pages.length === 1 ? "" : "s"} · updated{" "}
+                  {pagesForPath.length} page{pagesForPath.length === 1 ? "" : "s"}
+                  {pathScope !== "all" ? " in path" : ""} · updated{" "}
                   {formatUpdatedAt(catalog.updatedAt)}
                 </p>
+              ) : null}
+              {startUrls.length > 0 ? (
+                <div
+                  className="mt-2 flex flex-wrap items-center gap-1.5"
+                  onClick={(event) => event.stopPropagation()}
+                >
+                  <span className="font-mono text-[0.5rem] font-semibold tracking-[0.1em] text-muted uppercase">
+                    Roots
+                  </span>
+                  <SourceStartUrlsHint urls={startUrls} />
+                </div>
               ) : null}
             </div>
             <button
@@ -134,6 +228,14 @@ export function SourceCatalogDialog({
           </details>
 
           <section className="space-y-3">
+            {pathOptions.length >= 2 ? (
+              <PathScopePills
+                pathOptions={pathOptions}
+                pathScope={pathScope}
+                onPathScopeChange={setPathScope}
+                pathCounts={pathPageCounts}
+              />
+            ) : null}
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <p className="font-mono text-[0.5625rem] font-semibold tracking-[0.1em] text-muted uppercase">
                 All indexed pages
@@ -156,7 +258,28 @@ export function SourceCatalogDialog({
             {!loading && !error && filteredPages.length === 0 ? (
               <p className="text-sm text-muted">
                 {catalog
-                  ? "No pages match your filter."
+                  ? pathScope !== "all" && pages.length > 0
+                    ? (() => {
+                        const selected = pathOptions.find(
+                          (option) => option.id === pathScope,
+                        );
+                        const seg = selected
+                          ? pathRootSegment(selected.startUrl)
+                          : "";
+                        const indexedSummary = indexedPathSegments
+                          .map(([name, count]) => `${name} (${count})`)
+                          .join(", ");
+                        return `No indexed pages under this crawl root${
+                          seg ? ` (/${seg})` : ""
+                        }. ${
+                          indexedSummary
+                            ? `Indexed URL paths: ${indexedSummary}.`
+                            : ""
+                        } Run a paths-only update in Source updater if this path should have pages.`;
+                      })()
+                    : filter.trim()
+                      ? "No pages match your filter."
+                      : "No catalog for this set yet — index pages first."
                   : "No catalog for this set yet — index pages first."}
               </p>
             ) : null}
@@ -194,11 +317,13 @@ export function SourceCatalogDialog({
 export function SourceCatalogButton({
   sourceId,
   sourceName,
+  startUrls,
   disabled = false,
   className,
 }: {
   sourceId: string;
   sourceName: string;
+  startUrls?: readonly string[];
   disabled?: boolean;
   className?: string;
 }) {
@@ -220,6 +345,7 @@ export function SourceCatalogButton({
       <SourceCatalogDialog
         sourceId={sourceId}
         sourceName={sourceName}
+        startUrls={startUrls}
         open={open}
         onOpenChange={setOpen}
       />

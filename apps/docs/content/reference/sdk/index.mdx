@@ -1,0 +1,55 @@
+# @ledgeindex/sdk
+
+High-level in-process API — crawl, index, ask, and profile **without** a running HTTP server. Same stack as the CLI (`ledgeindex`).
+
+## Install
+
+```bash
+npm install @ledgeindex/sdk
+```
+
+## API map
+
+| Area | Exports | Page |
+|------|---------|------|
+| Entry | `createLedgeIndex`, `LedgeIndex` | [createLedgeIndex](/reference/sdk/create-ledgeindex) |
+| Crawl | `li.crawl`, `runWebCrawl`, `defaultWebCrawlConfig` | [crawl](/reference/sdk/crawl) |
+| Ask | `li.ask`, `askQuestion` | [ask](/reference/sdk/ask) |
+| Ask across sources | `li.askAcross`, `askAcrossSources` | [askAcross](/reference/sdk/ask-across) |
+| Source sets | `li.listSourceSets`, `li.saveSourceSet` | [askAcross](/reference/sdk/ask-across#pin-sources-ahead-of-time-source-sets) |
+| Profile | `li.profile`, `runProfile` | [profile](/reference/sdk/profile) |
+| Sources | `li.listSources`, `li.resolveSource` | [createLedgeIndex](/reference/sdk/create-ledgeindex) |
+| Config | `resolveOptions`, `initRuntime`, `getDefaultDataDir` | [Options & env](/reference/sdk/options) |
+
+## Quick start
+
+```ts
+import { createLedgeIndex } from "@ledgeindex/sdk";
+
+const li = await createLedgeIndex({
+  keys: { google: process.env.GOOGLE_GENERATIVE_AI_API_KEY },
+});
+
+const { sourceId } = await li.crawl({
+  url: "https://docs.example.com",
+  maxPages: 20,
+});
+
+const { answer } = await li.ask(sourceId, "How do I install?");
+console.log(answer);
+```
+
+## vs `@ledgeindex/client`
+
+| | SDK | Client |
+|---|-----|--------|
+| Server | Not required | API on `:3010` / `:3015` |
+| Data dir | `~/.ledgeindex/data` (default) | Server’s data store |
+| Auth | Keys in options / env | Bearer token or API key |
+| Best for | Scripts, CI, workers | Web UI, remote API, desktop sidecar |
+
+## Related
+
+- [Set up SDK](/guides/setup-sdk)
+- [Set up CLI](/guides/setup-cli) — terminal wrapper around this package
+- [@ledgeindex/client](/reference/client) — when the API is already running

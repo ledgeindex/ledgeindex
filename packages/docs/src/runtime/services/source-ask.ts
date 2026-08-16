@@ -19,12 +19,31 @@ export type SourceAskHit = {
   title: string;
   score: number;
   section?: string;
+  /** Repo sources only: where in the checkout this hit came from. */
+  filePath?: string;
+  startLine?: number;
+  endLine?: number;
+  symbolName?: string;
+  symbolKind?: string;
+};
+
+/** One cited page or code span — not the indexed "source" corpus. */
+export type AskCitation = {
+  /** Page title, or `file:line` for repo hits. */
+  name: string;
+  url: string;
+  score: number;
+  filePath?: string;
+  startLine?: number;
+  endLine?: number;
 };
 
 export type SourceAskResult = {
   mode: "agent" | "retrieve-only";
   answer: string;
   chunks: SourceAskHit[];
+  /** Deduped citations (name + url) derived from `chunks`. */
+  citations: AskCitation[];
   insufficient: boolean;
   rerankBackend?: RerankBackend;
 };
@@ -64,7 +83,9 @@ function formatRetrieveOnlyAnswer(
 
   if (opts?.evidenceStyle) {
     const lines = chunks.map((chunk, index) => {
-      const label = chunk.title || chunk.url;
+      const label = chunk.filePath
+        ? `${chunk.filePath}${chunk.startLine ? `:${chunk.startLine}-${chunk.endLine ?? chunk.startLine}` : ""}`
+        : chunk.title || chunk.url;
       return `${index + 1}. [${label}](${chunk.url}) (score ${chunk.score.toFixed(2)}) — ${chunk.text}`;
     });
     return [`Top matches for **${query}**:`, "", ...lines].join("\n");
@@ -89,13 +110,18 @@ function canRunAskAgent(model?: AskSourceModelSelection): boolean {
   return hasLlmKey();
 }
 
-function toHits(
+export function toAskHits(
   chunks: Array<{
     text: string;
     url: string;
     title: string;
     score: number;
     section?: string;
+    filePath?: string;
+    startLine?: number;
+    endLine?: number;
+    symbolName?: string;
+    symbolKind?: string;
   }>,
 ): SourceAskHit[] {
   return chunks.map((chunk) => ({
@@ -104,7 +130,54 @@ function toHits(
     title: chunk.title,
     score: chunk.score,
     ...(chunk.section ? { section: chunk.section } : {}),
+    // Code hits carry their exact span, so evidence can cite a line range.
+    ...(chunk.filePath ? { filePath: chunk.filePath } : {}),
+    ...(chunk.startLine ? { startLine: chunk.startLine } : {}),
+    ...(chunk.endLine ? { endLine: chunk.endLine } : {}),
+    ...(chunk.symbolName ? { symbolName: chunk.symbolName } : {}),
+    ...(chunk.symbolKind ? { symbolKind: chunk.symbolKind } : {}),
   }));
+}
+
+export function citationsFromHits(chunks: SourceAskHit[]): AskCitation[] {
+  const map = new Map<string, AskCitation>();
+
+  for (const chunk of chunks) {
+    const key =
+      chunk.filePath && chunk.startLine
+        ? `${chunk.url}:${chunk.startLine}-${chunk.endLine ?? chunk.startLine}`
+        : chunk.url;
+    const name =
+      chunk.filePath && chunk.startLine
+        ? `${chunk.filePath}:${chunk.startLine}-${chunk.endLine ?? chunk.startLine}`
+        : chunk.title || chunk.url;
+    const existing = map.get(key);
+    if (!existing || chunk.score > existing.score) {
+      map.set(key, {
+        name,
+        url: chunk.url,
+        score: chunk.score,
+        ...(chunk.filePath ? { filePath: chunk.filePath } : {}),
+        ...(chunk.startLine ? { startLine: chunk.startLine } : {}),
+        ...(chunk.endLine ? { endLine: chunk.endLine } : {}),
+      });
+    }
+  }
+
+  return [...map.values()].sort((a, b) => b.score - a.score);
+}
+
+function buildAskResult(input: {
+  mode: SourceAskResult["mode"];
+  answer: string;
+  chunks: SourceAskHit[];
+  insufficient: boolean;
+  rerankBackend?: RerankBackend;
+}): SourceAskResult {
+  return {
+    ...input,
+    citations: citationsFromHits(input.chunks),
+  };
 }
 
 async function retrievePrunedHits(
@@ -119,7 +192,7 @@ async function retrievePrunedHits(
   });
 
   return {
-    chunks: toHits(retrieval.pruned),
+    chunks: toAskHits(retrieval.pruned),
     insufficient: retrieval.insufficient,
   };
 }
@@ -148,7 +221,7 @@ async function askSourceInner(
       rerankBackend: rerankBackend ?? null,
     });
 
-    return {
+    return buildAskResult({
       mode: "retrieve-only",
       answer: formatRetrieveOnlyAnswer(message, chunks, insufficient, {
         evidenceStyle: forceRetrieveOnly,
@@ -156,7 +229,7 @@ async function askSourceInner(
       chunks,
       insufficient,
       ...(rerankBackend ? { rerankBackend } : {}),
-    };
+    });
   }
 
   const requestContext = new RequestContext();
@@ -184,7 +257,7 @@ async function askSourceInner(
   });
 
   const meta = readRetrievalMeta(requestContext);
-  const chunks = toHits(meta?.chunks ?? []);
+  const chunks = toAskHits(meta?.chunks ?? []);
 
   logVerbose("Source ask agent finished", "SourceAsk", {
     sourceId,
@@ -200,13 +273,13 @@ async function askSourceInner(
       ? response.text
       : formatRetrieveOnlyAnswer(message, chunks, insufficient);
 
-  return {
+  return buildAskResult({
     mode: "agent",
     answer,
     chunks,
     insufficient,
     ...(rerankBackend ? { rerankBackend } : {}),
-  };
+  });
 }
 
 export async function askSource(

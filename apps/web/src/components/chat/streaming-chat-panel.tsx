@@ -61,8 +61,10 @@ import {
 } from "@/components/chat/path-scope-pill";
 import {
   PromptInput,
+  PromptInputFooter,
   PromptInputSubmit,
   PromptInputTextarea,
+  PromptInputTools,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
 import { Cloud } from "lucide-react";
@@ -568,76 +570,85 @@ export function StreamingChatPanel({
               )}
             >
               <PromptInput
-                className="flex-row items-end gap-1 p-1.5"
+                className="gap-0 p-0"
                 onSubmit={handleSubmit}
               >
                 <PromptInputTextarea
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   placeholder={resolvedPlaceholder}
-                  className="min-h-9 max-h-28 flex-1 px-2.5 py-2"
+                  className="min-h-10 max-h-28 w-full px-3 py-2.5"
                 />
-                <div className="flex shrink-0 items-center gap-1 self-end pb-0.5">
-                  {!showRetrievalPanel ? (
-                    <PathScopePill
-                      pathOptions={resolvedPathOptions}
-                      pathScope={pathScope}
-                      onPathScopeChange={setPathScope}
-                      disabled={busy}
-                    />
-                  ) : null}
-                  {showDeepThinkingToggle &&
-                  thinkingLevel === undefined &&
-                  canUseDeepThinking ? (
-                    <DeepThinkingToggle
-                      enabled={deepThinkingEnabled}
-                      onChange={setDeepThinkingEnabled}
-                      disabled={busy}
-                      title={
-                        deepThinkingEnabled
-                          ? "Deep thinking on — slower, may show reasoning"
-                          : "Enable deep thinking for slower, more thorough answers"
-                      }
-                    />
-                  ) : null}
-                  {cloudSource ? (
-                    <span
-                      title="Cloud source — hosted retrieval and models"
-                      aria-label="Cloud retrieval path"
-                      className={cn(
-                        "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card-solid px-2",
-                        "text-muted",
-                      )}
-                    >
-                      <Cloud className="size-3.5" aria-hidden />
-                      <span className="hidden text-xs font-medium sm:inline">
-                        Cloud
+                <PromptInputFooter className="border-t border-border/60 px-2 py-1.5">
+                  <PromptInputTools className="gap-1">
+                    {!showRetrievalPanel ? (
+                      <PathScopePill
+                        pathOptions={resolvedPathOptions}
+                        pathScope={pathScope}
+                        onPathScopeChange={setPathScope}
+                        disabled={busy}
+                      />
+                    ) : null}
+                    {showDeepThinkingToggle &&
+                    thinkingLevel === undefined &&
+                    canUseDeepThinking ? (
+                      <DeepThinkingToggle
+                        enabled={deepThinkingEnabled}
+                        onChange={setDeepThinkingEnabled}
+                        disabled={busy}
+                        title={
+                          deepThinkingEnabled
+                            ? "Deep thinking on — slower, may show reasoning"
+                            : "Enable deep thinking for slower, more thorough answers"
+                        }
+                      />
+                    ) : null}
+                    {cloudSource ? (
+                      <span
+                        title="Cloud-hosted index — always ranked with Cohere"
+                        aria-label="Ranking: Cohere cloud"
+                        className={cn(
+                          "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card-solid px-2",
+                          "text-muted",
+                        )}
+                      >
+                        <span
+                          aria-hidden
+                          className="hidden font-mono text-[0.5625rem] tracking-[0.1em] uppercase sm:inline"
+                        >
+                          Ranking
+                        </span>
+                        <Cloud className="size-3.5" aria-hidden />
+                        <span className="hidden text-xs font-medium sm:inline">
+                          Cloud
+                        </span>
                       </span>
-                    </span>
-                  ) : (
-                    <CloudLocalToggle
-                      value={retrievalPath}
-                      disabled={busy}
-                      ariaLabel="Retrieval path"
-                      localTitle="Local retrieval — MiniLM rerank on this machine"
-                      cloudTitle="Cloud retrieval — Cohere rerank (answer model still from picker)"
-                      onChange={(next) => {
-                        const backend =
-                          next === "cloud"
-                            ? CLOUD_SOURCE_RERANK_BACKEND_ID
-                            : LOCAL_RERANK_BACKEND_ID;
-                        setLocalRerankBackend(backend);
-                        toolbar?.setRerankBackend(backend);
-                      }}
-                    />
-                  )}
-                  {showModelPicker ? toolbarEnd : null}
+                    ) : (
+                      <CloudLocalToggle
+                        value={retrievalPath}
+                        disabled={busy}
+                        label="Ranking"
+                        ariaLabel="Ranking model — does not move your index"
+                        localTitle="Rank on this machine with MiniLM. Nothing leaves your device. Slower."
+                        cloudTitle="Rank with Cohere. Your index stays local; matching page text is sent to Cohere to be scored. Much faster."
+                        onChange={(next) => {
+                          const backend =
+                            next === "cloud"
+                              ? CLOUD_SOURCE_RERANK_BACKEND_ID
+                              : LOCAL_RERANK_BACKEND_ID;
+                          setLocalRerankBackend(backend);
+                          toolbar?.setRerankBackend(backend);
+                        }}
+                      />
+                    )}
+                    {showModelPicker ? toolbarEnd : null}
+                  </PromptInputTools>
                   <PromptInputSubmit
                     status={status}
                     disabled={!input.trim() || busy}
                     className="size-8"
                   />
-                </div>
+                </PromptInputFooter>
               </PromptInput>
             </div>
           </ConversationFooter>

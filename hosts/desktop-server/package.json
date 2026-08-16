@@ -13,8 +13,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@ledgeindex/docs": "^0.1.9",
-    "@ledgeindex/server": "^0.1.9"
+    "@ledgeindex/docs": "^0.1.11",
+    "@ledgeindex/server": "^0.1.11"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

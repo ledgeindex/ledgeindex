@@ -5,6 +5,8 @@
  * forward the user's Firebase Bearer as auth_token.
  */
 
+import type { SourceContentType } from "../../db/types.js";
+
 export type RemotePlatformSourceSummary = {
   id: string;
   slug: string;
@@ -14,6 +16,24 @@ export type RemotePlatformSourceSummary = {
   pageCount: number;
   chunkCount: number;
   faviconUrl?: string | null;
+  /** Absent on older platform builds that predate the corpus-kind field. */
+  sourceType?: SourceContentType;
+};
+
+export type RemoteSourceSetMember = {
+  id: string;
+  slug: string;
+  name: string;
+  scope: "personal" | "global";
+};
+
+export type RemoteSourceSetSummary = {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  sourceCount: number;
+  sources: RemoteSourceSetMember[];
 };
 
 export type RemoteAskHit = {
@@ -106,6 +126,66 @@ export async function remoteListGlobalSources(
         typeof s.faviconUrl === "string" && s.faviconUrl.trim()
           ? s.faviconUrl.trim()
           : null,
+    }));
+
+  return { ok: true, items };
+}
+
+export async function remoteListUserSourceSets(
+  token: string,
+): Promise<
+  { ok: true; items: RemoteSourceSetSummary[] } | { ok: false; message: string }
+> {
+  const base = getRemotePlatformApiBase();
+  if (!base) {
+    return { ok: false, message: "Remote platform API URL is not configured" };
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(`${base}/api/source-sets`, {
+      method: "GET",
+      headers: authHeaders(token),
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Network error";
+    return { ok: false, message: `Cannot reach remote platform API: ${message}` };
+  }
+
+  const data = (await readJson(res)) as {
+    sourceSets?: Array<Partial<RemoteSourceSetSummary>>;
+    error?: unknown;
+  };
+
+  if (!res.ok) {
+    const err =
+      typeof data.error === "string"
+        ? data.error
+        : `Remote source sets failed (${res.status})`;
+    return { ok: false, message: err };
+  }
+
+  const items = (data.sourceSets ?? [])
+    .filter((set) => typeof set.id === "string" && typeof set.slug === "string")
+    .map((set) => ({
+      id: String(set.id),
+      slug: String(set.slug),
+      name: String(set.name ?? set.slug),
+      description:
+        typeof set.description === "string" || set.description === null
+          ? set.description
+          : null,
+      sourceCount: Number(set.sourceCount ?? 0),
+      sources: (set.sources ?? [])
+        .filter((member) => typeof member?.id === "string")
+        .map((member) => ({
+          id: String(member!.id),
+          slug: String(member!.slug ?? member!.id),
+          name: String(member!.name ?? member!.slug ?? member!.id),
+          scope: (member!.scope === "global" ? "global" : "personal") as
+            | "personal"
+            | "global",
+        })),
     }));
 
   return { ok: true, items };

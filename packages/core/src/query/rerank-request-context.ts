@@ -92,7 +92,6 @@ export const REQUEST_RERANK_BACKENDS = [
   "cohere",
   "cohere-auto",
   "cohere-v4-fast",
-  "local",
   "local-v2",
   "local-auto",
   "local-mini",
@@ -107,7 +106,6 @@ export function isRequestRerankBackend(
     value === "cohere" ||
     value === "cohere-auto" ||
     value === "cohere-v4-fast" ||
-    value === "local" ||
     value === "local-v2" ||
     value === "local-auto" ||
     value === "local-mini" ||

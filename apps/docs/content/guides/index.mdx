@@ -1,10 +1,105 @@
-# Guides
+# Getting started
 
-How to run LedgeIndex from a clone of this repo. Package APIs live under [Docs](/docs) and [Reference](/reference).
+LedgeIndex crawls documentation sites, chunks and embeds the content, and lets you **ask questions with citations** — from a terminal, a Node script, a web UI, or an MCP client.
 
-| Guide | What you run |
+This page is the map. Pick a setup path below (easiest first), or jump to [when to use what](#when-to-use-what) if you already know the shape of your project.
+
+## What LedgeIndex is good at
+
+- **Docs and knowledge sites** — install guides, API references, product docs, changelogs
+- **Git repositories** — TypeScript/JavaScript codebases with file:line citations ([setup](/guides/setup-repo))
+- **RAG over your crawl** — vector search, rerank, agent answers grounded in page text
+- **Site research profiles** — structured lenses (positioning, pricing, capabilities, …) from a public URL
+- **Agent tooling** — MCP tools to list source sets and query indexed docs from Cursor / Claude Desktop
+
+Pipeline in one line: discover → extract → chunk → embed → store → query.
+
+## What it is not
+
+Be honest about the boundaries before you invest in a setup path.
+
+| Expectation | Reality |
+|-------------|---------|
+| “Index my whole company Google Drive / Notion” | Built around **web crawl + markdown**, not native connectors for every SaaS |
+| “MCP from the CLI with no server” | **MCP needs a running API** (`:3010` web/Docker, `:3015` desktop). CLI and SDK are in-process only |
+| “One index everywhere” | **CLI default data** (`~/.ledgeindex/data`) is separate from a dev clone’s `./.data` unless you point both at the same `LEDGEINDEX_DATA_DIR` |
+| “Swap embedding stacks freely” | **LibSQL + FastEmbed (384-d)** and **Postgres + Gemini (1536-d)** are different indexes — don’t mix them on the same store |
+| “Profile replaces crawl” | **Profile** is structured research output; **crawl + ask** builds a searchable index. Different jobs, can complement each other |
+| “Production SaaS out of the box” | You get packages and hosts; **auth and multi-tenant ops** are yours to wire in |
+| “Crawl anything at any scale” | Respect robots, rate limits, and `maxPages`. Heavy JS sites may need `renderJs` and more tuning |
+
+If you need a custom pipeline (your own chunking, storage, or retrieval), compose [`@ledgeindex/core`](/reference/core) directly — see [Self-host the API](/docs/getting-started).
+
+## When to use what
+
+| You want to… | Start here | Package / surface |
+|--------------|------------|-------------------|
+| Try it in the terminal, no UI | [Set up CLI](/guides/setup-cli) | `ledgeindex` → `@ledgeindex/sdk` |
+| Automate crawl / ask / profile in Node | [Set up SDK](/guides/setup-sdk) | `@ledgeindex/sdk` |
+| Crawl a docs site and ask with URL citations | [Index documentation](/guides/setup-docs) | `@ledgeindex/sdk` `crawl`, CLI, or web UI |
+| Ask repo + docs together (one answer) | [askAcross](/reference/sdk/ask-across) · [Index documentation](/guides/setup-docs) | SDK / CLI `ask --sources` |
+| Index a GitHub repo and ask about the code | [Index a repository](/guides/setup-repo) · [`@ledgeindex/repo`](/reference/repo) | `@ledgeindex/sdk` scripts or in-process |
+| Browse sources, chat in a browser | [Set up web](/guides/setup-web) | Web UI + API |
+| Same as web, packaged app | [Set up desktop](/guides/setup-desktop) | Electron + sidecar `:3015` |
+| Postgres + Gemini + Cohere locally | [Set up Docker](/guides/setup-docker) | `docker-compose.*.yml` |
+| Ask indexed docs from Cursor / Claude | [Set up MCP](/guides/setup-mcp) | API `/mcp` (after web, Docker, or desktop) |
+| Call an API you already run | [Reference: client](/reference/client) | `@ledgeindex/client` |
+| Host your own Fastify API | [Docs: server](/docs/server) | `@ledgeindex/server` |
+| Low-level crawl / embed / query only | [Docs: core](/docs/core) | `@ledgeindex/core` |
+
+**Rule of thumb:** no server → **CLI or SDK**. UI or MCP → **web, Docker, or desktop** first. Remote or multi-user HTTP → **client** or **server**.
+
+## Setup paths
+
+Work through these in order if you are new. Each guide is self-contained.
+
+### Package guides
+
+No server required for CLI/SDK. Repository indexing uses the SDK scripts or in-process API.
+
+| Guide | What you get |
 |-------|----------------|
-| [Set up web](/guides/setup-web) | API on `:3010` + Next.js UI on `:3004` + MCP at `/mcp` |
-| [Set up desktop](/guides/setup-desktop) | Electron + local sidecar on `:3015` |
+| [Set up CLI](/guides/setup-cli) | Terminal crawl, ask, profile — `~/.ledgeindex/data` |
+| [Set up SDK](/guides/setup-sdk) | `createLedgeIndex()`, `crawl`, `ask`, `askAcross`, `indexRepo` in Node |
+| [Index documentation](/guides/setup-docs) | Docs site crawl → persistent index → URL citations |
+| [Index a repository](/guides/setup-repo) | GitHub repo → persistent index → file:line citations |
 
-Clone [ledgeindex/ledgeindex](https://github.com/ledgeindex/ledgeindex). Install from that repo root. You do not need a sibling `ledgeindex-api` folder.
+### Self-host
+
+Run the API (and usually the web UI) when you want a browser, Docker, desktop app, or MCP.
+
+| Guide | What you get |
+|-------|----------------|
+| [Set up web](/guides/setup-web) | API `:3010` + Next.js `:3004` + MCP `/mcp` |
+| [Set up Docker](/guides/setup-docker) | Compose — LibSQL or Postgres + Gemini |
+| [Set up desktop](/guides/setup-desktop) | Electron app, sidecar `:3015` |
+| [Set up MCP](/guides/setup-mcp) | Cursor / Claude Desktop on your index (needs API) |
+
+### Library & custom host
+
+Install `@ledgeindex/*`, call `startLedgeIndexServer`, or compose core primitives yourself.
+
+→ [Self-host the API](/docs/getting-started)
+
+## Compare setups at a glance
+
+| | CLI / SDK | Web / Docker (oss) | Docker (postgres) | Desktop |
+|---|-----------|-------------------|-------------------|---------|
+| Server | None | `:3010` API | `:3010` API | `:3015` sidecar |
+| UI | No | `:3004` | `:3004` | App window |
+| MCP | No | Yes | Yes | Yes |
+| Default embeddings | FastEmbed | FastEmbed | Gemini | FastEmbed |
+| Default vectors | LibSQL file | LibSQL | pgvector | LibSQL |
+| Clone repo? | No (npm) | Yes | Yes (or image) | Yes (build app) |
+
+## After you are running
+
+| Goal | Where |
+|------|--------|
+| Package APIs | [Reference](/reference) |
+| How packages fit together | [Docs overview](/docs) |
+| Ingest, chat, MCP internals | [Sources, chat & MCP](/docs/docs-profile) |
+| Profile lenses (14) | [Profile lenses](/reference/profile/lenses) |
+| Web, desktop, mobile | [Web & desktop](/docs/apps) |
+
+Clone [ledgeindex/ledgeindex](https://github.com/ledgeindex/ledgeindex) for web, desktop, and Docker guides. Install from that repo root — you do not need a separate `ledgeindex-api` checkout.

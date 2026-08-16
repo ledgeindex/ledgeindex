@@ -57,7 +57,9 @@ function urlBelongsToPathRoot(pageUrl: string, pathStartUrl: string): boolean {
   try {
     const page = new URL(pageUrl);
     const base = new URL(root);
-    if (page.origin !== base.origin) return false;
+    const pageHost = page.hostname.replace(/^www\./i, "").toLowerCase();
+    const baseHost = base.hostname.replace(/^www\./i, "").toLowerCase();
+    if (pageHost !== baseHost) return false;
     const pagePath = page.pathname.replace(/\/+$/, "") || "/";
     const rootPath = base.pathname.replace(/\/+$/, "") || "/";
     if (rootPath === "/") return true;
@@ -121,9 +123,22 @@ export function buildChunkMetadata(input: {
   versionNumber?: number | null;
   sourceFamilyId?: string | null;
   crawlRoot?: string | null;
+  /** Explicit facets; win over URL-derived segments and headings when set. */
+  category?: string | null;
+  section?: string | null;
+  /**
+   * Path within a repository checkout, for sources that are a checkout rather
+   * than a crawl. Set on every page of such a source, not only the ones the AST
+   * chunker handled: it is what identifies a source as code at query time, and a
+   * repo's own `.mdx` pages are part of that source.
+   */
+  filePath?: string | null;
 }): ChunkMetadataFields {
-  const { category, section } = deriveUrlSegments(input.url);
+  const derived = deriveUrlSegments(input.url);
   const headingPath = extractHeadingPath(input.text);
+  const category = input.category?.trim() || derived.category;
+  const section =
+    input.section?.trim() || headingPath[0] || derived.section;
   const sourceType = input.sourceMetadata?.sourceType ?? "unknown";
   const origin = input.sourceMetadata?.origin ?? "external";
   const versionLabel =
@@ -139,7 +154,7 @@ export function buildChunkMetadata(input: {
     sourceId: input.sourceId,
     projectId: input.projectId,
     category,
-    section: headingPath[0] ?? section,
+    section,
     headingPath,
     contentType: input.contentType ?? "html",
     language: input.language ?? "en",
@@ -151,5 +166,6 @@ export function buildChunkMetadata(input: {
     versionNumber: input.versionNumber ?? null,
     sourceFamilyId: input.sourceFamilyId ?? null,
     crawlRoot: input.crawlRoot?.trim() || null,
+    ...(input.filePath?.trim() ? { filePath: input.filePath.trim() } : {}),
   };
 }

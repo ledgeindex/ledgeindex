@@ -1,25 +1,316 @@
-/* LedgeIndex docs — Nextra theme + Docs / Guides / Reference tabs */
+/* LedgeIndex docs — warm paper palette (matches apps/web) */
 
-.docs-tabs-container {
-  width: 100%;
-  background: inherit;
+@import "@fontsource-variable/jetbrains-mono/wght.css";
+@import "@fontsource/ibm-plex-sans/400.css";
+@import "@fontsource/ibm-plex-sans/500.css";
+@import "@fontsource/ibm-plex-sans/600.css";
+@import "@fontsource/ibm-plex-sans/700.css";
+
+:root {
+  --li-background: #f6f2ea;
+  --li-foreground: #1c1917;
+  --li-muted: #78716c;
+  --li-muted-strong: #44403c;
+  --li-border: rgb(214 204 190 / 0.9);
+  --li-card: rgb(255 252 247 / 0.9);
+  --li-card-solid: #fffcf7;
+  --li-card-raised: #faf6ef;
+  --li-accent: #6b5a3e;
+  --li-accent-soft: rgb(107 90 62 / 0.1);
+  --li-surface-alt: #f3efe8;
+  --li-surface-raised: #f0ebe3;
+  --li-glow-cool: rgb(168 140 90 / 0.07);
+  --li-glow-warm: rgb(100 120 140 / 0.06);
+
+  /* Remap Nextra grays to warm stone (light) */
+  --x-color-gray-50: #f6f2ea;
+  --x-color-gray-100: #faf6ef;
+  --x-color-gray-200: #e8dfd2;
+  --x-color-gray-300: #d6ccc0;
+  --x-color-gray-400: #a8a29e;
+  --x-color-gray-600: #78716c;
+  --x-color-gray-700: #44403c;
+  --x-color-gray-800: #292524;
+  --x-color-gray-900: #1c1917;
+  --x-color-neutral-50: #fffcf7;
+  --x-color-neutral-200: #e8dfd2;
+  --x-color-neutral-300: #d6ccc0;
+  --x-color-neutral-400: #a8a29e;
+  --x-color-neutral-500: #78716c;
+  --x-color-neutral-800: #e8dfd2;
+  --x-color-slate-50: #faf6ef;
+  --x-color-slate-100: #f3efe8;
+  --x-color-slate-200: #e8dfd2;
+  --x-color-slate-700: #44403c;
+  --x-color-slate-900: #1c1917;
 }
-html.dark .docs-tabs-container {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+
+.dark {
+  --li-background: #151314;
+  --li-foreground: #ebe7e5;
+  --li-muted: #989294;
+  --li-muted-strong: #cfc9ca;
+  --li-border: rgb(236 230 228 / 0.09);
+  --li-card: rgb(29 27 28 / 0.88);
+  --li-card-solid: #1d1b1c;
+  --li-card-raised: #232122;
+  --li-accent: #c4a86e;
+  --li-accent-soft: rgb(196 168 110 / 0.12);
+  --li-surface-alt: #1a1819;
+  --li-surface-raised: #232122;
+  --li-glow-cool: rgb(212 196 168 / 0.04);
+  --li-glow-warm: rgb(140 155 170 / 0.04);
+
+  /*
+   * Nextra dark mode uses the same token names for text (e.g. dark:text-slate-200)
+   * and for surfaces. Invert like Tailwind: low steps → dark bg, high steps → light text.
+   */
+  --x-color-gray-50: #1a1819;
+  --x-color-gray-100: #232122;
+  --x-color-gray-200: #3a3638;
+  --x-color-gray-300: #4a4547;
+  --x-color-gray-400: #989294;
+  --x-color-gray-600: #b8b2b4;
+  --x-color-gray-700: #cfc9ca;
+  --x-color-gray-800: #e0dbda;
+  --x-color-gray-900: #ebe7e5;
+
+  --x-color-neutral-50: #1d1b1c;
+  --x-color-neutral-200: #d8d2d0;
+  --x-color-neutral-300: #4a4547;
+  --x-color-neutral-400: #989294;
+  --x-color-neutral-500: #b8b2b4;
+  --x-color-neutral-600: #cfc9ca;
+  --x-color-neutral-700: #2e2b2c;
+  --x-color-neutral-800: #232122;
+
+  --x-color-slate-50: #1a1819;
+  --x-color-slate-100: #ebe7e5;
+  --x-color-slate-200: #d8d2d0;
+  --x-color-slate-700: #cfc9ca;
+  --x-color-slate-900: #f5f2f1;
 }
-html:not(.dark) .docs-tabs-container {
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+
+html {
+  font-family: "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
+
+body {
+  color: var(--li-foreground);
+  background-color: var(--li-background);
+}
+
+/* ── Dark mode: main content readability (Nextra + warm palette) ── */
+.dark article.nextra-body-typesetting-article,
+.dark article {
+  color: var(--li-muted-strong);
+}
+
+.dark article h1,
+.dark article h2,
+.dark article h3,
+.dark article h4,
+.dark article h5,
+.dark article h6 {
+  color: var(--li-foreground);
+}
+
+.dark article strong {
+  color: var(--li-foreground);
+}
+
+.dark article a {
+  color: var(--li-accent);
+}
+
+.dark article th {
+  color: var(--li-foreground);
+  background: var(--li-surface-raised);
+}
+
+.dark article td {
+  color: var(--li-muted-strong);
+  border-color: var(--li-border);
+}
+
+.dark article code:not(pre code) {
+  color: var(--li-foreground);
+  background-color: var(--li-surface-raised) !important;
+}
+
+.dark article blockquote {
+  color: var(--li-muted-strong);
+  border-color: var(--li-border);
+}
+
+/* TOC + search */
+.dark .nextra-toc a,
+.dark [data-toggle-animation="show"] {
+  color: var(--li-muted-strong);
+}
+
+.dark .nextra-toc a:hover,
+.dark .nextra-toc .x\:text-primary-600 {
+  color: var(--li-accent) !important;
+}
+
+.dark input::placeholder {
+  color: var(--li-muted) !important;
+  opacity: 1;
+}
+
+.dark .nextra-navbar input,
+.dark .nextra-search input,
+.dark input[type="search"] {
+  color: var(--li-foreground) !important;
+  background-color: var(--li-surface-raised) !important;
+  border-color: var(--li-border) !important;
+}
+
+/* Sidebar links */
+.dark .nextra-sidebar-container a {
+  color: var(--li-muted-strong);
+}
+
+.dark .nextra-sidebar-container a:hover,
+.dark .nextra-sidebar-container a.x\:text-primary-600 {
+  color: var(--li-accent) !important;
+}
+
+.dark .nextra-sidebar-container .x\:font-semibold {
+  color: var(--li-foreground);
+}
+
+/* _meta.js separator headings — Nextra uses dark:text-gray-100, which maps to a dark surface in our palette */
+.nextra-sidebar-container li[class*="font-semibold"]:not(:has(a)),
+aside li[class*="font-semibold"]:not(:has(a)) {
+  color: var(--li-muted-strong);
+  font-size: 0.75rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.dark .nextra-sidebar-container li[class*="font-semibold"]:not(:has(a)),
+.dark aside li[class*="font-semibold"]:not(:has(a)) {
+  color: var(--li-accent) !important;
+  opacity: 0.9;
+}
+
+/* Subtle paper wash behind content (matches web section glows) */
+.docs-section-root {
+  background:
+    radial-gradient(ellipse 55% 55% at 18% 15%, var(--li-glow-cool), transparent 70%),
+    radial-gradient(ellipse 45% 45% at 88% 80%, var(--li-glow-warm), transparent 70%);
+}
+
+/* Navbar logo — matches apps/web SiteBrand */
+.docs-logo-img {
+  display: block;
+  height: 1.75rem;
+  width: auto;
+  flex-shrink: 0;
+}
+
+@media (min-width: 640px) {
+  .docs-logo-img {
+    height: 2rem;
+  }
+}
+
+/* Navbar — logo + Docs / Guides / Reference in one row */
+.docs-navbar-start {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+@media (min-width: 768px) {
+  .docs-navbar-start {
+    gap: 1.25rem;
+  }
+}
+
+.docs-navbar-logo-link {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  transition: opacity 0.2s;
+}
+
+.docs-navbar-logo-link:hover {
+  opacity: 0.75;
+}
+
 .docs-tabs {
   display: flex;
+  align-items: center;
   gap: 0;
-  max-width: 90rem;
-  margin-left: auto !important;
-  margin-right: auto !important;
-  padding-left: 1rem !important;
+  min-width: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
+
+.docs-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.docs-tab {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  font-weight: 400;
+  line-height: 1.25rem;
+  color: var(--li-muted);
+  text-decoration: none;
+  border-bottom: 2px solid transparent;
+  white-space: nowrap;
+  transition:
+    color 0.2s,
+    border-color 0.2s;
+}
+
+@media (min-width: 768px) {
+  .docs-tab {
+    padding: 0.5rem 1rem;
+    font-size: 0.9375rem;
+  }
+}
+
 .docs-tab:hover {
-  color: var(--nextra-body) !important;
+  color: var(--li-foreground) !important;
+}
+
+.docs-tab-active {
+  font-weight: 600;
+  color: var(--li-accent) !important;
+  border-bottom-color: var(--li-accent) !important;
+}
+
+/* Code blocks — warmer raised surface */
+.nextra-code,
+pre code {
+  font-family: "JetBrains Mono Variable", ui-monospace, monospace !important;
+}
+
+/* Tables — card-like rows on warm surface */
+article table {
+  border-color: var(--li-border);
+}
+
+article th {
+  background: var(--li-surface-raised);
+  color: var(--li-foreground);
+}
+
+article td {
+  color: var(--li-muted-strong);
+}
+
+.dark article tr:nth-child(even) td {
+  background: rgb(255 255 255 / 0.02);
 }
 
 /* Sidebar: only show the active tab section */

@@ -1,0 +1,49 @@
+# Ingest & crawl
+
+Workflow routes for indexing a source after setup — crawl discovery, human review steps, chunking, and embedding. Used by the web/desktop **Index** flow.
+
+## Ingest workflow
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/sources/:id/ingest/start` | Start ingest pipeline (crawl → review → index) |
+| `GET` | `/api/sources/:id/ingest/:runId` | Poll workflow snapshot (status, suspended step, progress) |
+| `POST` | `/api/sources/:id/ingest/:runId/resume` | Resume after `crawl-review` or `parse-review` with user input |
+| `POST` | `/api/sources/:id/ingest/cancel` | Cancel in-flight crawl / ingest |
+| `GET` | `/api/sources/:id/crawl-progress` | Live URL discovery progress during crawl |
+
+### Typical sequence
+
+1. `POST …/ingest/start` with source config
+2. Poll `GET …/ingest/:runId` until `suspendedStep` is `crawl-review-step` (or similar)
+3. `POST …/ingest/:runId/resume` with selected URLs / review payload
+4. Poll until `status` is `done` or `failed`
+
+High-level orchestration without manual polling: client [`runWebCrawl`](/reference/client/crawl).
+
+## Refresh (re-crawl)
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/sources/:id/refresh/start` | Start refresh run (discover changes) |
+| `GET` | `/api/sources/:id/refresh/status` | Refresh run status |
+| `POST` | `/api/sources/:id/refresh/cancel` | Cancel refresh |
+| `POST` | `/api/sources/:id/refresh/apply` | Apply accepted changes to the index |
+| `POST` | `/api/sources/:id/refresh/dismiss` | Dismiss refresh without applying |
+
+## Client wrappers
+
+| Client export | Purpose |
+|---------------|---------|
+| `startIngestWorkflow` | `POST …/ingest/start` |
+| `getIngestWorkflowStatus` | `GET …/ingest/:runId` |
+| `resumeIngestWorkflow` | `POST …/ingest/:runId/resume` |
+| `cancelIngestCrawl` | `POST …/ingest/cancel` |
+| `getCrawlProgress` | `GET …/crawl-progress` |
+| `startRefresh`, `getRefreshStatus`, … | Refresh family |
+
+## Related
+
+- [Sources](/reference/api/sources)
+- [Client runWebCrawl](/reference/client/crawl)
+- [@ledgeindex/sdk crawl](/reference/sdk/crawl) — in-process equivalent (no HTTP)

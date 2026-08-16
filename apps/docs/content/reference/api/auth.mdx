@@ -1,0 +1,36 @@
+# Auth
+
+API keys and optional request authentication for a self-hosted LedgeIndex API.
+
+## Local default
+
+With **`LEDGEINDEX_AUTH_REQUIRED=0`** (default for local web, Docker OSS, and desktop sidecar), routes use a local user id. You do not need a Bearer token or API key for curl or the web UI.
+
+## Optional API auth
+
+Set **`LEDGEINDEX_AUTH_REQUIRED=1`** when you want every `/api/*` request authenticated. Your host plugin (see [Server options](/docs/server/options)) typically installs identity verification; clients then send:
+
+- **`Authorization: Bearer <token>`** — session or ID token from your auth provider, or  
+- **`X-Api-Key`** — key created via the routes below
+
+Client helpers: [Client auth](/reference/client/auth).
+
+## API keys
+
+| Method | Path | Description |
+|--------|------|-------------|
+| `GET` | `/api/auth/me` | Current user id / profile (when auth is enabled) |
+| `GET` | `/api/auth/api-keys` | List API keys for the user |
+| `POST` | `/api/auth/api-keys` | Create a new API key |
+| `POST` | `/api/auth/api-keys/ensure-playground` | Ensure a playground key exists |
+| `DELETE` | `/api/auth/api-keys/:keyId` | Revoke a key |
+
+## MCP OAuth
+
+OAuth routes for MCP client registration live under `/oauth/*` and `/.well-known/*` — see [Health & MCP](/reference/api/health). Used for Cursor / Claude MCP connect, not for ordinary REST `/api/*` calls.
+
+## Related
+
+- [Client auth](/reference/client/auth)
+- [HTTP API overview](/reference/api)
+- [Set up web](/guides/setup-web) — `LEDGEINDEX_AUTH_REQUIRED` in `.env`

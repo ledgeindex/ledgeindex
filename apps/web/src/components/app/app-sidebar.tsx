@@ -47,14 +47,16 @@ function AppSidebarInner({
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const { user, profile, signOut } = useAuth();
+  const { user, profile, signOut, planLimitsEnabled } = useAuth();
   const desktop = useLedgeIndexDesktop();
   const isAdmin = profile?.role === "admin";
   const appVersion = useAppVersion(desktop);
 
   const navItems = APP_NAV_ITEMS.filter(
     (item) =>
-      (!item.adminOnly || isAdmin) && (!item.desktopOnly || Boolean(desktop)),
+      (!item.adminOnly || isAdmin) &&
+      (!item.desktopOnly || Boolean(desktop)) &&
+      (!item.requiresPlanLimits || planLimitsEnabled),
   );
 
   return (

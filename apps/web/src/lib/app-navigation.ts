@@ -1,5 +1,6 @@
 import type { LucideIcon } from "lucide-react";
 import {
+  CreditCard,
   BookOpen,
   KeyRound,
   Layers,
@@ -18,6 +19,8 @@ export type AppNavItem = {
   href: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  /** Only show when hosted billing / plan limits are enabled on the API. */
+  requiresPlanLimits?: boolean;
   /** Only show inside @ledgeindex/desktop (Electron). */
   desktopOnly?: boolean;
 };
@@ -64,6 +67,13 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
     label: "API keys",
     href: "/api-keys",
     icon: KeyRound,
+  },
+  {
+    id: "billing",
+    label: "Billing",
+    href: "/billing",
+    icon: CreditCard,
+    requiresPlanLimits: true,
   },
   {
     id: "provider-keys",

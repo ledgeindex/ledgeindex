@@ -1,9 +1,12 @@
 export default {
   index: "Overview",
-  core: "Core",
-  "docs-runtime": "Docs runtime",
+  api: "HTTP API",
+  sdk: "@ledgeindex/sdk",
+  client: "@ledgeindex/client",
+  core: "@ledgeindex/core",
+  repo: "@ledgeindex/repo",
+  "docs-runtime": "@ledgeindex/docs",
   profile: "Profile",
-  client: "Client",
   server: "Server",
   model: "Model",
 };

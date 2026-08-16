@@ -1,6 +1,7 @@
 import { createTool } from "@mastra/core/tools";
 import { z } from "zod";
 import { listSourceSetSummaries } from "../../../services/source-set-summary.js";
+import { ensureDefaultSourceSetForLimitedUser } from "../../../services/source-set-limits.js";
 import { mergeRequestContextFromMcp } from "../request-context-utils.js";
 
 export const listSourceSetsTool = createTool({
@@ -38,6 +39,7 @@ export const listSourceSetsTool = createTool({
     const q = String(input.query ?? "")
       .trim()
       .toLowerCase();
+    await ensureDefaultSourceSetForLimitedUser(userId);
     let items = await listSourceSetSummaries(userId);
     if (q) {
       items = items.filter(

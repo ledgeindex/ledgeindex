@@ -156,7 +156,9 @@ export function pipelineFromCatalogIngest(input: {
 /** Map a source-refresh run onto the shared crawl → extract → index → store strip. */
 export function pipelineFromRefreshSnapshot(
   snapshot: RefreshRunSnapshot | null,
+  options?: { checkOnly?: boolean },
 ): IngestPipelineNode[] {
+  const checkOnly = options?.checkOnly ?? false;
   const pipeline = cloneIdle();
   if (!snapshot) return pipeline;
 
@@ -228,8 +230,13 @@ export function pipelineFromRefreshSnapshot(
   if (snapshot.status === "ready") {
     mark("crawl", "done", "Discovered");
     mark("extract", "done", "Compared");
-    mark("embed", "pending", "Waiting to apply");
-    mark("store", "pending", "Waiting");
+    if (checkOnly) {
+      mark("embed", "pending", "Check only");
+      mark("store", "pending", "Not indexed");
+    } else {
+      mark("embed", "pending", "Waiting to apply");
+      mark("store", "pending", "Waiting");
+    }
     return pipeline;
   }
 

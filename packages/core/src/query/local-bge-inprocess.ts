@@ -1,28 +1,26 @@
 import { logInfo, logVerbose, logWarn } from "../lib/logger.js";
 
-/** Current default — small Transformers.js port. */
-export const LOCAL_RERANK_MODEL_BASE = "Xenova/bge-reranker-base";
-
 /**
- * Stronger multilingual cross-encoder (ONNX for Transformers.js).
- * @see https://huggingface.co/onnx-community/bge-reranker-v2-m3-ONNX
- */
-export const LOCAL_RERANK_MODEL_V2_M3 =
-  "onnx-community/bge-reranker-v2-m3-ONNX";
-
-/**
- * English MS MARCO MiniLM family (ONNX) — same CE line, depth tradeoff.
+ * English MS MARCO MiniLM family (ONNX) — the default local cross-encoder line
+ * for every caller: web UI, SDK, and CLI. L6 is the default depth.
  * @see https://huggingface.co/Xenova/ms-marco-MiniLM-L-6-v2
  */
 export const LOCAL_RERANK_MODEL_MINILM = "Xenova/ms-marco-MiniLM-L-6-v2";
 export const LOCAL_RERANK_MODEL_MINILM_L12 =
   "Xenova/ms-marco-MiniLM-L-12-v2";
 
+/**
+ * Stronger multilingual cross-encoder (ONNX for Transformers.js). Opt in only —
+ * the MiniLM pair covers the English corpora we ship against.
+ * @see https://huggingface.co/onnx-community/bge-reranker-v2-m3-ONNX
+ */
+export const LOCAL_RERANK_MODEL_V2_M3 =
+  "onnx-community/bge-reranker-v2-m3-ONNX";
+
 export const LOCAL_RERANK_MODELS = {
-  base: LOCAL_RERANK_MODEL_BASE,
-  "v2-m3": LOCAL_RERANK_MODEL_V2_M3,
   minilm: LOCAL_RERANK_MODEL_MINILM,
   "minilm-l12": LOCAL_RERANK_MODEL_MINILM_L12,
+  "v2-m3": LOCAL_RERANK_MODEL_V2_M3,
 } as const;
 
 export type LocalRerankModelKey = keyof typeof LOCAL_RERANK_MODELS;
@@ -37,7 +35,7 @@ export type LocalRerankDevice =
   | "webgpu"
   | "wasm";
 
-const DEFAULT_MODEL_ID = LOCAL_RERANK_MODEL_BASE;
+const DEFAULT_MODEL_ID = LOCAL_RERANK_MODEL_MINILM;
 
 type LoadedReranker = {
   tokenizer: {
@@ -134,7 +132,7 @@ function sigmoid(value: number): number {
 }
 
 /**
- * Prefer in-process BGE unless an explicit sidecar mode/url is forced.
+ * Prefer the in-process cross-encoder unless an explicit sidecar mode/url is forced.
  * - `LEDGEINDEX_LOCAL_RERANK_MODE=inprocess|sidecar|auto` (default auto)
  * - auto: in-process first, HTTP sidecar fallback
  */
@@ -179,7 +177,7 @@ async function loadInProcessReranker(modelId: string): Promise<LoadedReranker> {
   const candidates = resolveLocalRerankDeviceCandidates(preference);
 
   slot.loadPromise = (async () => {
-    logInfo("Loading in-process local BGE reranker", "LocalBgeRerank", {
+    logInfo("Loading in-process local cross-encoder", "LocalCrossEncoder", {
       modelId,
       devicePreference: preference,
       candidates,
@@ -190,7 +188,7 @@ async function loadInProcessReranker(modelId: string): Promise<LoadedReranker> {
       try {
         const loaded = await loadModelOnDevice(modelId, device);
         slot.loaded = loaded;
-        logInfo("In-process local BGE reranker ready", "LocalBgeRerank", {
+        logInfo("In-process local cross-encoder ready", "LocalCrossEncoder", {
           modelId,
           device: loaded.device,
         });
@@ -199,7 +197,7 @@ async function loadInProcessReranker(modelId: string): Promise<LoadedReranker> {
         lastError = error;
         logWarn(
           `Local rerank device "${device}" failed — trying next`,
-          "LocalBgeRerank",
+          "LocalCrossEncoder",
           {
             modelId,
             device,
@@ -212,7 +210,7 @@ async function loadInProcessReranker(modelId: string): Promise<LoadedReranker> {
     const message =
       lastError instanceof Error
         ? lastError.message
-        : "Failed to load in-process BGE reranker";
+        : "Failed to load in-process cross-encoder";
     slot.loadError = message;
     slot.loadPromise = null;
     throw lastError instanceof Error ? lastError : new Error(message);
@@ -221,7 +219,7 @@ async function loadInProcessReranker(modelId: string): Promise<LoadedReranker> {
       slot.loadError =
         error instanceof Error
           ? error.message
-          : "Failed to load in-process BGE reranker";
+          : "Failed to load in-process cross-encoder";
     }
     slot.loadPromise = null;
     throw error instanceof Error ? error : new Error(slot.loadError);
@@ -230,7 +228,7 @@ async function loadInProcessReranker(modelId: string): Promise<LoadedReranker> {
   return slot.loadPromise;
 }
 
-/** Score query↔document pairs with an in-process BGE cross-encoder. */
+/** Score query↔document pairs with an in-process cross-encoder. */
 export async function scoreDocumentsInProcess(
   query: string,
   documents: string[],
@@ -257,7 +255,7 @@ export async function scoreDocumentsInProcess(
     Math.min(1, Math.max(0, sigmoid(Number(logit)))),
   );
 
-  logVerbose("In-process BGE scored documents", "LocalBgeRerank", {
+  logVerbose("In-process cross-encoder scored documents", "LocalCrossEncoder", {
     documentCount: documents.length,
     modelId,
     device: reranker.device,

@@ -7,6 +7,7 @@ import {
   hashPageContent,
   type PageSnapshotInput,
 } from "../db/page-snapshots.js";
+import { runProbeRefreshCheck } from "./source-refresh-probe.js";
 import { cancelIngestForSource } from "../ingest/ingest-cancel.js";
 import {
   prepareChunksForPages,
@@ -16,6 +17,7 @@ import { markSourceIndexed } from "../indexing/source-index-status.js";
 import { mapWithConcurrency } from "../lib/map-with-concurrency.js";
 import { logError, logInfo } from "../lib/logger.js";
 import { parsePage } from "../parser/extract-content.js";
+import { deleteLexicalChunks } from "../retrieval/lexical-store.js";
 import { ensureCatalogHasPages } from "../retrieval/page-catalog-rebuild.js";
 import { LEDGEINDEX_CHUNKS_INDEX } from "../vector/constants.js";
 import { ensureChunksIndex, getVectorStore } from "../vector/store.js";
@@ -107,6 +109,7 @@ async function deleteVectorsForUrls(sourceId: string, urls: string[]) {
     } catch {
       // Fallback: ignore per-url delete failures; upsert still adds fresh chunks.
     }
+    await deleteLexicalChunks({ sourceId, url });
   }
 }
 
@@ -360,6 +363,10 @@ async function runDiscoverRefreshCheck(
 }
 
 async function runRefreshCheck(sourceId: string, run: RefreshRunSnapshot) {
+  if (run.mode === "probe") {
+    await runProbeRefreshCheck(sourceId, run);
+    return;
+  }
   if (run.mode === "selected") {
     await runSelectedRefreshCheck(sourceId, run);
     return;

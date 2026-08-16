@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/repo",
-  "version": "0.1.9",
+  "version": "0.1.11",
   "description": "LedgeIndex repo — index local/GitHub checkouts and explore for grounded usage examples",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
@@ -30,15 +30,16 @@
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
-    "@ledgeindex/core": "^0.1.9",
+    "@babel/parser": "^8.0.4",
+    "@ledgeindex/core": "^0.1.11",
     "@mastra/core": "^1.49.0",
     "zod": "3.25.76"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",
+    "tsup": "^8.0.0",
     "tsx": "^4.23.1",
-    "typescript": "^7.0.2",
-    "tsup": "^8.0.0"
+    "typescript": "^7.0.2"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js"

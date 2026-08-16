@@ -58,6 +58,7 @@ export function toSourceSummary(source: Source): SourceSummary {
     }),
     startUrl,
     startUrls,
+    sourceType: source.sourceMetadata?.sourceType ?? "unknown",
     ogImageUrl: source.ogImageUrl ?? null,
     faviconUrl: source.faviconUrl ?? null,
     indexedAt: source.indexedAt ?? null,

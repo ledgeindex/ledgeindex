@@ -19,6 +19,8 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { Search } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { LedgeIndexPageLoader } from "@/components/ledgeindex-page-loader";
 import { SourceBannerCard } from "@/components/sources/source-banner-card";
 import { SourceCategoryFilterBar } from "@/components/sources/source-category-filter";
 import {
@@ -29,6 +31,8 @@ import {
 import { useDashboardToolbar } from "@/contexts/dashboard-toolbar-context";
 import { useIndexedFlash } from "@/contexts/indexed-flash-context";
 import { useAuth } from "@/lib/auth-context";
+import { usePlanBilling } from "@/contexts/plan-billing-context";
+import type { AccountSourceLimits } from "@/lib/billing-api";
 import {
   deleteSource,
   listSources,
@@ -109,12 +113,16 @@ function sourceMatchesQuery(source: SourceSummary, query: string): boolean {
 }
 
 function DashboardContent() {
-  const { user, loading: authLoading, isAdmin } = useAuth();
+  const { user, loading: authLoading, isAdmin, planLimitsEnabled, profile } = useAuth();
+  const { openUpgradeModal } = usePlanBilling();
   const searchParams = useSearchParams();
   const indexedParam = searchParams.get("indexed");
   const { flashId: indexedFlashId } = useIndexedFlash();
   const { scope, viewMode, ready: toolbarReady } = useDashboardToolbar();
   const [sources, setSources] = useState<SourceSummary[]>([]);
+  const [sourceLimits, setSourceLimits] = useState<AccountSourceLimits | null>(
+    null,
+  );
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [loading, setLoading] = useState(true);
@@ -138,9 +146,10 @@ function DashboardContent() {
       setLoading(true);
       setError(null);
       try {
-        const { sources: next } = await listSources(loadScope);
+        const { sources: next, meta } = await listSources(loadScope);
         if (cancelled || fetchSeq !== fetchSeqRef.current) return;
         setSources(groupSourcesByFamily(next));
+        setSourceLimits(meta?.limits ?? null);
         setSelectedCategory((current) =>
           current &&
           (SOURCE_KIND_PRESETS.some((entry) => entry.slug === current) ||
@@ -303,7 +312,14 @@ function DashboardContent() {
   }
 
   const canCreateInScope =
-    scope === "personal" || (scope === "global" && isAdmin);
+    (scope === "personal" || (scope === "global" && isAdmin)) &&
+    (!sourceLimits?.apply || sourceLimits.canCreate);
+  const showSourceLimitBanner =
+    planLimitsEnabled &&
+    !isAdmin &&
+    profile?.plan !== "pro" &&
+    sourceLimits?.apply &&
+    sourceLimits.maxSources !== null;
   /** Dashboard management (context menu, shelves, delete) — admins only. */
   const canAdminManage = isAdmin;
   const canReorderList =
@@ -412,6 +428,12 @@ function DashboardContent() {
     listSourcesVisible.length === 0 &&
     (Boolean(searchQuery.trim()) || selectedCategory !== null);
 
+  if (showLoading) {
+    return (
+      <LedgeIndexPageLoader className="min-h-[calc(100dvh-5.5rem)] w-full" />
+    );
+  }
+
   return (
     <div
       className={cn(
@@ -419,9 +441,7 @@ function DashboardContent() {
         viewMode === "list" ? "max-w-3xl" : "max-w-6xl",
       )}
     >
-      {showLoading ? (
-        <p className="text-sm text-muted">Loading sets…</p>
-      ) : sources.length === 0 ? (
+      {sources.length === 0 ? (
         error ? (
           <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
         ) : (
@@ -445,6 +465,25 @@ function DashboardContent() {
         )
       ) : (
         <div className="space-y-5">
+          {showSourceLimitBanner ? (
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+              <p>
+                Free plan: {sourceLimits.currentSourceCount}/
+                {sourceLimits.maxSources}{" "}
+                {scope === "global" ? "public" : "personal"} source
+                {sourceLimits.maxSources === 1 ? "" : "s"}.
+              </p>
+              {!sourceLimits.canCreate ? (
+                <Button
+                  variant="secondary"
+                  className="h-8 px-3 text-xs"
+                  onClick={() => openUpgradeModal()}
+                >
+                  Upgrade to Pro
+                </Button>
+              ) : null}
+            </div>
+          ) : null}
           {error ? (
             <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
           ) : null}
@@ -644,7 +683,11 @@ function DashboardContent() {
 
 export default function DashboardPage() {
   return (
-    <Suspense fallback={<div className="px-4 py-8 text-sm text-muted">Loading…</div>}>
+    <Suspense
+      fallback={
+        <LedgeIndexPageLoader className="min-h-[calc(100dvh-5.5rem)] w-full" />
+      }
+    >
       <DashboardContent />
     </Suspense>
   );

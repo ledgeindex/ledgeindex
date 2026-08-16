@@ -45,6 +45,11 @@ import {
 } from "../services/source-versioning.js";
 import { normalizeCanonicalUrl } from "../lib/canonical-url.js";
 import {
+  assertCanCreateSource,
+  getAccountSourceLimitsForUser,
+  SourceLimitError,
+} from "../services/source-set-limits.js";
+import {
   isValidSourceSlug,
   normalizeSourceSlugInput,
 } from "../lib/source-slug.js";
@@ -89,6 +94,25 @@ export async function sourceRoutes(fastify: FastifyInstance) {
     return { duplicate };
   });
 
+  fastify.get("/api/sources/limits", async (request, reply) => {
+    const userId = await requireUser(request, reply);
+    if (!userId) return;
+
+    const query = z
+      .object({ scope: z.enum(["personal", "global"]).default("personal") })
+      .safeParse(request.query);
+    if (!query.success) {
+      return reply.status(400).send({ error: query.error.flatten() });
+    }
+
+    if (query.data.scope === "global" && !(await requireAdmin(request, reply))) {
+      return;
+    }
+
+    const limits = await getAccountSourceLimitsForUser(userId, query.data.scope);
+    return { limits };
+  });
+
   fastify.get("/api/sources", async (request, reply) => {
     const userId = await requireUser(request, reply);
     if (!userId) return;
@@ -100,13 +124,19 @@ export async function sourceRoutes(fastify: FastifyInstance) {
 
     try {
       if (query.data.scope === "personal") {
-        const sources = await listSourceSummariesForOwner(userId);
-        return { sources };
+        const [sources, limits] = await Promise.all([
+          listSourceSummariesForOwner(userId),
+          getAccountSourceLimitsForUser(userId, "personal"),
+        ]);
+        return { sources, meta: { limits } };
       }
 
       if (query.data.scope === "global") {
-        const sources = await listGlobalSourceSummaries();
-        return { sources };
+        const [sources, limits] = await Promise.all([
+          listGlobalSourceSummaries(),
+          getAccountSourceLimitsForUser(userId, "global"),
+        ]);
+        return { sources, meta: { limits } };
       }
 
       const [personal, global] = await Promise.all([
@@ -279,6 +309,24 @@ export async function sourceRoutes(fastify: FastifyInstance) {
       });
 
       return reply.status(200).send({ source: updated, replaced: true });
+    }
+
+    const isNewSourceFamily = familySources.length === 0;
+    if (isNewSourceFamily) {
+      try {
+        await assertCanCreateSource(userId, scope);
+      } catch (error) {
+        if (error instanceof SourceLimitError) {
+          return reply.status(403).send({
+            error: "Source limit reached",
+            message: error.message,
+            scope: error.scope,
+            current: error.current,
+            limit: error.limit,
+          });
+        }
+        throw error;
+      }
     }
 
     const versionFields = resolveVersionFieldsForCreate({

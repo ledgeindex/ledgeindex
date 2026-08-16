@@ -1,9 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
-import { ChevronDown } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
 import { CachedRemoteImage } from "@/components/sources/cached-remote-image";
 import {
   SourceActionsMenu,
@@ -12,7 +10,10 @@ import {
 import { SourceProfileBadge } from "@/components/sources/source-profile-badge";
 import { SourceSiteProfileDialog } from "@/components/sources/source-site-profile-dialog";
 import { resolveSourceVersion } from "@/components/sources/source-version-select";
-import { formatUrlLabel } from "@/components/sources/source-display";
+import {
+  resolveStartUrls,
+  SourceStartUrlsHint,
+} from "@/components/sources/source-start-urls-hint";
 import {
   isPersonalCloudSource,
   SourceCloudBadge,
@@ -55,162 +56,6 @@ function BannerFavicon({
     >
       {initials}
     </div>
-  );
-}
-
-function resolveStartUrls(source: SourceSummary): string[] {
-  const fromList = (source.startUrls ?? []).filter(Boolean);
-  if (fromList.length > 0) return [...new Set(fromList)];
-  return source.startUrl ? [source.startUrl] : [];
-}
-
-/** Path after host for glance label, e.g. https://mastra.ai/docs → /docs */
-function formatStartUrlPathLabel(url: string): string {
-  try {
-    const parsed = new URL(url);
-    const path = parsed.pathname.replace(/\/+$/, "") || "/";
-    return path;
-  } catch {
-    const slash = url.lastIndexOf("/");
-    if (slash >= 0 && slash < url.length - 1) {
-      return `/${url.slice(slash + 1)}`;
-    }
-    return url;
-  }
-}
-
-function StartUrlsHint({ urls }: { urls: string[] }) {
-  const [open, setOpen] = useState(false);
-  const [rect, setRect] = useState<{ top: number; left: number } | null>(null);
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const panelRef = useRef<HTMLDivElement>(null);
-  const count = urls.length;
-
-  useEffect(() => {
-    if (!open) return;
-
-    const sync = () => {
-      const button = buttonRef.current;
-      if (!button) return;
-      const box = button.getBoundingClientRect();
-      const width = 260;
-      const left = Math.min(
-        Math.max(12, box.left),
-        window.innerWidth - width - 12,
-      );
-      const top = Math.min(box.bottom + 4, window.innerHeight - 12);
-      setRect({ top, left });
-    };
-
-    sync();
-
-    const onPointerDown = (event: MouseEvent) => {
-      const target = event.target as Node;
-      if (
-        !buttonRef.current?.contains(target) &&
-        !panelRef.current?.contains(target)
-      ) {
-        setOpen(false);
-      }
-    };
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-
-    window.addEventListener("resize", sync);
-    window.addEventListener("scroll", sync, true);
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("resize", sync);
-      window.removeEventListener("scroll", sync, true);
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
-  }, [open]);
-
-  if (count === 0) return null;
-
-  const firstPath = formatStartUrlPathLabel(urls[0]!);
-  const label =
-    count === 1 ? firstPath : `${firstPath} +${count - 1}`;
-
-  const panel =
-    open && rect
-      ? createPortal(
-          <div
-            ref={panelRef}
-            role="dialog"
-            aria-label="Start URLs"
-            style={{
-              position: "fixed",
-              top: rect.top,
-              left: rect.left,
-              width: 260,
-              zIndex: 220,
-            }}
-            className="max-h-56 overflow-auto rounded-lg border border-border bg-card-solid py-1.5 shadow-card"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <p className="px-3 pb-1 font-mono text-[0.5rem] font-semibold tracking-[0.1em] text-muted uppercase">
-              Start URLs
-            </p>
-            <ul className="space-y-0.5">
-              {urls.map((url) => (
-                <li key={url}>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    title={url}
-                    className="block truncate px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-surface-raised hover:text-accent"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    {formatUrlLabel(url)}
-                  </a>
-                </li>
-              ))}
-            </ul>
-          </div>,
-          document.body,
-        )
-      : null;
-
-  return (
-    <>
-      <button
-        ref={buttonRef}
-        type="button"
-        aria-expanded={open}
-        aria-haspopup="dialog"
-        title={
-          count === 1
-            ? urls[0]
-            : `${count} start URLs — click to view`
-        }
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          setOpen((current) => !current);
-        }}
-        className={cn(
-          "inline-flex max-w-full items-center gap-0.5 truncate rounded-sm normal-case tracking-normal text-muted transition-colors",
-          "hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/20",
-          open && "text-foreground",
-        )}
-      >
-        <span className="truncate">{label}</span>
-        <ChevronDown
-          className={cn(
-            "size-3 shrink-0 opacity-70 transition-transform",
-            open && "rotate-180",
-          )}
-          aria-hidden
-        />
-      </button>
-      {panel}
-    </>
   );
 }
 
@@ -356,7 +201,7 @@ export function SourceBannerCard({
                   <span className="shrink-0 text-muted/50" aria-hidden>
                     ·
                   </span>
-                  <StartUrlsHint urls={startUrls} />
+                  <SourceStartUrlsHint urls={startUrls} variant="subtle" />
                 </>
               ) : null}
             </div>

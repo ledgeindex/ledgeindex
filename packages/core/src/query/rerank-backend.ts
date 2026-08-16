@@ -37,7 +37,6 @@ export type RerankBackend =
   | "cohere-v4-fast"
   | "cohere-mastra"
   | "llm-batch"
-  | "local"
   | "local-v2"
   | "local-auto"
   | "local-mini"
@@ -45,7 +44,6 @@ export type RerankBackend =
   | "vector";
 
 const LOCAL_CE_BACKENDS = new Set<RerankBackend>([
-  "local",
   "local-v2",
   "local-auto",
   "local-mini",
@@ -64,7 +62,6 @@ const KNOWN_BACKENDS = new Set<string>([
   "cohere-v4-fast",
   "cohere-mastra",
   "llm-batch",
-  "local",
   "local-v2",
   "local-auto",
   "local-mini",
@@ -72,21 +69,76 @@ const KNOWN_BACKENDS = new Set<string>([
   "vector",
 ]);
 
-export function resolveRerankBackend(): RerankBackend {
+/**
+ * The backend, plus whether anything actually asked for it. A default may be
+ * overridden by what the candidates turn out to be; an explicit choice may not.
+ */
+export function resolveRerankBackendSelection(): {
+  backend: RerankBackend;
+  explicit: boolean;
+} {
   // Cloud-hosted indexes: fixed fast path — Cohere Auto + Gemini embeds.
-  if (preferCloudRetrieval()) return "cohere-auto";
+  if (preferCloudRetrieval()) return { backend: "cohere-auto", explicit: true };
 
   const requestOverride = getRequestRerankBackend();
-  if (requestOverride) return requestOverride;
+  if (requestOverride) return { backend: requestOverride, explicit: true };
 
-  const explicit = process.env.LEDGEINDEX_RERANK_BACKEND?.toLowerCase();
-  if (explicit && KNOWN_BACKENDS.has(explicit)) {
-    return explicit as RerankBackend;
+  const configured = process.env.LEDGEINDEX_RERANK_BACKEND?.toLowerCase();
+  if (configured && KNOWN_BACKENDS.has(configured)) {
+    return { backend: configured as RerankBackend, explicit: true };
   }
 
   // Local indexes: never silently escalate to Cohere just because a key exists.
   // The UI Local/Cloud toggle must opt into cloud rerank via request override.
-  return "local-auto";
+  return { backend: "local-auto", explicit: false };
+}
+
+export function resolveRerankBackend(): RerankBackend {
+  return resolveRerankBackendSelection().backend;
+}
+
+/**
+ * Share of candidates carrying code metadata above which a source counts as a
+ * code source. Well clear of a docs source that happens to include a few
+ * fenced examples, and well below a repo whose docs pages are indexed too.
+ */
+const CODE_CANDIDATE_RATIO = 0.6;
+
+function skipCrossEncoderForCode(): boolean {
+  const raw =
+    process.env.LEDGEINDEX_CODE_SKIP_CROSS_ENCODER?.trim().toLowerCase();
+  if (!raw) return true;
+  return raw !== "0" && raw !== "false" && raw !== "off";
+}
+
+/**
+ * Which backend should actually score a candidate pool that looks like code.
+ *
+ * The cross-encoders in use are trained on prose, and on the Stagehand golden
+ * set the local one is worse than the fused order at every depth past rank 1,
+ * costs four times the latency, and — because its scores are low on code while
+ * carrying half the weight in the blend — pushes correct chunks under
+ * `RELEVANCE_THRESHOLD`, where they are discarded rather than merely demoted.
+ * Measured on the production path: recall@8 of 77.8% with the cross-encoder
+ * against 100% without, three of four misses being answers the ranking found
+ * and the threshold then dropped.
+ *
+ * So for code, ranking is the fused order. An explicit choice still wins, and
+ * `LEDGEINDEX_CODE_SKIP_CROSS_ENCODER=0` restores the old behaviour.
+ */
+export function effectiveRerankBackend(codeCandidateRatio: number): {
+  backend: RerankBackend;
+  codeSourceOverride: boolean;
+} {
+  const selection = resolveRerankBackendSelection();
+  if (
+    !selection.explicit &&
+    skipCrossEncoderForCode() &&
+    codeCandidateRatio >= CODE_CANDIDATE_RATIO
+  ) {
+    return { backend: "vector", codeSourceOverride: true };
+  }
+  return { backend: selection.backend, codeSourceOverride: false };
 }
 
 /**
@@ -159,6 +211,12 @@ function labelForLocalDevice(device: string | null | undefined): string {
  */
 export function describeRerankRuntimeMeta(options?: {
   cascadePassUsed?: boolean;
+  /**
+   * What actually ran, when it differs from what the config resolves to — a code
+   * source overrides the default backend, and the UI should say so rather than
+   * report the backend that was configured but skipped.
+   */
+  effectiveBackend?: RerankBackend;
 }): {
   rerankBackend: RerankBackend | "cascade";
   rerankDevice: string | null;
@@ -172,7 +230,7 @@ export function describeRerankRuntimeMeta(options?: {
     };
   }
 
-  const backend = resolveRerankBackend();
+  const backend = options?.effectiveBackend ?? resolveRerankBackend();
   if (COHERE_BACKENDS.has(backend) || backend === "cohere-mastra") {
     return {
       rerankBackend: backend,
@@ -225,14 +283,20 @@ export async function executeKapaRerank(input: {
   results: QueryResult[];
   queryVector?: number[];
   topK?: number;
+  /** Fraction of candidates that carry code metadata; see {@link effectiveRerankBackend}. */
+  codeCandidateRatio?: number;
 }): Promise<RerankResult[]> {
-  const backend = resolveRerankBackend();
+  const { backend, codeSourceOverride } = effectiveRerankBackend(
+    input.codeCandidateRatio ?? 0,
+  );
   const topK = input.topK ?? SEARCH_TOP_K;
 
   if (input.results.length === 0) return [];
 
   logVerbose("Kapa rerank backend", "KapaRerank", {
     backend,
+    codeSourceOverride,
+    codeCandidateRatio: input.codeCandidateRatio ?? 0,
     requestOverride: getRequestRerankBackend() ?? null,
     candidateCount: input.results.length,
     topK,
@@ -291,9 +355,6 @@ export async function executeKapaRerank(input: {
 
     case "llm-batch":
       return batchLlmRerank(rerankInput);
-
-    case "local":
-      return runLocalWithVectorFallback(rerankInput);
 
     case "local-v2":
       return runLocalWithVectorFallback({

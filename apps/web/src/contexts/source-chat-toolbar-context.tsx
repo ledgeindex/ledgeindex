@@ -28,6 +28,7 @@ import { useAuth } from "@/lib/auth-context";
 type ActiveSource = {
   sourceId: string;
   sourceName: string;
+  startUrls?: string[];
   scope?: "personal" | "global";
   hosting?: "local" | "cloud";
 };

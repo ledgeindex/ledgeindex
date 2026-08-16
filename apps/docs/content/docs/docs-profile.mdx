@@ -1,44 +1,67 @@
-# Docs profile (`@ledgeindex/docs`)
+# Sources, chat & MCP
 
-The **docs** profile is the product path for documentation sources: ingest a site, store chunks, chat with retrieval, and expose tools over MCP.
+The **`@ledgeindex/docs`** package — what powers web, desktop, and the SDK. You add a docs URL or repo, crawl/index it, ask questions with citations, and expose the same index to agents via MCP.
 
-You usually enable it through `@ledgeindex/server` with `profiles: ["docs", ...]`. You do not need to mount the package by hand unless you are building a custom host.
+## When to use it
 
-## What it adds
+Use `@ledgeindex/docs` when you want documentation you can chat with or expose to an agent. Add a source, crawl it, ask questions, connect MCP if you need it.
 
-- Source CRUD and ownership (personal and global/public sources)
-- Ingest and refresh workflows (crawl progress, cancel, resume)
-- RAG chat against a source (Mastra)
-- MCP HTTP transport + OAuth helpers for IDE / agent clients
-- Access helpers used by the hosted gate (approve / pending / denied)
+| You want… | Use |
+|-----------|-----|
+| Terminal or a Node script, no server | [SDK](/guides/setup-sdk) or [CLI](/guides/setup-cli) |
+| A browser UI plus API | [Set up web](/guides/setup-web) |
+| An API you already have running | [@ledgeindex/client](/reference/client) |
+| Your own Fastify host | [Server](/docs/server) with `profiles: ["docs"]` |
 
-## Typical HTTP surface
+Skip this package if you only need crawl, chunk, and embed functions with no sources model. That is [@ledgeindex/core](/docs/core).
 
-Exact paths live in the package routes. Expect families like:
+Skip it if you want structured site research (pricing, positioning, package guides) instead of a searchable index. That is [@ledgeindex/profile](/docs/profile).
+
+## What it includes
+
+- Sources you can create, update, and delete (personal or global)
+- Crawl and ingest with progress, cancel, and resume
+- Refresh when the upstream docs change
+- Source chat with citations
+- MCP over HTTP for Cursor, Claude Desktop, and other clients
+
+## Running it
+
+**With a server.** Enable the docs profile on `@ledgeindex/server`:
+
+```ts
+profiles: ["docs"]
+```
+
+See [Server](/docs/server).
+
+**Without a server.** The SDK and CLI bundle this package in-process. See [Guides](/guides).
+
+API details: [@ledgeindex/docs](/reference/docs-runtime). Route list: [HTTP API](/reference/api).
+
+## HTTP routes
+
+Full tables live in the [HTTP API reference](/reference/api). Short map:
 
 | Area | Examples |
 |------|----------|
-| Sources | `GET/POST /api/sources`, source detail and ownership |
+| Sources | `GET/POST /api/sources`, source detail |
 | Ingest | `POST /api/sources/:id/ingest/start`, progress, cancel, resume |
-| Refresh | start / status / apply / dismiss under `/api/sources/:id/refresh/*` |
-| Chat / Mastra | mounted Mastra routes when the docs contribution is active |
-| MCP | MCP HTTP path from health metadata; OAuth under the MCP OAuth paths |
-| Health | `/health`, `/health/packages`, docs health with MCP path hints |
+| Refresh | `/api/sources/:id/refresh/*` |
+| Chat | `POST /api/sources/:id/ask`, `/chat/docsAgent` ([chat API](/reference/api/chat)) |
+| MCP | Path from `GET /health`; OAuth under `/.well-known/*` ([health & MCP](/reference/api/health)) |
+| Health | `/health`, `/health/packages`, `/health/db` |
 
-Use `GET /health` (and related package health) to confirm MCP HTTP path and profile status after boot.
+After boot, `GET /health` shows the MCP path and whether the docs profile loaded.
 
-## Auth and early access
+## Auth (optional)
 
-When the host requires API auth (`LEDGEINDEX_AUTH_REQUIRED` / cloud mode), the server registers an approved-access middleware. Unapproved signed-in users get **403** with `accessStatus` of `pending` or `denied`, except for a few gate endpoints (`/api/auth/me`, `/api/access-request`, health).
-
-Admins are treated as approved. Desktop sidecars that run without that auth requirement are not blocked by this gate.
-
-Mastra agent/workflow HTTP is not left open without auth in production hosts. MCP transport and OAuth stay reachable as designed for client connect flows.
+Local dev and the desktop sidecar default to `LEDGEINDEX_AUTH_REQUIRED=0`, so you do not need sign-in. Set `LEDGEINDEX_AUTH_REQUIRED=1` and add your host auth plugin when `/api/*` routes should require a token. See [HTTP API auth](/reference/api/auth) and [Set up web](/guides/setup-web).
 
 ## Related
 
 | Goal | Page |
 |------|------|
-| Mounting profiles | [Server](/docs/server) |
-| Crawl / chunk primitives | [Core](/docs/core) |
-| Web and desktop clients | [Apps](/docs/apps), [Guides](/guides) |
+| Mount profiles on a server | [Server](/docs/server) |
+| Crawl and embed functions | [Core](/docs/core) |
+| Web and desktop apps | [Web & desktop](/docs/apps), [Guides](/guides) |

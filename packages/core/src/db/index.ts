@@ -31,9 +31,9 @@ class LocalWithCloudGlobalStore implements Store {
   ) {}
 
   async getSource(id: string): Promise<Source | null> {
-    const fromCloud = await this.cloud.getSource(id);
-    if (fromCloud) return fromCloud;
-    return this.local.getSource(id);
+    const fromLocal = await this.local.getSource(id);
+    if (fromLocal) return fromLocal;
+    return this.cloud.getSource(id);
   }
 
   async listGlobalSources(): Promise<Source[]> {
@@ -44,7 +44,7 @@ class LocalWithCloudGlobalStore implements Store {
     if (!projectId) {
       const [localSources, global] = await Promise.all([
         this.local.listSources(),
-        this.cloud.listGlobalSources(),
+        this.listGlobalSources(),
       ]);
       const personal = localSources.filter((s) => s.scope !== "global");
       const byId = new Map<string, Source>();
@@ -58,15 +58,15 @@ class LocalWithCloudGlobalStore implements Store {
     slug: string,
     slugOwnerKey: string,
   ): Promise<Source | null> {
-    const fromCloud = await this.cloud.getSourceBySlug(slug, slugOwnerKey);
-    if (fromCloud) return fromCloud;
-    return this.local.getSourceBySlug(slug, slugOwnerKey);
+    const fromLocal = await this.local.getSourceBySlug(slug, slugOwnerKey);
+    if (fromLocal) return fromLocal;
+    return this.cloud.getSourceBySlug(slug, slugOwnerKey);
   }
 
   async listSourcesByFamilyId(sourceFamilyId: string): Promise<Source[]> {
-    const fromCloud = await this.cloud.listSourcesByFamilyId(sourceFamilyId);
-    if (fromCloud.length > 0) return fromCloud;
-    return this.local.listSourcesByFamilyId(sourceFamilyId);
+    const fromLocal = await this.local.listSourcesByFamilyId(sourceFamilyId);
+    if (fromLocal.length > 0) return fromLocal;
+    return this.cloud.listSourcesByFamilyId(sourceFamilyId);
   }
 
   async listSourcesByCanonicalUrl(
@@ -148,19 +148,22 @@ class LocalWithCloudGlobalStore implements Store {
   ): Promise<Source | null> {
     // Cloud-owned global sources: persist metadata (incl. categories) to cloud
     // so every local API can read the same shelves. Personal stays local-only.
+    const localSource = await this.local.getSource(id);
+    if (localSource) {
+      return this.local.updateSource(id, input);
+    }
     const cloudSource = await this.cloud.getSource(id);
     if (cloudSource) {
       return this.cloud.updateSource(id, input);
     }
-    return this.local.updateSource(id, input);
+    return null;
   }
   async deleteSource(id: string): Promise<boolean> {
-    // Cloud-owned global sources must be deleted from cloud (same as updateSource).
-    const cloudSource = await this.cloud.getSource(id);
-    if (cloudSource) {
-      return this.cloud.deleteSource(id);
+    const localSource = await this.local.getSource(id);
+    if (localSource) {
+      return this.local.deleteSource(id);
     }
-    return this.local.deleteSource(id);
+    return this.cloud.deleteSource(id);
   }
   createCrawlRun(input: {
     sourceId: string;

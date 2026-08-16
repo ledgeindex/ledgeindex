@@ -1,0 +1,96 @@
+# createLedgeIndex
+
+Initialize the in-process runtime and return a `LedgeIndex` handle.
+
+## Signature
+
+```ts
+import { createLedgeIndex } from "@ledgeindex/sdk";
+
+const li = await createLedgeIndex(options?: LedgeIndexOptions): Promise<LedgeIndex>;
+```
+
+Call once per process (or reuse the returned handle). Initializes Mastra, storage, and vector backends.
+
+## LedgeIndexOptions
+
+| Option | Default | Purpose |
+|--------|---------|---------|
+| `dataDir` | `~/.ledgeindex/data` | Sources, LibSQL vectors, workflow state |
+| `localUserId` | `ledgeindex-sdk-local` | Owner id for personal sources |
+| `keys.openai` | env `OPENAI_API_KEY` | OpenAI — required for `ask` / `autoFilter` / `enrichExamples` |
+| `keys.google` | env `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini — required for `ask` / `autoFilter` / `enrichExamples`; also pgvector embeddings |
+| `keys.deepseek` | env `DEEPSEEK_API_KEY` | DeepSeek — required for `ask` / `autoFilter` / `enrichExamples` |
+| `keys.cohere` | env `COHERE_API_KEY` | Cohere rerank on `ask` |
+| `provider` | auto (google → deepseek → openai) | Force chat/crawl LLM provider |
+| `vectorBackend` | `libsql` | `libsql` (FastEmbed) or `pgvector` (Gemini) |
+| `postgresUrl` | env `POSTGRES_CONNECTION_STRING` | Required for `pgvector` |
+| `rerankBackend` | cohere if key else `local` | Override rerank on `ask` |
+
+Full env list: [Options & env](/reference/sdk/options).
+
+## LedgeIndex handle
+
+```ts
+type LedgeIndex = {
+  readonly dataDir: string;
+  readonly localUserId: string;
+  crawl(options: LedgeIndexCrawlOptions): Promise<RunWebCrawlResult>;
+  indexRepo(options: LedgeIndexIndexRepoOptions): Promise<LedgeIndexIndexRepoResult>;
+  ask(
+    sourceIdOrSlug: string,
+    question: string,
+    options?: LedgeIndexAskOptions,
+  ): Promise<SourceAskResult>;
+  askAcross(
+    question: string,
+    options?: LedgeIndexAskAcrossOptions,
+  ): Promise<RoutedAskResult>;
+  listSources(): Promise<SourceSummary[]>;
+  listSourceSets(): Promise<LedgeIndexSourceSet[]>;
+  saveSourceSet(options: LedgeIndexSaveSourceSetOptions): Promise<LedgeIndexSourceSet>;
+  resolveSource(token: string): Promise<{ sourceId: string; name: string; slug: string }>;
+  profile(url: string, options?: LedgeIndexProfileOptions): Promise<CompanyProfileResult>;
+  checkForUpdates(options?: CheckForUpdatesOptions): Promise<CheckForUpdatesResult>;
+  applyUpdates(options?: ApplyUpdatesOptions): Promise<ApplyUpdatesResult>;
+  deleteSource(sourceIdOrSlug: string): Promise<void>;
+};
+```
+
+`askAcross` requires a chat key and runs the Explore pipeline over multiple sources — see [askAcross](/reference/sdk/ask-across).
+
+## Usage
+
+```ts
+const li = await createLedgeIndex({
+  dataDir: "/var/ledgeindex/data",
+  localUserId: "my-app",
+  keys: {
+    google: process.env.GOOGLE_GENERATIVE_AI_API_KEY,
+    cohere: process.env.COHERE_API_KEY,
+  },
+  provider: "google",
+});
+
+const sources = await li.listSources();
+const { sourceId } = await li.resolveSource("docs-example");
+```
+
+## Low-level init
+
+If you need finer control without the facade object:
+
+```ts
+import { resolveOptions, initRuntime } from "@ledgeindex/sdk";
+
+const resolved = resolveOptions({ keys: { google: "..." } });
+await initRuntime(resolved);
+// then runWebCrawl / askQuestion directly
+```
+
+## Related
+
+- [crawl](/reference/sdk/crawl)
+- [ask](/reference/sdk/ask)
+- [askAcross](/reference/sdk/ask-across)
+- [Options & env](/reference/sdk/options)

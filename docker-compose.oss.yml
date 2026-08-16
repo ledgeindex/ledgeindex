@@ -1,0 +1,56 @@
+# LedgeIndex OSS — API + Web UI in one command (from repo clone).
+# Light stack: LibSQL + FastEmbed (no Postgres). For Gemini embeds + pgvector see docker-compose.postgres.yml.
+## Usage:
+#   cp env.example .env
+#   # add OPENAI_API_KEY or GOOGLE_GENERATIVE_AI_API_KEY to .env
+#   docker compose -f docker-compose.oss.yml up --build
+#
+# UI:  http://localhost:3004
+# API:  http://localhost:3010
+
+services:
+  api:
+    image: node:22-bookworm-slim
+    working_dir: /app/ledgeindex
+    command: >
+      bash -lc "npm install && npm run build:packages && npm run dev:api"
+    ports:
+      - "3010:3010"
+    environment:
+      PORT: "3010"
+      HOST: "0.0.0.0"
+      LEDGEINDEX_AUTH_REQUIRED: "0"
+      LEDGEINDEX_DATA_DIR: /data
+      MASTRA_PUBLIC_URL: http://localhost:3010
+      LEDGEINDEX_FRONTEND_URL: http://localhost:3004
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GOOGLE_GENERATIVE_AI_API_KEY: ${GOOGLE_GENERATIVE_AI_API_KEY:-}
+      DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      COHERE_API_KEY: ${COHERE_API_KEY:-}
+    volumes:
+      - ..:/app
+      - ledgeindex-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3010/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+
+  web:
+    image: node:22-bookworm-slim
+    working_dir: /app/ledgeindex
+    command: >
+      bash -lc "npm install && npm run dev:web"
+    ports:
+      - "3004:3004"
+    environment:
+      NEXT_PUBLIC_LEDGEINDEX_API_URL: http://localhost:3010
+    volumes:
+      - ..:/app
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  ledgeindex-data:
