@@ -8,6 +8,7 @@ import "nextra-theme-docs/style.css";
 import "./globals.css";
 
 export const metadata = {
+  metadataBase: new URL("https://ledgeindex.com"),
   title: {
     default: "LedgeIndex Docs",
     template: "%s — LedgeIndex Docs",

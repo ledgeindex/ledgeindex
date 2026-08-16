@@ -8,10 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { cn } from "@/lib/utils";
 
-const NAV_LINKS = [
-  { href: "#use-cases", label: "Use cases" },
-  { href: "#showcase", label: "How it works" },
-] as const;
+const DOCS_HREF = "/docs";
 
 function GithubIcon({ className }: { className?: string }) {
   return (
@@ -63,19 +60,17 @@ export function SiteHeader() {
           )}
         >
           <div className="flex h-14 items-center justify-between gap-3 px-4 sm:h-16 sm:gap-4 sm:px-6">
-            <SiteBrand />
+            <div className="flex min-w-0 items-center gap-4 sm:gap-6">
+              <SiteBrand />
+              <a
+                href={DOCS_HREF}
+                className="text-sm text-muted transition-colors hover:text-foreground"
+              >
+                Docs
+              </a>
+            </div>
 
             <nav className="flex shrink-0 items-center gap-1.5 sm:gap-3">
-              {NAV_LINKS.map((link) => (
-                <a
-                  key={link.href}
-                  href={link.href}
-                  className="hidden text-sm text-muted transition-colors hover:text-foreground md:inline"
-                >
-                  {link.label}
-                </a>
-              ))}
-
               {/* social icons */}
               <div className="hidden items-center gap-0.5 lg:flex">
                 {SOCIAL_LINKS.map((social) => (
