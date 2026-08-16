@@ -2,6 +2,7 @@ import { Laptop, Package, Server } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Container } from "@/components/ui/container";
 import { Eyebrow, SectionBadge } from "@/components/ui/section-badge";
+import { SectionVisual } from "@/components/ui/section-visual";
 import { type DesktopReleaseAsset } from "@/lib/desktop-release";
 import { getLedgeIndexApiBaseUrl } from "@/lib/ledgeindex-api";
 import { cn } from "@/lib/utils";
@@ -122,6 +123,16 @@ export function OpenSourceSection({
             the desktop app. The hosted platform is the same code with managed
             hosting on top.
           </p>
+        </div>
+
+        <div className="mx-auto mt-8 max-w-md sm:mt-10 sm:max-w-lg">
+          <SectionVisual
+            src="/images/docs-kit.webp"
+            alt="Physical-looking docs kit: quick start guide, index, and interlocking blocks on a desk"
+            width={1024}
+            height={1024}
+            className="rounded-2xl border border-border/70 bg-surface-raised shadow-card"
+          />
         </div>
 
         <div className="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3 lg:gap-6">
