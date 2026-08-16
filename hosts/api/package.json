@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@ledgeindex/docs": "^0.1.11",
-    "@ledgeindex/server": "^0.1.11",
+    "@ledgeindex/docs": "^0.1.12",
+    "@ledgeindex/server": "^0.1.12",
     "dotenv": "^17.4.2"
   },
   "devDependencies": {

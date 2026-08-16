@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/profile",
-  "version": "0.1.11",
+  "version": "0.1.12",
   "description": "LedgeIndex profile — site/entity research profiles, landscape runs",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
@@ -35,7 +35,7 @@
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
-    "@ledgeindex/core": "^0.1.11",
+    "@ledgeindex/core": "^0.1.12",
     "@mastra/core": "^1.51.0",
     "exa-js": "^2.16.0",
     "fastify": "^5.10.0",
