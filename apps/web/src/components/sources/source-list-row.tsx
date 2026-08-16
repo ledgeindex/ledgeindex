@@ -121,6 +121,7 @@ export function SourceListRow({
   onCategoriesUpdated,
   onRefreshApplied,
   onSiteProfileUpdated,
+  onBrandingUpdated,
 }: {
   source: SourceSummary;
   /** 1-based catalog rank in the current ordered list. */
@@ -140,6 +141,10 @@ export function SourceListRow({
   onSiteProfileUpdated?: (
     sourceId: string,
     payload: { hasSiteProfile: boolean; siteProfileLensCount: number },
+  ) => void;
+  onBrandingUpdated?: (
+    sourceId: string,
+    payload: { ogImageUrl: string | null; faviconUrl: string | null },
   ) => void;
 }) {
   const router = useRouter();
@@ -363,6 +368,9 @@ export function SourceListRow({
             onRefreshApplied={onRefreshApplied}
             onSiteProfileUpdated={(payload) =>
               onSiteProfileUpdated?.(activeSource.id, payload)
+            }
+            onBrandingUpdated={(payload) =>
+              onBrandingUpdated?.(activeSource.id, payload)
             }
             className="size-7 md:hidden"
             contextPoint={contextPoint}

@@ -252,6 +252,27 @@ function DashboardContent() {
     );
   }
 
+  function handleBrandingUpdated(
+    sourceId: string,
+    payload: { ogImageUrl: string | null; faviconUrl: string | null },
+  ) {
+    setSources((current) =>
+      current.map((source) => {
+        if (
+          source.id === sourceId ||
+          source.versions.some((version) => version.id === sourceId)
+        ) {
+          return {
+            ...source,
+            ogImageUrl: payload.ogImageUrl,
+            faviconUrl: payload.faviconUrl,
+          };
+        }
+        return source;
+      }),
+    );
+  }
+
   function handleRefreshApplied() {
     void listSources(scope)
       .then(({ sources: next }) => setSources(groupSourcesByFamily(next)))
@@ -581,6 +602,7 @@ function DashboardContent() {
                           onCategoriesUpdated={handleCategoriesUpdated}
                           onRefreshApplied={handleRefreshApplied}
                           onSiteProfileUpdated={handleSiteProfileUpdated}
+                          onBrandingUpdated={handleBrandingUpdated}
                         />
                       );
                     })}
@@ -633,6 +655,7 @@ function DashboardContent() {
                           onSlugUpdated={handleSlugUpdated}
                           onRefreshApplied={handleRefreshApplied}
                           onSiteProfileUpdated={handleSiteProfileUpdated}
+                          onBrandingUpdated={handleBrandingUpdated}
                         />
                       ))}
                     </div>
@@ -667,6 +690,7 @@ function DashboardContent() {
                           onSlugUpdated={handleSlugUpdated}
                           onRefreshApplied={handleRefreshApplied}
                           onSiteProfileUpdated={handleSiteProfileUpdated}
+                          onBrandingUpdated={handleBrandingUpdated}
                         />
                       ))}
                     </div>

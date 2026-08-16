@@ -19,7 +19,7 @@ import {
   mergeSourceCategories,
   splitSourceCategories,
 } from "@/lib/source-category-presets";
-import { updateSourceCategories } from "@/lib/ledgeindex-api";
+import { updateSourceCategories, refreshSourceBranding } from "@/lib/ledgeindex-api";
 import { cn } from "@/lib/utils";
 import type { SourceSummary } from "@/lib/ledgeindex-api";
 
@@ -42,6 +42,7 @@ export function SourceActionsMenu({
   onRefreshApplied,
   onStartUrlsUpdated,
   onSiteProfileUpdated,
+  onBrandingUpdated,
   className,
   align = "right",
   /** Hide the ⋮ button — open via `contextPoint` (right-click). */
@@ -61,6 +62,10 @@ export function SourceActionsMenu({
   onSiteProfileUpdated?: (payload: {
     hasSiteProfile: boolean;
     siteProfileLensCount: number;
+  }) => void;
+  onBrandingUpdated?: (payload: {
+    ogImageUrl: string | null;
+    faviconUrl: string | null;
   }) => void;
   className?: string;
   align?: "left" | "right";
@@ -83,6 +88,7 @@ export function SourceActionsMenu({
   );
   const [shelfSubmenuOpen, setShelfSubmenuOpen] = useState(false);
   const [savingShelf, setSavingShelf] = useState(false);
+  const [refreshingBranding, setRefreshingBranding] = useState(false);
   const [menuRect, setMenuRect] = useState<{
     top: number;
     left: number;
@@ -113,7 +119,7 @@ export function SourceActionsMenu({
       88 +
       32 +
       (source.chunkCount > 0 && canEditCategories ? 64 : 0) +
-      (canEditCategories ? 32 + 64 + 32 + 32 : 0) +
+      (canEditCategories ? 32 + 64 + 32 + 32 + 32 : 0) +
       (onDelete ? 32 : 0)
     );
   }, [onDelete, canEditCategories, source.chunkCount]);
@@ -222,6 +228,28 @@ export function SourceActionsMenu({
     }
   }
 
+  async function updateOgImage() {
+    if (refreshingBranding || !source.startUrl) return;
+    setRefreshingBranding(true);
+    try {
+      const { source: updated } = await refreshSourceBranding(
+        source.id,
+        source.startUrl,
+      );
+      onBrandingUpdated?.({
+        ogImageUrl: updated.ogImageUrl ?? null,
+        faviconUrl: updated.faviconUrl ?? null,
+      });
+      closeMenu();
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Could not update OG image";
+      window.alert(message);
+    } finally {
+      setRefreshingBranding(false);
+    }
+  }
+
   const menu =
     open && menuRect
       ? createPortal(
@@ -284,6 +312,17 @@ export function SourceActionsMenu({
               >
                 Review selection
               </Link>
+            ) : null}
+            {canEditCategories ? (
+              <button
+                type="button"
+                role="menuitem"
+                disabled={!source.startUrl || refreshingBranding}
+                onClick={() => void updateOgImage()}
+                className="flex w-full items-center px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-surface-raised disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {refreshingBranding ? "Updating OG…" : "Update OG image"}
+              </button>
             ) : null}
             {canEditCategories ? (
               <button

@@ -71,6 +71,7 @@ export function SourceBannerCard({
   onSlugUpdated,
   onRefreshApplied,
   onSiteProfileUpdated,
+  onBrandingUpdated,
 }: {
   source: SourceSummary;
   highlighted?: boolean;
@@ -86,6 +87,10 @@ export function SourceBannerCard({
   onSiteProfileUpdated?: (
     sourceId: string,
     payload: { hasSiteProfile: boolean; siteProfileLensCount: number },
+  ) => void;
+  onBrandingUpdated?: (
+    sourceId: string,
+    payload: { ogImageUrl: string | null; faviconUrl: string | null },
   ) => void;
 }) {
   const router = useRouter();
@@ -226,6 +231,9 @@ export function SourceBannerCard({
           onRefreshApplied={onRefreshApplied}
           onSiteProfileUpdated={(payload) =>
             onSiteProfileUpdated?.(activeSource.id, payload)
+          }
+          onBrandingUpdated={(payload) =>
+            onBrandingUpdated?.(activeSource.id, payload)
           }
         />
       ) : null}

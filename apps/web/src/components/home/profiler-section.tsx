@@ -25,12 +25,13 @@ export function ProfilerSection() {
           <div>
             <SectionBadge>Profiler</SectionBadge>
             <h2 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
-              A clear picture of any product site
+              Built for research and meta information
             </h2>
             <p className="mt-3 max-w-lg text-sm leading-6 text-muted sm:text-base sm:leading-7">
-              Besides indexing docs, LedgeIndex can research a product site and
-              pull out who they are, what they offer, pricing, and more. Each
-              fact comes with a link you can open.
+              Point the profiler at a product site and get structured fields you
+              can use for competitive research, source catalogs, or onboarding
+              metadata. Identity, pricing, capabilities, and more, each with a
+              link back to the page it came from.
             </p>
 
             <div className="mt-5 flex flex-wrap gap-1.5">

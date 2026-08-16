@@ -36,7 +36,12 @@ import {
   SOURCE_CONTENT_TYPE_LABELS,
   type SourceMetadata,
 } from "@/lib/source-metadata";
-import { partitionSkippedUrls, isHttpStatusSkipReason, promoteHttpErrorsIntoReviewList } from "@/lib/canonical-dedupe";
+import {
+  partitionSkippedUrls,
+  isHttpStatusSkipReason,
+  promoteHttpErrorsIntoReviewList,
+  type DiscoveredReviewUrl,
+} from "@/lib/canonical-dedupe";
 import {
   SourceVersionResolutionModal,
   type VersionResolutionChoice,
@@ -1677,7 +1682,7 @@ export function WebCrawlSetup() {
 
     if (snapshot.suspendedStep === "crawl-review-step") {
       const payload = snapshot.suspendPayload as {
-        urls?: { url: string; title?: string }[];
+        urls?: DiscoveredReviewUrl[];
         skipped?: { url: string; reason: string }[];
         pagesDiscovered?: number;
         httpStatusFiltered?: number;
@@ -1689,7 +1694,11 @@ export function WebCrawlSetup() {
       // Filter off → keep HTTP error pages in the review list (marked), not only skipped.
       // Filter on → leave them stripped; AI filter may drop more.
       const keepHttpErrorsInList = !autoDiscoverExcludesRef.current;
-      const promoted = keepHttpErrorsInList
+      const promoted: {
+        urls: DiscoveredReviewUrl[];
+        skipped: { url: string; reason: string }[];
+        httpErrorCount: number;
+      } = keepHttpErrorsInList
         ? promoteHttpErrorsIntoReviewList(rawUrls, rawSkipped)
         : {
             urls: rawUrls,
@@ -1701,7 +1710,7 @@ export function WebCrawlSetup() {
             ),
           };
 
-      const urls = promoted.urls;
+      const urls: DiscoveredReviewUrl[] = promoted.urls;
       const skipped = promoted.skipped;
       setCrawlRun({
         id: snapshot.runId,

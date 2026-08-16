@@ -906,6 +906,22 @@ export async function updateSourceCategories(id: string, categories: string[]) {
   return updateSource(id, { categories });
 }
 
+/**
+ * Re-fetch OG image + favicon for a source start URL (including parent-root
+ * fallback when the docs path has no branding), then persist on the source.
+ */
+export async function refreshSourceBranding(id: string, startUrl: string) {
+  const url = startUrl.trim();
+  if (!url) {
+    throw new Error("Source has no start URL to probe for branding");
+  }
+  const { preflight } = await preflightSite(url);
+  return updateSource(id, {
+    ogImageUrl: preflight.ogImage ?? null,
+    faviconUrl: preflight.faviconUrl ?? null,
+  });
+}
+
 export async function updateSourceDocsIdentity(
   id: string,
   docsIdentity: DocsIdentity,

@@ -12,7 +12,7 @@ import { OpenSourceSection } from "@/components/home/open-source-section";
 import { AppsComingSection } from "@/components/home/apps-coming-section";
 import { AgentGroundingSection } from "@/components/home/agent-grounding-section";
 import { ProfilerSection } from "@/components/home/profiler-section";
-import { PinpointKnowledgeSection } from "@/components/home/pinpoint-knowledge-section";
+import { AskAcrossSection } from "@/components/home/ask-across-section";
 import { RegistrySection } from "@/components/home/registry-section";
 import { SourceBuilderSection } from "@/components/home/source-builder-section";
 import { getLatestDesktopMacRelease, getLatestDesktopWindowsRelease } from "@/lib/desktop-release";
@@ -37,7 +37,7 @@ export default async function Home() {
         <UseCasesSection />
         <AcceleratorSection />
         <ProfilerSection />
-        <PinpointKnowledgeSection />
+        <AskAcrossSection />
         <OpenSourceSection
           windowsRelease={windowsRelease}
           macRelease={macRelease}
