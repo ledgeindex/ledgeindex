@@ -78,6 +78,7 @@ export function SourceChat({
     needsProviderKeys,
     chatModelsReady,
     canChooseModel,
+    retrievalStrictness,
   } = useSourceChatToolbar();
   const pathOptions = useMemo(
     () => pathOptionsFromStartUrls(startUrls),
@@ -163,8 +164,8 @@ export function SourceChat({
 
   return (
     <StreamingChatPanel
-      key={`${sourceId}-${modelId}-${effectiveRerankBackend}-${sourceScope}-${sourceHosting}-${toolbar?.retrievalStrictness ?? "strict"}`}
-      chatId={`source-chat-${sourceId}-${modelId}-${effectiveRerankBackend}-${toolbar?.retrievalStrictness ?? "strict"}`}
+      key={`${sourceId}-${modelId}-${effectiveRerankBackend}-${sourceScope}-${sourceHosting}-${retrievalStrictness}`}
+      chatId={`source-chat-${sourceId}-${modelId}-${effectiveRerankBackend}-${retrievalStrictness}`}
       agent="docsAgent"
       modelId={modelId}
       sourceId={sourceId}
