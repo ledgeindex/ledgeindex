@@ -589,6 +589,7 @@ export function WebCrawlSetup() {
     setPatternsAreRegex(initialPatternsAreRegex);
   }, [initialPatternsAreRegex]);
   const [sourceName, setSourceName] = useState("");
+  const [sourceSlug, setSourceSlug] = useState("");
   const [preflightOgImage, setPreflightOgImage] = useState<string | null>(null);
   const [preflightFaviconUrl, setPreflightFaviconUrl] = useState<string | null>(
     null,
@@ -942,6 +943,7 @@ export function WebCrawlSetup() {
     setPrimaryStartUrl("");
     setAdditionalStartUrls([]);
     setSourceName("");
+    setSourceSlug("");
     setPreflightOgImage(null);
     setPreflightFaviconUrl(null);
     setPreflightTitle("");
@@ -973,6 +975,7 @@ export function WebCrawlSetup() {
       preflightAbortRef.current?.abort();
       setPreflightCheckedUrl(url);
       setSourceName(formatUrlLabel(url));
+      setSourceSlug("");
       setPreflightOgImage(null);
       setPreflightFaviconUrl(null);
       setPreflightTitle("");
@@ -989,6 +992,7 @@ export function WebCrawlSetup() {
 
     setPreflightState("loading");
     setPreflightError(null);
+    setSourceSlug("");
     setPreflightOgImage(null);
     setPreflightFaviconUrl(null);
     setPreflightTitle("");
@@ -1004,6 +1008,7 @@ export function WebCrawlSetup() {
       );
       setPreflightCheckedUrl(url);
       setSourceName(preflight.siteName);
+      setSourceSlug(preflight.siteSlug);
       setPreflightOgImage(preflight.ogImage ?? null);
       setPreflightFaviconUrl(preflight.faviconUrl ?? null);
       setPreflightTitle(preflight.title ?? "");
@@ -1020,6 +1025,7 @@ export function WebCrawlSetup() {
       if (error instanceof Error && error.name === "AbortError") return;
       setPreflightCheckedUrl(url);
       setSourceName(formatUrlLabel(url));
+      setSourceSlug("");
       setPreflightOgImage(null);
       setPreflightFaviconUrl(null);
       setPreflightTitle("");
@@ -1072,6 +1078,7 @@ export function WebCrawlSetup() {
         const [primary, ...rest] = cfg.startUrls;
         setSourceId(source.id);
         setSourceName(source.name);
+        setSourceSlug(source.slug ?? "");
         setPrimaryStartUrl(primary ?? "");
         setAdditionalStartUrls(rest);
         setIncludePatternsText(cfg.includePatterns.join("\n"));
@@ -1136,6 +1143,7 @@ export function WebCrawlSetup() {
 
         setSourceId(source.id);
         setSourceName(source.name);
+        setSourceSlug(source.slug ?? "");
         setPrimaryStartUrl(primary);
         setAdditionalStartUrls(additional);
         setIncludePatternsText(cfg.includePatterns.join("\n"));
@@ -1516,6 +1524,7 @@ export function WebCrawlSetup() {
     syncApiBaseForHosting({ scope: sourceScope, hosting });
     const createInput = {
       name: resolveSourceName(sourceName, primaryStartUrl),
+      ...(sourceSlug.trim() ? { slug: sourceSlug.trim() } : {}),
       scope: sourceScope as "personal" | "global",
       hosting,
       config,

@@ -29,7 +29,8 @@
     "publish:packages:dry-run": "node scripts/publish-packages.mjs --dry-run",
     "publish:packages": "node scripts/publish-packages.mjs",
     "release:packages": "node scripts/release-packages.mjs",
-    "release:packages:check": "node scripts/release-packages.mjs --check"
+    "release:packages:check": "node scripts/release-packages.mjs --check",
+    "eval:golden": "node scripts/golden-retrieve.mjs --golden scripts/golden/mastra.json"
   },
   "devDependencies": {
     "prettier": "^3.7.4"

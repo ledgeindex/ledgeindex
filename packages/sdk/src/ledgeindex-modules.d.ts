@@ -256,6 +256,7 @@ declare module "@ledgeindex/core/crawl/preflight.js" {
     ok: boolean;
     status: number;
     siteName: string;
+    siteSlug: string;
     ogImage?: string;
     faviconUrl?: string;
     metadata?: SourceMetadata;

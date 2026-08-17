@@ -1,5 +1,6 @@
 import type { KapaRetrievedChunk } from "./kapa-retrieve.js";
 import type { AnswerMode, CoverageTier } from "./assess-coverage.js";
+import type { RetrievalStrictness } from "./retrieval-strictness.js";
 
 export const LEDGEINDEX_RETRIEVAL_META_KEY = "ledgeindex_retrieval_meta";
 
@@ -45,6 +46,8 @@ export type RetrievalSearchAttempt = {
   directHitCount?: number;
   /** Rerank scores of direct hits (≥ threshold), highest first. */
   directHitScores?: number[];
+  /** Top rerank scores when nothing passed the threshold. */
+  rerankTopScores?: number[];
   prunedCount?: number;
 };
 
@@ -67,6 +70,10 @@ export type RetrievalTimings = {
 export type RetrievalMeta = {
   question: string;
   rewrittenQueries: string[];
+  /** Short natural-language question used for cross-encoder reranking. */
+  intentForRerank?: string;
+  /** Final cross-encoder query (intent + trimmed error/code snippet). */
+  rerankQuery?: string;
   rewriteMethod: "llm" | "catalog" | "fallback" | "cascade";
   rewriteModelId?: string;
   /** single = one topic area. multi = distinct areas — all queries searched and merged. */
@@ -86,7 +93,14 @@ export type RetrievalMeta = {
     succeeded: boolean;
   };
   relaxedPassUsed?: boolean;
-  /** True when cheap vector peek skipped rewrite + rerank. */
+  /** True when below-threshold rerank hits were shown to the answer agent. */
+  weakEvidenceUsed?: boolean;
+  /** Retrieval strictness used for this turn (strict / balanced / permissive). */
+  retrievalStrictness?: RetrievalStrictness;
+  /** Primary relevance threshold for the strict retrieve pass. */
+  relevanceThreshold?: number;
+  /** Relaxed threshold used on retry (balanced strictness). */
+  relaxedThreshold?: number;
   cascadePassUsed?: boolean;
   /** Top raw vector score that triggered the cascade early-exit. */
   cascadeTopScore?: number;

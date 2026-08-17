@@ -9,6 +9,22 @@ export function formatUrlLabel(url: string) {
   }
 }
 
+/** Short line for source pickers (storage + page count). */
+export function formatSourceListMeta(source: {
+  scope?: "personal" | "global";
+  hosting?: "local" | "cloud";
+  pageCount: number;
+}): string {
+  const storage =
+    source.scope === "global"
+      ? "Public"
+      : source.hosting === "cloud"
+        ? "Cloud"
+        : "Local";
+  const pages = source.pageCount;
+  return `${storage} · ${pages} page${pages === 1 ? "" : "s"}`;
+}
+
 export function formatIndexedAt(value: string | null) {
   if (!value) return "Not indexed";
   try {

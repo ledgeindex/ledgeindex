@@ -22,6 +22,11 @@ import {
   type LedgeIndexRerankBackendId,
 } from "@/lib/rerank-backend";
 import type { ChatSuggestionInput } from "@/lib/chat-suggestions";
+import {
+  readStoredRetrievalStrictness,
+  storeRetrievalStrictness,
+  type RetrievalStrictness,
+} from "@/lib/retrieval-strictness";
 import { useDesktopChatModels } from "@/lib/use-desktop-chat-models";
 import { useAuth } from "@/lib/auth-context";
 
@@ -42,6 +47,7 @@ type SourceChatToolbarContextValue = {
   exploreSession: boolean;
   modelId: LedgeIndexChatModelId;
   rerankBackend: LedgeIndexRerankBackendId;
+  retrievalStrictness: RetrievalStrictness;
   testPromptSuggestions: readonly ChatSuggestionInput[];
   availableModels: readonly LedgeIndexChatModel[];
   chatModelsReady: boolean;
@@ -55,6 +61,7 @@ type SourceChatToolbarContextValue = {
   setExploreSession: (active: boolean) => void;
   setModelId: (modelId: LedgeIndexChatModelId) => void;
   setRerankBackend: (backendId: LedgeIndexRerankBackendId) => void;
+  setRetrievalStrictness: (strictness: RetrievalStrictness) => void;
   setTestPromptSuggestions: (
     suggestions: readonly ChatSuggestionInput[],
   ) => void;
@@ -91,6 +98,8 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
     useState<LedgeIndexChatModelId>(DEFAULT_CHAT_MODEL_ID);
   const [rerankBackend, setRerankBackendState] =
     useState<LedgeIndexRerankBackendId>(LOCAL_RERANK_BACKEND_ID);
+  const [retrievalStrictness, setRetrievalStrictnessState] =
+    useState<RetrievalStrictness>(() => readStoredRetrievalStrictness());
   const [testPromptSuggestions, setTestPromptSuggestions] = useState<
     readonly ChatSuggestionInput[]
   >([]);
@@ -141,6 +150,11 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
     [isAdmin],
   );
 
+  const setRetrievalStrictness = useCallback((strictness: RetrievalStrictness) => {
+    setRetrievalStrictnessState(strictness);
+    storeRetrievalStrictness(strictness);
+  }, []);
+
   const setActiveSource = useCallback((source: ActiveSource | null) => {
     setActiveSourceState(source);
   }, []);
@@ -170,6 +184,7 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
       exploreSession,
       modelId,
       rerankBackend,
+      retrievalStrictness,
       testPromptSuggestions,
       availableModels: chatModels.models,
       chatModelsReady: chatModels.ready,
@@ -181,6 +196,7 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
       setExploreSession,
       setModelId,
       setRerankBackend,
+      setRetrievalStrictness,
       setTestPromptSuggestions,
       registerTestPromptSubmit,
       submitTestPrompt,
@@ -193,6 +209,7 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
       exploreSession,
       modelId,
       rerankBackend,
+      retrievalStrictness,
       testPromptSuggestions,
       chatModels.models,
       chatModels.ready,
@@ -202,6 +219,7 @@ export function SourceChatToolbarProvider({ children }: { children: ReactNode })
       newChatAvailable,
       setActiveSource,
       setRerankBackend,
+      setRetrievalStrictness,
       registerTestPromptSubmit,
       submitTestPrompt,
       registerNewChat,

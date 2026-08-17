@@ -1,5 +1,6 @@
 import { Agent } from "@mastra/core/agent";
 import { z } from "zod";
+import { cleanQuestionForRetrieve } from "@ledgeindex/core/query/query-intent.js";
 import {
   primaryAuxiliaryModelId,
   resolveRewriteModelConfig,
@@ -7,19 +8,37 @@ import {
 import { agentStructuredOutput } from "../llm/agent-structured-output.js";
 
 const rewriteOutputSchema = z.object({
-  /** "single" = one topic area (1 query). "multi" = distinct areas (1 query each, max 3). */
   topicScope: z.enum(["single", "multi"]),
-  queries: z.array(z.string().min(3).max(80)).min(1).max(3),
+  /** Natural-language search queries (embedding + BM25 use the same text). */
+  queries: z.array(z.string().min(3).max(120)).min(1).max(3),
+  /** Catalog section hints — metadata narrowing when mapped, not BM25 text. */
+  domainHints: z.array(z.string().min(2).max(40)).max(5).optional(),
 });
 
 export type RewriteTopicScope = "single" | "multi";
 
+/** Deterministic rewrite — topicScope and query variants should not flicker per run. */
+const REWRITE_TEMPERATURE = 0;
+
 export type RewriteResult = {
+  /** Generated NL variants; the retrieve path always also includes the user question. */
   queries: string[];
   topicScope: RewriteTopicScope;
+  domainHints?: string[];
   method: "llm" | "fallback";
   rewriteModelId: string;
 };
+
+function fallbackRewrite(question: string, rewriteModelId: string): RewriteResult {
+  const cleaned = cleanQuestionForRetrieve(question);
+  return {
+    queries: cleaned ? [cleaned] : [question.trim().slice(0, 120)],
+    topicScope: "single",
+    domainHints: [],
+    method: "fallback",
+    rewriteModelId,
+  };
+}
 
 export async function rewriteQueries(input: {
   question: string;
@@ -33,22 +52,26 @@ export async function rewriteQueries(input: {
   const agent = new Agent({
     id: "query-rewrite-agent",
     name: "Query Rewrite Agent",
-    instructions: `Rewrite documentation questions into search queries for vector retrieval.
+    instructions: `Generate natural-language search queries for documentation retrieval (LlamaIndex-style query generation).
 
 Decide topicScope first:
-- "single": ONE documentation area. Multiple clauses about the same area → 1 query.
-  Example: "How do I configure auth and session expiry?" → one query (same auth area).
-  Example: "How do I pass data between pipeline steps?" → one query (same pipeline area).
-- "multi": DISTINCT documentation areas → 1 query per area (max 3), ordered by importance.
+- "single": ONE documentation area. Multiple clauses about the same area → 1–2 query variants.
+  Example: "How do I configure auth and session expiry?" → same auth area, one or two phrasings.
+- "multi": DISTINCT documentation areas → one query per area (max 3), ordered by importance.
   Example: "What is billing and how do I set up webhooks?" → separate queries when catalog shows different sections.
-  Example: "What are workspaces and how do I pass data between workflow steps?" → separate queries when those topics map to different catalog pages.
 
-Do NOT merge unrelated areas into one vague query just because words appear together in the question. Use the page catalog to decide whether clauses belong to the same section or different sections.
+Use vocabulary from the page catalog. Resolve follow-ups from conversation history.
 
-Rules:
-- Use vocabulary from the page catalog. Resolve follow-ups from conversation history.
-- Keep queries short (3-8 words), keyword-rich, no URL paths.
-- Compound questions ("and"/"und") can be single or multi — decide by doc area, not by keyword overlap.`,
+Output:
+1. topicScope — "single" or "multi".
+2. queries — 1–3 complete natural-language questions or short phrases suitable for BOTH vector search and keyword search.
+   - Use catalog terminology; prefer how the docs phrase the topic.
+   - Do NOT output keyword lists, coreGoal splits, or code dumps.
+   - Do NOT repeat the user's exact wording if a catalog phrase is clearer.
+   - For vague questions ("what are the primitives"), name the product concepts from the catalog.
+3. domainHints — optional catalog section labels (guides, reference, API) for metadata narrowing only.
+
+The retrieve pipeline always runs the user's original question as well; your queries are additional variants fused with RRF.`,
     model,
   });
 
@@ -57,25 +80,24 @@ Rules:
       agent,
       `Catalog of indexed pages:\n${input.catalogText}\n\nConversation:\n${input.history}\n\nQuestion: ${input.question}`,
       rewriteOutputSchema,
+      { temperature: REWRITE_TEMPERATURE },
     );
     if (object && object.queries.length > 0) {
-      const queries = object.queries.slice(0, 3);
-      const topicScope = object.topicScope;
+      const queries = object.queries
+        .map((query) => query.trim())
+        .filter(Boolean)
+        .slice(0, 3);
       return {
         queries,
-        topicScope: topicScope === "multi" ? "multi" : "single",
+        topicScope: object.topicScope === "multi" ? "multi" : "single",
+        domainHints: object.domainHints?.map((h) => h.trim()).filter(Boolean),
         method: "llm",
         rewriteModelId,
       };
     }
   } catch {
-    // use raw question below
+    // use fallback below
   }
 
-  return {
-    queries: [input.question],
-    topicScope: "single",
-    method: "fallback",
-    rewriteModelId,
-  };
+  return fallbackRewrite(input.question, rewriteModelId);
 }

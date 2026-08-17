@@ -14,12 +14,21 @@ import {
   UnsupportedStartUrlError,
   UNSUPPORTED_PDF_START_URL_MESSAGE,
 } from "../lib/unsupported-start-url.js";
+import {
+  hostnameLabel,
+  looksLikeDocPageTitle,
+  registrableDomain,
+  siteNameFromUrl,
+  siteSlugFromUrl,
+} from "../lib/site-label-from-url.js";
 
 export type PreflightResult = {
   url: string;
   ok: boolean;
   status: number;
   siteName: string;
+  /** Stable slug from the site's registrable domain (e.g. mastra.ai → mastra). */
+  siteSlug: string;
   title?: string;
   ogImage?: string;
   faviconUrl?: string;
@@ -42,14 +51,6 @@ function cleanTitleForSourceName(title: string) {
 
   const segment = trimmed.split(/\s*[|\-–—:]\s*/)[0]?.trim();
   return segment || trimmed;
-}
-
-function hostnameLabel(url: string) {
-  try {
-    return new URL(url).hostname.replace(/^www\./i, "");
-  } catch {
-    return "Web source";
-  }
 }
 
 function parseIconSize(sizes: string | undefined): number {
@@ -168,33 +169,6 @@ function siteRootUrl(url: string): string {
   return new URL("/", url).href;
 }
 
-/** Common multi-part public suffixes (best-effort; not a full PSL). */
-const MULTI_PART_PUBLIC_SUFFIXES = new Set([
-  "co.uk",
-  "org.uk",
-  "ac.uk",
-  "gov.uk",
-  "com.au",
-  "net.au",
-  "org.au",
-  "co.jp",
-  "co.nz",
-  "co.za",
-]);
-
-function registrableDomain(hostname: string): string {
-  const host = hostname.replace(/^www\./i, "").toLowerCase();
-  const parts = host.split(".").filter(Boolean);
-  if (parts.length <= 2) return host;
-
-  const lastTwo = parts.slice(-2).join(".");
-  if (MULTI_PART_PUBLIC_SUFFIXES.has(lastTwo) && parts.length >= 3) {
-    return parts.slice(-3).join(".");
-  }
-
-  return lastTwo;
-}
-
 function apexOriginUrl(url: string): string | undefined {
   try {
     const parsed = new URL(url);
@@ -233,6 +207,31 @@ function brandingFallbackUrls(startUrl: string): string[] {
   add(apexOriginUrl(startUrl));
 
   return urls;
+}
+
+function extractOgSiteName($: CheerioAPI): string | undefined {
+  const ogSiteName = $('meta[property="og:site_name"]').attr("content")?.trim();
+  if (ogSiteName) return ogSiteName;
+
+  const ogTitle = $('meta[property="og:title"]').attr("content")?.trim();
+  const documentTitle = $("title").first().text().trim();
+  const cleaned = cleanTitleForSourceName(ogTitle || documentTitle);
+  if (!cleaned || looksLikeDocPageTitle(cleaned)) return undefined;
+
+  return cleaned;
+}
+
+async function fetchOgSiteName(
+  pageUrl: string,
+  userAgent: string,
+): Promise<string | undefined> {
+  try {
+    const { html, contentType } = await fetchPageHtml(pageUrl, userAgent);
+    if (isPdfContentType(contentType)) return undefined;
+    return extractOgSiteName(cheerio.load(html));
+  } catch {
+    return undefined;
+  }
 }
 
 async function fetchPageBranding(
@@ -299,14 +298,33 @@ export async function preflightStartUrl(
 
   const $ = cheerio.load(html);
 
-  const ogSiteName = $('meta[property="og:site_name"]').attr("content")?.trim();
+  const ogSiteName = extractOgSiteName($);
   const ogTitle = $('meta[property="og:title"]').attr("content")?.trim();
   const documentTitle = $("title").first().text().trim();
+  const pageTitle = cleanTitleForSourceName(ogTitle || documentTitle);
+  const domainName = siteNameFromUrl(url);
+  const siteSlug = siteSlugFromUrl(url);
 
-  const siteName =
-    ogSiteName ||
-    cleanTitleForSourceName(ogTitle || documentTitle) ||
-    hostnameLabel(url);
+  let siteName = ogSiteName;
+
+  if (!siteName && !isSiteRootUrl(url)) {
+    for (const fallbackUrl of brandingFallbackUrls(url)) {
+      siteName = await fetchOgSiteName(fallbackUrl, userAgent);
+      if (siteName) break;
+    }
+  }
+
+  if (!siteName) {
+    siteName = looksLikeDocPageTitle(pageTitle)
+      ? domainName
+      : pageTitle || domainName;
+  } else if (!ogSiteName && looksLikeDocPageTitle(siteName)) {
+    siteName = domainName;
+  }
+
+  if (!siteName) {
+    siteName = hostnameLabel(url);
+  }
 
   let ogImage = extractOgImage($, url);
 
@@ -343,6 +361,7 @@ export async function preflightStartUrl(
     ok: status >= 200 && status < 400,
     status,
     siteName,
+    siteSlug,
     title: documentTitle || ogTitle || undefined,
     ogImage,
     faviconUrl,

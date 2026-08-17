@@ -1,5 +1,12 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import type { RerankBackend } from "./rerank-backend.js";
+import {
+  DEFAULT_RETRIEVAL_STRICTNESS,
+  isRetrievalStrictness,
+  resolveRetrievalSettings,
+  type ResolvedRetrievalSettings,
+  type RetrievalStrictness,
+} from "./retrieval-strictness.js";
 
 export type SourceScope = "personal" | "global";
 export type SourceHosting = "local" | "cloud";
@@ -8,6 +15,9 @@ type RetrievalRequestContext = {
   backend?: RerankBackend;
   sourceScope?: SourceScope;
   sourceHosting?: SourceHosting;
+  retrievalStrictness?: RetrievalStrictness;
+  relevanceThreshold?: number | null;
+  includeWeakEvidence?: boolean;
 };
 
 const storage = new AsyncLocalStorage<RetrievalRequestContext>();
@@ -59,30 +69,129 @@ export function setRequestSourceHosting(hosting: SourceHosting): void {
   storage.enterWith({ sourceHosting: hosting });
 }
 
+export function getResolvedRetrievalSettings(): ResolvedRetrievalSettings {
+  const store = storage.getStore();
+  return resolveRetrievalSettings({
+    strictness: store?.retrievalStrictness,
+    relevanceThreshold: store?.relevanceThreshold,
+    includeWeakEvidence: store?.includeWeakEvidence,
+  });
+}
+
+export function setRequestRetrievalStrictness(strictness: RetrievalStrictness): void {
+  const store = storage.getStore();
+  if (store) {
+    store.retrievalStrictness = strictness;
+    return;
+  }
+  storage.enterWith({ retrievalStrictness: strictness });
+}
+
+export function setRequestRelevanceThreshold(threshold: number | null): void {
+  const store = storage.getStore();
+  if (store) {
+    store.relevanceThreshold = threshold;
+    return;
+  }
+  storage.enterWith({ relevanceThreshold: threshold });
+}
+
+export function setRequestIncludeWeakEvidence(include: boolean): void {
+  const store = storage.getStore();
+  if (store) {
+    store.includeWeakEvidence = include;
+    return;
+  }
+  storage.enterWith({ includeWeakEvidence: include });
+}
+
+export function applyRetrievalSettingsToStore(
+  settings: ResolvedRetrievalSettings,
+): void {
+  setRequestRetrievalStrictness(settings.strictness);
+  setRequestRelevanceThreshold(settings.relevanceThreshold);
+  setRequestIncludeWeakEvidence(settings.includeWeakEvidence);
+}
+
+export function readRetrievalSettingsFromRequestContext(
+  requestContext?: { get?: (key: string) => unknown },
+): ResolvedRetrievalSettings {
+  const strictness = requestContext?.get?.("retrieval_strictness");
+  const threshold = requestContext?.get?.("relevance_threshold");
+  const includeWeak = requestContext?.get?.("include_weak_evidence");
+
+  const fromCtx = resolveRetrievalSettings({
+    strictness: isRetrievalStrictness(strictness) ? strictness : undefined,
+    relevanceThreshold:
+      typeof threshold === "number" || threshold === null
+        ? (threshold as number | null)
+        : undefined,
+    includeWeakEvidence:
+      typeof includeWeak === "boolean" ? includeWeak : undefined,
+  });
+
+  const store = storage.getStore();
+  if (!store?.retrievalStrictness && !store?.relevanceThreshold && store?.includeWeakEvidence === undefined) {
+    return fromCtx;
+  }
+
+  return resolveRetrievalSettings({
+    strictness: store?.retrievalStrictness ?? fromCtx.strictness,
+    relevanceThreshold:
+      store?.relevanceThreshold !== undefined
+        ? store.relevanceThreshold
+        : fromCtx.relevanceThreshold,
+    includeWeakEvidence:
+      store?.includeWeakEvidence ?? fromCtx.includeWeakEvidence,
+  });
+}
+
 /** Run `fn` with per-request retrieval overrides (rerank + source scope/hosting). */
 export function runWithRetrievalContext<T>(
   input: {
     backend?: RerankBackend;
     sourceScope?: SourceScope;
     sourceHosting?: SourceHosting;
+    retrievalStrictness?: RetrievalStrictness;
+    relevanceThreshold?: number | null;
+    includeWeakEvidence?: boolean;
   },
-  fn: () => Promise<T>,
+  fn: () => Promise<T>
 ): Promise<T> {
   const current = storage.getStore() ?? {};
+  const mergedSettings = resolveRetrievalSettings({
+    strictness: input.retrievalStrictness ?? current.retrievalStrictness,
+    relevanceThreshold:
+      input.relevanceThreshold !== undefined
+        ? input.relevanceThreshold
+        : current.relevanceThreshold,
+    includeWeakEvidence: input.includeWeakEvidence ?? current.includeWeakEvidence,
+  });
   return storage.run(
     {
       backend: input.backend ?? current.backend,
       sourceScope: input.sourceScope ?? current.sourceScope,
       sourceHosting: input.sourceHosting ?? current.sourceHosting,
+      retrievalStrictness: mergedSettings.strictness,
+      relevanceThreshold: mergedSettings.relevanceThreshold,
+      includeWeakEvidence: mergedSettings.includeWeakEvidence,
     },
-    fn,
+    fn
   );
 }
+
+export {
+  DEFAULT_RETRIEVAL_STRICTNESS,
+  isRetrievalStrictness,
+  resolveRetrievalSettings,
+  type RetrievalStrictness,
+  type ResolvedRetrievalSettings,
+} from "./retrieval-strictness.js";
 
 /** @deprecated Prefer runWithRetrievalContext — kept for callers. */
 export function runWithRerankBackend<T>(
   backend: RerankBackend | undefined,
-  fn: () => Promise<T>,
+  fn: () => Promise<T>
 ): Promise<T> {
   if (!backend) return fn();
   return runWithRetrievalContext({ backend }, fn);
@@ -99,9 +208,7 @@ export const REQUEST_RERANK_BACKENDS = [
   "vector",
 ] as const satisfies readonly RerankBackend[];
 
-export function isRequestRerankBackend(
-  value: unknown,
-): value is RerankBackend {
+export function isRequestRerankBackend(value: unknown): value is RerankBackend {
   return (
     value === "cohere" ||
     value === "cohere-auto" ||

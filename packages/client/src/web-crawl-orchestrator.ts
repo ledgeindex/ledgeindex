@@ -67,6 +67,7 @@ type CrawlSuspendPayload = {
 export type RunWebCrawlOptions = {
   url: string;
   name?: string;
+  slug?: string;
   maxPages?: number;
   autoFilter?: boolean;
   enrichExamples?: boolean;
@@ -249,6 +250,7 @@ export async function runWebCrawl(
   }
 
   const name = options.name?.trim() || preflight.siteName || normalizedUrl;
+  const slug = options.slug?.trim() || preflight.siteSlug;
   const config = defaultWebCrawlConfig(normalizedUrl);
   if (options.maxPages != null) {
     config.maxPages = options.maxPages;
@@ -256,6 +258,7 @@ export async function runWebCrawl(
 
   const { source } = await createSource({
     name,
+    slug,
     scope: options.scope ?? "personal",
     config,
     sourceMetadata: preflight.metadata ?? null,

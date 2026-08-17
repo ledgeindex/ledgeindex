@@ -49,7 +49,7 @@ Copy from `apps/web/.env.example`.
 |----------|---------|----------------|
 | `NEXT_PUBLIC_LEDGEINDEX_API_URL` | `http://localhost:3010` | Browser and server calls to the API |
 | `NEXT_PUBLIC_LEDGEINDEX_MASTRA_URL` | same as API | Only if Mastra is on a different origin |
-| `NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL` | empty | Hosted API for desktop Public. Leave empty for local-only web. |
+| `NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL` | empty | **Web app** (browser) — hosted API for Public tab + cloud-personal listing when your local API is on `:3010`. Example: `https://api.ledgeindex.com`. This is **not** read from the API server `.env`; set it here and restart `dev:ledgeindex`. |
 | `NEXT_PUBLIC_FIREBASE_*` | unset | Sign-in. Optional for local `LEDGEINDEX_AUTH_REQUIRED=0`. |
 
 Dev falls back to `http://localhost:3010` if the web env is missing. A **production** `next build` fails unless `NEXT_PUBLIC_LEDGEINDEX_API_URL` is set to a non-localhost origin.
@@ -59,13 +59,15 @@ Dev falls back to `http://localhost:3010` if the web env is missing. A **product
 Two processes, from the repo root:
 
 ```bash
-npm run dev:api    # Fastify + MCP on :3010
-npm run dev:web    # Next.js on :3004
+npm run dev:ledgeindex-api   # Fastify + MCP on :3010
+npm run dev:ledgeindex       # Next.js UI on :3004
+npm run dev:ledgeindex-docs  # Docs on :3005 (header **Docs** link in local UI)
 ```
 
 | URL | What |
 |-----|------|
 | http://localhost:3004 | UI |
+| http://localhost:3005/docs | Docs (separate dev server — header **Docs** link targets this locally) |
 | http://localhost:3010/health | API health |
 | http://localhost:3010/mcp | MCP for Cursor / agents |
 

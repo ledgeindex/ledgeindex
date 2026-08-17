@@ -86,6 +86,12 @@ export const LEXICAL_HEADING_WEIGHT = 5;
  */
 export const RRF_K = 60;
 
+/** Min rerank score for weak-evidence fallback chunks. */
+export const WEAK_EVIDENCE_MIN_SCORE = 0.15;
+
+/** Max chunks kept on weak-evidence fallback. */
+export const WEAK_EVIDENCE_TOP_K = 5;
+
 /** Tier 1 coverage full: min max injected chunk score (strict pass). */
 export const COVERAGE_FULL_MAX_SCORE = 0.82;
 

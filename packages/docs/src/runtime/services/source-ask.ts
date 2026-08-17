@@ -2,13 +2,15 @@ import { RequestContext } from "@mastra/core/request-context";
 import { resolveEnrichModelFromSelection } from "@ledgeindex/core";
 import {
   isRequestRerankBackend,
+  isRetrievalStrictness,
   runWithRetrievalContext,
+  type RetrievalStrictness,
   type SourceHosting,
   type SourceScope,
 } from "@ledgeindex/core/query/rerank-request-context.js";
 import type { RerankBackend } from "@ledgeindex/core/query/rerank-backend.js";
 import { getMastra } from "../mastra/instance.js";
-import { kapaRetrieve } from "../retrieval/kapa-retrieve.js";
+import { retrieveWithStructuredRewriteInContext } from "../retrieval/structured-retrieve.js";
 import { readRetrievalMeta } from "../retrieval/retrieval-meta.js";
 import { hasLlmKey } from "../llm/models.js";
 import { logVerbose } from "../lib/logger.js";
@@ -69,6 +71,12 @@ export type AskSourceOptions = {
    * retrieve-only — return score-pruned rerank hits only (MCP evidence path).
    */
   mode?: "agent" | "retrieve-only";
+  /** strict | balanced (weak fallback) | permissive (lower threshold + weak). */
+  retrievalStrictness?: RetrievalStrictness;
+  /** Override prune threshold (0–1). `null` disables pruning. */
+  relevanceThreshold?: number | null;
+  /** Include below-threshold rerank hits when strict pruning finds nothing. */
+  includeWeakEvidence?: boolean;
 };
 
 function formatRetrieveOnlyAnswer(
@@ -184,16 +192,27 @@ async function retrievePrunedHits(
   sourceId: string,
   message: string,
   expandPages: boolean,
+  retrievalContext: {
+    backend?: RerankBackend;
+    sourceScope: "personal" | "global";
+    sourceHosting: "local" | "cloud";
+    retrievalStrictness?: RetrievalStrictness;
+    relevanceThreshold?: number | null;
+    includeWeakEvidence?: boolean;
+  },
 ): Promise<{ chunks: SourceAskHit[]; insufficient: boolean }> {
-  const retrieval = await kapaRetrieve({
-    query: message,
-    sourceId,
-    expandPages,
-  });
+  const result = await retrieveWithStructuredRewriteInContext(
+    {
+      sourceId,
+      question: message,
+      expandPages,
+    },
+    retrievalContext,
+  );
 
   return {
-    chunks: toAskHits(retrieval.pruned),
-    insufficient: retrieval.insufficient,
+    chunks: toAskHits(result.chunks),
+    insufficient: result.insufficient,
   };
 }
 
@@ -211,6 +230,25 @@ async function askSourceInner(
       sourceId,
       message,
       !forceRetrieveOnly,
+      {
+        ...(rerankBackend ? { backend: rerankBackend } : {}),
+        sourceScope: options?.sourceScope === "global" ? "global" : "personal",
+        sourceHosting:
+          options?.sourceHosting === "local" || options?.sourceHosting === "cloud"
+            ? options.sourceHosting
+            : options?.sourceScope === "global"
+              ? "cloud"
+              : "local",
+        ...(options?.retrievalStrictness
+          ? { retrievalStrictness: options.retrievalStrictness }
+          : {}),
+        ...(options?.relevanceThreshold !== undefined
+          ? { relevanceThreshold: options.relevanceThreshold }
+          : {}),
+        ...(typeof options?.includeWeakEvidence === "boolean"
+          ? { includeWeakEvidence: options.includeWeakEvidence }
+          : {}),
+      },
     );
 
     logVerbose("Source ask retrieve-only finished", "SourceAsk", {
@@ -236,6 +274,18 @@ async function askSourceInner(
   requestContext.set("source_id", sourceId);
   if (rerankBackend) {
     requestContext.set("rerank_backend", rerankBackend);
+  }
+  if (options?.retrievalStrictness && isRetrievalStrictness(options.retrievalStrictness)) {
+    requestContext.set("retrieval_strictness", options.retrievalStrictness);
+  }
+  if (
+    typeof options?.relevanceThreshold === "number" ||
+    options?.relevanceThreshold === null
+  ) {
+    requestContext.set("relevance_threshold", options.relevanceThreshold);
+  }
+  if (typeof options?.includeWeakEvidence === "boolean") {
+    requestContext.set("include_weak_evidence", options.includeWeakEvidence);
   }
   if (model?.backend) {
     requestContext.set("model_backend", model.backend);
@@ -302,7 +352,20 @@ export async function askSource(
       : undefined;
 
   return runWithRetrievalContext(
-    { backend: rerankBackend, sourceScope, sourceHosting },
+    {
+      backend: rerankBackend,
+      sourceScope,
+      sourceHosting,
+      ...(options?.retrievalStrictness
+        ? { retrievalStrictness: options.retrievalStrictness }
+        : {}),
+      ...(options?.relevanceThreshold !== undefined
+        ? { relevanceThreshold: options.relevanceThreshold }
+        : {}),
+      ...(typeof options?.includeWeakEvidence === "boolean"
+        ? { includeWeakEvidence: options.includeWeakEvidence }
+        : {}),
+    },
     () =>
       askSourceInner(sourceId, message, {
         ...options,

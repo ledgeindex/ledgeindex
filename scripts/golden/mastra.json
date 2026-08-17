@@ -1,0 +1,59 @@
+{
+  "name": "mastra-docs",
+  "sourceId": "6cabf272-42f5-4d48-bf10-cac53fca40de",
+  "sourceSlug": "mastra",
+  "strictness": "strict",
+  "hosting": "local",
+  "scope": "personal",
+  "cases": [
+    {
+      "id": "primitives-vague",
+      "question": "what are the primitives",
+      "expectUrls": ["/reference/core/mastra-class", "mastra-class"],
+      "tags": ["vague", "reference"]
+    },
+    {
+      "id": "mastra-class-direct",
+      "question": "what is the Mastra class",
+      "expectUrls": ["/reference/core/mastra-class", "mastra-class"],
+      "tags": ["reference"]
+    },
+    {
+      "id": "build-with-confusable",
+      "question": "what are things you build with mastra",
+      "expectUrls": ["/docs/use-cases", "/docs", "overview"],
+      "rejectUrls": ["build-with-ai"],
+      "tags": ["confusable-page"]
+    },
+    {
+      "id": "agents-how-to",
+      "question": "how do I create an agent",
+      "expectUrls": ["/docs/agents", "/agents"],
+      "tags": ["guide"]
+    },
+    {
+      "id": "workflows-overview",
+      "question": "how do workflows work in mastra",
+      "expectUrls": ["/docs/workflows", "/workflows"],
+      "tags": ["guide"]
+    },
+    {
+      "id": "memory",
+      "question": "how does memory work",
+      "expectUrls": ["/docs/memory", "/memory", "/reference/memory"],
+      "tags": ["guide"]
+    },
+    {
+      "id": "tools",
+      "question": "how do I add a tool to my agent",
+      "expectUrls": ["/docs/tools", "/tools"],
+      "tags": ["guide"]
+    },
+    {
+      "id": "mcp",
+      "question": "how do I use MCP with mastra",
+      "expectUrls": ["/mcp", "/docs/mcp"],
+      "tags": ["guide"]
+    }
+  ]
+}

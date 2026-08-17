@@ -13,8 +13,12 @@ export type LedgeIndexChatAgent =
   | "exploreAgent";
 
 /** Mastra chatRoute paths (registered on Fastify root, not under /mastra prefix). */
-export function mastraChatUrl(agent: LedgeIndexChatAgent): string {
-  return `${getLedgeIndexApiBaseUrl()}/chat/${agent}`;
+export function mastraChatUrl(
+  agent: LedgeIndexChatAgent,
+  apiBase?: string,
+): string {
+  const base = apiBase?.trim() || getLedgeIndexApiBaseUrl();
+  return `${base.replace(/\/$/, "")}/chat/${agent}`;
 }
 
 export type MastraChatTransportBody = {
@@ -25,6 +29,9 @@ export type MastraChatTransportBody = {
     source_scope?: "personal" | "global";
     source_hosting?: "local" | "cloud";
     rerank_backend?: string;
+    retrieval_strictness?: "strict" | "balanced" | "permissive";
+    relevance_threshold?: number | null;
+    include_weak_evidence?: boolean;
     docs_url_prefix?: string;
     docs_crawl_root?: string;
     model_thinking_level?: ChatThinkingLevel;
@@ -46,6 +53,7 @@ export function mastraChatTransportBody(input: {
   sourceHosting?: "local" | "cloud";
   thinkingLevel?: ChatThinkingLevel;
   rerankBackend?: LedgeIndexRerankBackendId;
+  retrievalStrictness?: "strict" | "balanced" | "permissive";
   docsUrlPrefix?: string;
   docsCrawlRoot?: string;
 }): MastraChatTransportBody {
@@ -76,6 +84,10 @@ export function mastraChatTransportBody(input: {
       ...(sourceScope ? { source_scope: sourceScope } : {}),
       ...(sourceHosting ? { source_hosting: sourceHosting } : {}),
       ...(rerankBackend ? { rerank_backend: rerankBackend } : {}),
+      retrieval_strictness: input.retrievalStrictness ?? "strict",
+      ...(input.retrievalStrictness === "permissive"
+        ? { include_weak_evidence: true }
+        : {}),
       ...(docsUrlPrefix ? { docs_url_prefix: docsUrlPrefix } : {}),
       ...(docsCrawlRoot ? { docs_crawl_root: docsCrawlRoot } : {}),
     },

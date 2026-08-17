@@ -6,6 +6,7 @@ import { auth } from "@/lib/firebase";
 import {
   setApiAuthTokenGetter,
   setLedgeIndexApiBaseUrl,
+  setLedgeIndexRemoteApiBaseUrl,
 } from "@ledgeindex/client";
 
 // Direct NEXT_PUBLIC_* access so Next inlines the production API URL at build time.
@@ -14,6 +15,13 @@ const apiBase =
   process.env.NEXT_PUBLIC_KNOWLEDGEINDEX_API_URL?.trim();
 if (apiBase) {
   setLedgeIndexApiBaseUrl(apiBase);
+}
+
+const remoteApiBase =
+  process.env.NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL?.trim() ||
+  process.env.NEXT_PUBLIC_KNOWLEDGEINDEX_REMOTE_API_URL?.trim();
+if (remoteApiBase) {
+  setLedgeIndexRemoteApiBaseUrl(remoteApiBase);
 }
 
 setApiAuthTokenGetter(async (forceRefresh) => {

@@ -14,7 +14,7 @@ import { ensureCatalogHasPages } from "../retrieval/page-catalog-rebuild.js";
 import { getExampleCatalog } from "../retrieval/example-catalog-store.js";
 import { getPageChunks } from "../retrieval/page-chunks.js";
 import { getPageExamples } from "../retrieval/page-examples.js";
-import { kapaRetrieve } from "../retrieval/kapa-retrieve.js";
+import { retrieveWithStructuredRewrite } from "../retrieval/structured-retrieve.js";
 import { getVectorBackend } from "../vector/config.js";
 import { runWithRetrievalContext } from "../retrieval/rerank-request-context.js";
 import { logError, logInfo } from "../lib/logger.js";
@@ -444,15 +444,29 @@ export async function indexingRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const result = await kapaRetrieve({
-        query: body.data.query,
-        sourceId: id,
-        filter: body.data.filter,
-      });
+      const retrieval = await runWithRetrievalContext(
+        { sourceScope: source.scope === "global" ? "global" : "personal" },
+        () =>
+          retrieveWithStructuredRewrite({
+            sourceId: id,
+            question: body.data.query,
+            expandPages: false,
+            history: "(indexing debug query)",
+            filter: body.data.filter,
+          }),
+      );
 
       return {
         vectorBackend: getVectorBackend(),
-        ...result,
+        query: body.data.query,
+        filter: body.data.filter ?? {},
+        insufficient: retrieval.insufficient,
+        chunks: retrieval.chunks,
+        pruned: retrieval.chunks,
+        rewrite: {
+          queries: retrieval.rewrite.queries,
+          topicScope: retrieval.rewrite.topicScope,
+        },
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Query failed";

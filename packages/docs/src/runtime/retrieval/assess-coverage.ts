@@ -30,16 +30,21 @@ const graderOutputSchema = z.object({
   reason: z.string().min(1).max(400),
 });
 
+const COVERAGE_GRADER_TEMPERATURE = 0;
+
 const GRADER_INSTRUCTIONS = `You are a coverage grader for RAG retrieval.
 
-Given the user's question and retrieved source previews, decide whether the sources are sufficient to answer the question.
+Given the user's question and retrieved source previews (with rerank scores), decide whether the sources are sufficient to answer the question.
 
 Rules:
 - "full": sources clearly cover the question; a thorough answer is supported.
 - "partial": sources are related but incomplete, outdated for the question, or miss key aspects.
 - "none": sources do not substantively answer the question (wrong topic or no usable facts).
 
-Be strict: related docs about a nearby topic is "partial", not "full".`;
+Important:
+- If retrieval scores already passed the strict relevance threshold, "none" is NOT allowed — use "partial" at minimum.
+- For "what are the X" / list/overview questions, a source that lists or defines X is at least "partial"; use "full" when the list is clearly the right topic.
+- Be strict about "full": nearby or tangential docs are "partial", not "full".`;
 
 function chunkPreview(chunk: KapaRetrievedChunk, maxChars = 200): string {
   const text = chunk.text.trim();
@@ -60,9 +65,31 @@ function isAmbiguousZone(input: {
   );
 }
 
+/** Never let the grader veto chunks that already cleared strict relevance. */
+function clampGraderCoverage(input: {
+  coverage: AnswerMode;
+  reason: string;
+  maxChunkScore: number;
+  chunkCount: number;
+}): { coverage: AnswerMode; reason: string } {
+  if (
+    input.coverage === "none" &&
+    input.chunkCount > 0 &&
+    input.maxChunkScore >= RELEVANCE_THRESHOLD
+  ) {
+    return {
+      coverage: "partial",
+      reason: `${input.reason} (retrieval scores passed threshold ${RELEVANCE_THRESHOLD}; capped from none).`,
+    };
+  }
+  return { coverage: input.coverage, reason: input.reason };
+}
+
 async function runCoverageGrader(input: {
   question: string;
   chunks: KapaRetrievedChunk[];
+  maxChunkScore: number;
+  avgTop3Score: number;
   requestContext?: { get?: (key: string) => unknown };
 }): Promise<{ coverage: AnswerMode; reason: string; modelId: string } | null> {
   const previews = input.chunks.slice(0, 5).map((chunk, index) => ({
@@ -91,23 +118,32 @@ async function runCoverageGrader(input: {
       [
         `Question: ${input.question}`,
         "",
+        `Retrieval already passed strict relevance threshold ${RELEVANCE_THRESHOLD} (max score ${input.maxChunkScore.toFixed(2)}, avg top-3 ${input.avgTop3Score.toFixed(2)}). Do not return "none".`,
+        "",
         "Retrieved source previews:",
         JSON.stringify(previews),
       ].join("\n"),
       graderOutputSchema,
+      { temperature: COVERAGE_GRADER_TEMPERATURE },
     );
     if (!object) return null;
 
-    const { coverage, reason } = object;
+    const clamped = clampGraderCoverage({
+      coverage: object.coverage,
+      reason: object.reason.trim(),
+      maxChunkScore: input.maxChunkScore,
+      chunkCount: input.chunks.length,
+    });
 
     logVerbose("Coverage grader finished", "CoverageGrader", {
       question: input.question,
-      coverage,
+      coverage: clamped.coverage,
+      rawCoverage: object.coverage,
       previewCount: previews.length,
       modelId: coverageModelId,
     });
 
-    return { coverage, reason, modelId: coverageModelId };
+    return { coverage: clamped.coverage, reason: clamped.reason, modelId: coverageModelId };
   } catch (error) {
     logWarn(
       error instanceof Error ? error.message : "Coverage grader failed",
@@ -123,11 +159,24 @@ export async function assessCoverage(input: {
   chunks: KapaRetrievedChunk[];
   insufficient: boolean;
   relaxedPassUsed: boolean;
+  weakEvidenceUsed?: boolean;
   maxChunkScore?: number;
   avgTop3Score?: number;
   requestContext?: { get?: (key: string) => unknown };
 }): Promise<CoverageAssessment> {
   const relaxedPassUsed = input.relaxedPassUsed;
+  const weakEvidenceUsed = Boolean(input.weakEvidenceUsed);
+
+  if (weakEvidenceUsed && input.chunks.length > 0) {
+    return {
+      answerMode: "partial",
+      coverageTier: "tier1_heuristic",
+      coverageGraderUsed: false,
+      coverageReason:
+        "Matches were below the normal relevance threshold; answer only from these weak matches.",
+      relaxedPassUsed,
+    };
+  }
 
   if (input.insufficient || input.chunks.length === 0) {
     return {
@@ -147,7 +196,8 @@ export async function assessCoverage(input: {
       answerMode: "partial",
       coverageTier: "tier1_heuristic",
       coverageGraderUsed: false,
-      coverageReason: "Relaxed threshold (0.50) was required to retrieve sources.",
+      coverageReason:
+        "Relaxed threshold (0.50) was required to retrieve sources.",
       relaxedPassUsed,
     };
   }
@@ -175,12 +225,12 @@ export async function assessCoverage(input: {
     };
   }
 
-  if (
-    isAmbiguousZone({ relaxedPassUsed, maxChunkScore, avgTop3Score })
-  ) {
+  if (isAmbiguousZone({ relaxedPassUsed, maxChunkScore, avgTop3Score })) {
     const graded = await runCoverageGrader({
       question: input.question,
       chunks: input.chunks,
+      maxChunkScore,
+      avgTop3Score,
       requestContext: input.requestContext,
     });
 
@@ -228,7 +278,8 @@ Do not invent or guess information.`;
       ? `\nCoverage note: ${coverageReason}`
       : "";
     return `Based on the available sources, you can only partially answer this question.
-Start by acknowledging gaps or uncertainty. Only state what the sources explicitly confirm.
+Start by clearly stating that the knowledge sources do not fully cover the user's query.
+Only state what the sources explicitly support — do not invent facts beyond them.
 Cite with inline markdown links [title](url).
 If the sources do not cover part of the question, say the knowledge sources do not fully confirm it.${reasonLine}`;
   }

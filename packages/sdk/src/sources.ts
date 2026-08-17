@@ -46,6 +46,7 @@ export async function resolveSourceRef(
 
 export async function createWebCrawlSource(input: {
   name: string;
+  slug?: string;
   scope?: SourceScope;
   config: WebCrawlSourceConfig;
   sourceMetadata?: SourceMetadata | null;
@@ -87,6 +88,7 @@ export async function createWebCrawlSource(input: {
     name: input.name,
     scope,
     ownerUserId: slugOwnerUserId,
+    preferredSlug: input.slug,
   });
 
   const sourceMetadata = input.sourceMetadata

@@ -2,8 +2,12 @@ import type { Processor, ProcessInputArgs } from "@mastra/core/processors";
 import type { MastraDBMessage } from "@mastra/core/agent";
 import { getMetadataCatalog } from "../../retrieval/metadata-catalog-store.js";
 import { ensureCatalogHasPages } from "../../retrieval/page-catalog-rebuild.js";
-import { resolveCatalogUrlFilter } from "../../retrieval/rank-catalog-pages.js";
-import { formatCatalogForAgent, filterCatalogByUrlPrefix } from "../../retrieval/search-query-planner.js";
+import { resolveCatalogUrlFilter, resolveDomainHintsUrlPrefix, pickNarrowerUrlPrefix } from "../../retrieval/rank-catalog-pages.js";
+import { buildRerankQuery } from "@ledgeindex/core/query/query-intent.js";
+import {
+  formatCatalogForAgent,
+  filterCatalogByUrlPrefix,
+} from "../../retrieval/search-query-planner.js";
 import {
   kapaRetrieveMany,
   type KapaRetrievedChunk,
@@ -20,7 +24,6 @@ import {
   assessCoverage,
   instructionForAnswerMode,
 } from "../../retrieval/assess-coverage.js";
-import { RELAXED_RELEVANCE_THRESHOLD } from "../../vector/constants.js";
 import { logVerbose } from "../../lib/logger.js";
 import { getSourceSummary } from "../../services/source-summary.js";
 import { primaryAuxiliaryModelId } from "../../llm/chat-model-config.js";
@@ -29,8 +32,16 @@ import {
   isRequestRerankBackend,
   isSourceHosting,
   isSourceScope,
+  readRetrievalSettingsFromRequestContext,
+  resolveRetrievalSettings,
   runWithRetrievalContext,
+  isRetrievalStrictness,
+  DEFAULT_RETRIEVAL_STRICTNESS,
 } from "../../retrieval/rerank-request-context.js";
+import {
+  RELEVANCE_THRESHOLD,
+  RELAXED_RELEVANCE_THRESHOLD,
+} from "../../vector/constants.js";
 
 const MAX_HISTORY_TURNS = 6;
 
@@ -41,7 +52,7 @@ function textFromMessage(message: MastraDBMessage): string {
     .map((part) =>
       part && typeof part === "object" && "text" in part
         ? String((part as { text?: unknown }).text ?? "")
-        : "",
+        : ""
     )
     .join(" ")
     .replace(/\s+/g, " ")
@@ -75,7 +86,9 @@ function formatChunksForContext(chunks: KapaRetrievedChunk[]): string {
       const location =
         chunk.filePath && chunk.startLine
           ? `Location: ${chunk.filePath}:${chunk.startLine}-${chunk.endLine ?? chunk.startLine}${
-              chunk.symbolName ? ` (${chunk.symbolKind ?? "symbol"} ${chunk.symbolName})` : ""
+              chunk.symbolName
+                ? ` (${chunk.symbolKind ?? "symbol"} ${chunk.symbolName})`
+                : ""
             }\n`
           : "";
       return `### Source ${index + 1}: ${chunk.title}
@@ -113,10 +126,7 @@ function elapsedMs(started: number): number {
 function pushRetrievePhaseSteps(
   steps: RetrievalTimingStep[],
   retrieval: Awaited<ReturnType<typeof kapaRetrieveMany>>,
-  {
-    idPrefix,
-    labelPrefix,
-  }: { idPrefix: string; labelPrefix: string },
+  { idPrefix, labelPrefix }: { idPrefix: string; labelPrefix: string }
 ) {
   const timings = retrieval.timings;
   if (!timings) return;
@@ -161,9 +171,26 @@ function pushRetrievePhaseSteps(
   });
 }
 
+function mergePathFilterWithDomainHints(
+  pathFilter: { crawlRoot?: string; urlPrefix?: string } | undefined,
+  domainHintsUrlPrefix: string | undefined,
+): { crawlRoot?: string; urlPrefix?: string } | undefined {
+  if (!domainHintsUrlPrefix) return pathFilter;
+  const narrowed = pickNarrowerUrlPrefix(
+    pathFilter?.urlPrefix,
+    domainHintsUrlPrefix,
+  );
+  if (!pathFilter && !narrowed) return undefined;
+  return {
+    ...(pathFilter?.crawlRoot ? { crawlRoot: pathFilter.crawlRoot } : {}),
+    ...(narrowed ? { urlPrefix: narrowed } : {}),
+  };
+}
+
 function buildRetrievalMeta(input: {
   question: string;
   rewrittenQueries: string[];
+  rerankQuery?: string;
   rewriteMethod: RetrievalMeta["rewriteMethod"];
   rewriteModelId?: string;
   topicScope?: RetrievalMeta["topicScope"];
@@ -176,10 +203,17 @@ function buildRetrievalMeta(input: {
   coverage: Awaited<ReturnType<typeof assessCoverage>>;
   cascadePassUsed?: boolean;
   cascadeTopScore?: number;
+  weakEvidenceUsed?: boolean;
   rerankBackendUsed?: Awaited<
     ReturnType<typeof kapaRetrieveMany>
   >["rerankBackendUsed"];
   timings?: RetrievalMeta["timings"];
+  retrievalSettings?: {
+    strictness?: RetrievalMeta["retrievalStrictness"];
+    relevanceThreshold: number;
+    relaxedThreshold: number;
+    includeWeakEvidence: boolean;
+  };
 }): RetrievalMeta {
   const { maxChunkScore, avgTop3Score } = scoreSummary(input.chunks);
   const rerankRuntime = describeRerankRuntimeMeta({
@@ -190,6 +224,7 @@ function buildRetrievalMeta(input: {
   return {
     question: input.question,
     rewrittenQueries: input.rewrittenQueries,
+    rerankQuery: input.rerankQuery,
     rewriteMethod: input.rewriteMethod,
     rewriteModelId: input.rewriteModelId,
     topicScope: input.topicScope,
@@ -201,6 +236,13 @@ function buildRetrievalMeta(input: {
     avgTop3Score,
     catalogUrlFilter: input.catalogUrlFilter,
     relaxedPassUsed: input.coverage.relaxedPassUsed,
+    weakEvidenceUsed: input.weakEvidenceUsed,
+    retrievalStrictness:
+      input.retrievalSettings?.strictness ?? DEFAULT_RETRIEVAL_STRICTNESS,
+    relevanceThreshold:
+      input.retrievalSettings?.relevanceThreshold ?? RELEVANCE_THRESHOLD,
+    relaxedThreshold:
+      input.retrievalSettings?.relaxedThreshold ?? RELAXED_RELEVANCE_THRESHOLD,
     cascadePassUsed: input.cascadePassUsed,
     cascadeTopScore: input.cascadeTopScore,
     rerankBackend: rerankRuntime.rerankBackend,
@@ -222,6 +264,7 @@ function buildRetrievalMeta(input: {
       rerankedCount: entry.rerankedCount,
       directHitCount: entry.directHitCount,
       directHitScores: entry.directHitScores,
+      rerankTopScores: entry.rerankTopScores,
       prunedCount: entry.prunedCount,
     })),
     chunks: input.chunks.map(toRetrievalMetaChunk),
@@ -230,7 +273,7 @@ function buildRetrievalMeta(input: {
 }
 
 function buildMultiPartAnswerInstruction(
-  topicScope: "single" | "multi",
+  topicScope: "single" | "multi"
 ): string {
   if (topicScope !== "multi") return "";
 
@@ -286,11 +329,22 @@ export class RAGQueryProcessor implements Processor {
           ? backendRaw
           : undefined;
 
+    const strictnessRaw = requestContext?.get?.("retrieval_strictness");
+    const includeWeakRaw = requestContext?.get?.("include_weak_evidence");
+    const chatRetrievalSettings = resolveRetrievalSettings({
+      strictness: isRetrievalStrictness(strictnessRaw) ? strictnessRaw : undefined,
+      includeWeakEvidence:
+        typeof includeWeakRaw === "boolean" ? includeWeakRaw : undefined,
+    });
+
     return runWithRetrievalContext(
       {
         sourceScope,
         sourceHosting,
         ...(backend ? { backend } : {}),
+        retrievalStrictness: chatRetrievalSettings.strictness,
+        relevanceThreshold: chatRetrievalSettings.relevanceThreshold,
+        includeWeakEvidence: chatRetrievalSettings.includeWeakEvidence,
       },
       () =>
         this.runRagWithContext({
@@ -298,7 +352,7 @@ export class RAGQueryProcessor implements Processor {
           systemMessages,
           requestContext,
           sourceId,
-        }),
+        })
     );
   }
 
@@ -343,10 +397,13 @@ export class RAGQueryProcessor implements Processor {
     // Path scope (Docs / Guides) must narrow rewrite + catalog URL hints, not just retrieval.
     const scopedCatalog = filterCatalogByUrlPrefix(
       catalogRecord,
-      docsUrlPrefix || docsCrawlRoot || null,
+      docsUrlPrefix || docsCrawlRoot || null
     );
     const catalogText = formatCatalogForAgent(scopedCatalog);
     const history = buildHistory(messages);
+    const retrievalSettings = readRetrievalSettingsFromRequestContext(
+      requestContext,
+    );
     timingSteps.push({
       id: "catalog",
       label: "Catalog",
@@ -364,9 +421,7 @@ export class RAGQueryProcessor implements Processor {
       id: "cascade",
       label: cascade ? "Cascade (hit)" : "Cascade (miss/off)",
       ms: elapsedMs(cascadeStarted),
-      detail: cascade
-        ? `top ${cascade.topScore.toFixed(2)}`
-        : undefined,
+      detail: cascade ? `top ${cascade.topScore.toFixed(2)}` : undefined,
     });
 
     if (cascade) {
@@ -385,9 +440,7 @@ export class RAGQueryProcessor implements Processor {
       });
       timingSteps.push({
         id: "coverage",
-        label: coverage.coverageGraderUsed
-          ? "Coverage (grader)"
-          : "Coverage",
+        label: coverage.coverageGraderUsed ? "Coverage (grader)" : "Coverage",
         ms: elapsedMs(coverageStarted),
         detail: coverage.coverageModelId
           ? coverage.coverageModelId
@@ -417,12 +470,14 @@ export class RAGQueryProcessor implements Processor {
             rerankedCount: 0,
             directHitCount: agentChunks.length,
             directHitScores: agentChunks.map((c) => c.score),
+            rerankTopScores: [],
           },
         ],
         chunks: agentChunks,
         coverage,
         cascadePassUsed: true,
         cascadeTopScore: cascade.topScore,
+        retrievalSettings,
         timings: {
           totalMs: elapsedMs(ragStarted),
           steps: timingSteps,
@@ -453,7 +508,7 @@ export class RAGQueryProcessor implements Processor {
 
       const retrievalInstruction = instructionForAnswerMode(
         coverage.answerMode,
-        coverage.coverageReason,
+        coverage.coverageReason
       );
       const sourceBlock =
         coverage.answerMode === "none"
@@ -477,8 +532,13 @@ export class RAGQueryProcessor implements Processor {
     }
 
     const rewriteStarted = performance.now();
-    const { queries, topicScope, method: rewriteMethod, rewriteModelId } =
-      await rewriteQueries({
+    const {
+      queries,
+      topicScope,
+      domainHints,
+      method: rewriteMethod,
+      rewriteModelId,
+    } = await rewriteQueries({
       question,
       catalogText,
       history,
@@ -491,7 +551,21 @@ export class RAGQueryProcessor implements Processor {
       detail: rewriteModelId,
     });
 
-    const queryMode = topicScope === "multi" ? "merge_all" : "short_circuit";
+    const domainHintsList = [
+      ...new Set(
+        (domainHints ?? []).map((hint) => hint.trim()).filter(Boolean),
+      ),
+    ];
+    const domainHintsUrlPrefix =
+      scopedCatalog?.pages?.length && domainHintsList.length > 0
+        ? resolveDomainHintsUrlPrefix(domainHintsList, scopedCatalog.pages)
+        : undefined;
+    const retrievalPathFilter = mergePathFilterWithDomainHints(
+      pathFilter,
+      domainHintsUrlPrefix,
+    );
+    const rerankQuery = buildRerankQuery({ originalQuestion: question });
+
     const catalogUrlCandidate = scopedCatalog?.pages?.length
       ? resolveCatalogUrlFilter(question, scopedCatalog.pages)
       : null;
@@ -504,14 +578,15 @@ export class RAGQueryProcessor implements Processor {
       : undefined;
 
     let relaxedPassUsed = false;
+    let weakEvidenceUsed = false;
     const retrieveStrictStarted = performance.now();
     let retrieval = await kapaRetrieveMany({
       queries,
       question,
       sourceId,
-      queryMode,
       catalogUrlFilter,
-      filter: pathFilter,
+      filter: retrievalPathFilter,
+      relevanceThreshold: retrievalSettings.relevanceThreshold,
     });
     pushRetrievePhaseSteps(timingSteps, retrieval, {
       idPrefix: "retrieve-strict",
@@ -526,23 +601,31 @@ export class RAGQueryProcessor implements Processor {
       });
     }
 
-    if (retrieval.merged.length === 0) {
-      logVerbose("RAG strict pass empty, retrying relaxed threshold", "RAGQuery", {
-        sourceId,
-        queries,
-        topicScope,
-        catalogUrlFilter: catalogUrlCandidate?.url,
-        docsUrlPrefix: docsUrlPrefix || null,
-      });
+    if (
+      retrieval.merged.length === 0 &&
+      retrievalSettings.relaxedThreshold <
+        retrievalSettings.relevanceThreshold
+    ) {
+      logVerbose(
+        "RAG strict pass empty, retrying relaxed threshold",
+        "RAGQuery",
+        {
+          sourceId,
+          queries,
+          topicScope,
+          catalogUrlFilter: catalogUrlCandidate?.url,
+          docsUrlPrefix: docsUrlPrefix || null,
+          relaxedThreshold: retrievalSettings.relaxedThreshold,
+        },
+      );
       const retrieveRelaxedStarted = performance.now();
       retrieval = await kapaRetrieveMany({
         queries,
         question,
         sourceId,
-        queryMode,
         catalogUrlFilter,
-        filter: pathFilter,
-        relevanceThreshold: RELAXED_RELEVANCE_THRESHOLD,
+        filter: retrievalPathFilter,
+        relevanceThreshold: retrievalSettings.relaxedThreshold,
       });
       pushRetrievePhaseSteps(timingSteps, retrieval, {
         idPrefix: "retrieve-relaxed",
@@ -558,6 +641,36 @@ export class RAGQueryProcessor implements Processor {
       relaxedPassUsed = retrieval.merged.length > 0;
     }
 
+    if (retrieval.merged.length === 0 && retrievalSettings.includeWeakEvidence) {
+      logVerbose("RAG passes empty, trying weak-evidence fallback", "RAGQuery", {
+        sourceId,
+        queries,
+        topicScope,
+      });
+      const retrieveWeakStarted = performance.now();
+      retrieval = await kapaRetrieveMany({
+        queries,
+        question,
+        sourceId,
+        catalogUrlFilter,
+        filter: retrievalPathFilter,
+        relevanceThreshold: retrievalSettings.relevanceThreshold,
+        allowWeakEvidence: true,
+      });
+      pushRetrievePhaseSteps(timingSteps, retrieval, {
+        idPrefix: "retrieve-weak",
+        labelPrefix: "Retrieve weak",
+      });
+      if (!retrieval.timings) {
+        timingSteps.push({
+          id: "retrieve-weak-wall",
+          label: "Retrieve weak (wall)",
+          ms: elapsedMs(retrieveWeakStarted),
+        });
+      }
+      weakEvidenceUsed = retrieval.merged.length > 0;
+    }
+
     const agentChunks = retrieval.merged;
     const insufficient = agentChunks.length === 0;
     const { maxChunkScore, avgTop3Score } = scoreSummary(agentChunks);
@@ -567,6 +680,7 @@ export class RAGQueryProcessor implements Processor {
       chunks: agentChunks,
       insufficient,
       relaxedPassUsed,
+      weakEvidenceUsed,
       maxChunkScore,
       avgTop3Score,
       requestContext,
@@ -579,11 +693,12 @@ export class RAGQueryProcessor implements Processor {
         ? coverage.coverageModelId
         : coverage.answerMode,
     });
-    const partial = relaxedPassUsed;
+    const partial = relaxedPassUsed || weakEvidenceUsed;
     const sourceSummary = await getSourceSummary(sourceId);
     const meta = buildRetrievalMeta({
       question,
-      rewrittenQueries: queries,
+      rewrittenQueries: retrieval.queries,
+      rerankQuery,
       rewriteMethod,
       rewriteModelId,
       topicScope,
@@ -594,8 +709,10 @@ export class RAGQueryProcessor implements Processor {
       chunks: agentChunks,
       catalogUrlFilter: retrieval.catalogUrlFilter,
       coverage,
+      weakEvidenceUsed,
       cascadePassUsed: false,
       rerankBackendUsed: retrieval.rerankBackendUsed,
+      retrievalSettings,
       timings: {
         totalMs: elapsedMs(ragStarted),
         steps: timingSteps,
@@ -635,16 +752,20 @@ export class RAGQueryProcessor implements Processor {
 
     const retrievalInstruction = instructionForAnswerMode(
       coverage.answerMode,
-      coverage.coverageReason,
+      coverage.coverageReason
     );
     const multiPartInstruction = buildMultiPartAnswerInstruction(topicScope);
 
     const sourceBlock =
       coverage.answerMode === "none"
-      ? ""
-      : `\n\nRetrieved sources:\n${formatChunksForContext(agentChunks)}`;
+        ? ""
+        : `\n\nRetrieved sources:\n${formatChunksForContext(agentChunks)}`;
 
-    const systemParts = [retrievalInstruction, multiPartInstruction, sourceBlock]
+    const systemParts = [
+      retrievalInstruction,
+      multiPartInstruction,
+      sourceBlock,
+    ]
       .map((part) => part.trim())
       .filter(Boolean);
 

@@ -1,9 +1,13 @@
 import type { FastifyPluginAsync } from "fastify";
 import {
   isRequestRerankBackend,
+  isRetrievalStrictness,
   isSourceHosting,
   isSourceScope,
+  setRequestIncludeWeakEvidence,
+  setRequestRelevanceThreshold,
   setRequestRerankBackend,
+  setRequestRetrievalStrictness,
   setRequestSourceHosting,
   setRequestSourceScope,
 } from "../retrieval/rerank-request-context.js";
@@ -21,10 +25,22 @@ const rerankRequestContextPlugin: FastifyPluginAsync = async (fastify) => {
     }
 
     const body = request.body as
-      | { requestContext?: Record<string, unknown> }
-      | undefined;
+      { requestContext?: Record<string, unknown> } | undefined;
     const ctx = body?.requestContext;
     if (!ctx) return;
+
+    const strictness = ctx.retrieval_strictness;
+    if (isRetrievalStrictness(strictness)) {
+      setRequestRetrievalStrictness(strictness);
+    }
+    const threshold = ctx.relevance_threshold;
+    if (typeof threshold === "number" || threshold === null) {
+      setRequestRelevanceThreshold(threshold);
+    }
+    const includeWeak = ctx.include_weak_evidence;
+    if (typeof includeWeak === "boolean") {
+      setRequestIncludeWeakEvidence(includeWeak);
+    }
 
     const hosting = ctx.source_hosting;
     if (isSourceHosting(hosting)) {

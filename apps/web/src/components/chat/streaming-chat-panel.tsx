@@ -33,6 +33,7 @@ import { collectMessageCitationSources } from "@/lib/message-citation-sources";
 import type { RetrievalMeta } from "@/lib/retrieval-meta";
 import { authenticatedFetch, getSource } from "@/lib/ledgeindex-api";
 import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
+import { resolveApiBaseForHosting } from "@/lib/desktop-api-routing";
 import {
   mastraChatTransportBody,
   mastraChatUrl,
@@ -144,6 +145,13 @@ export function StreamingChatPanel({
     hosting: resolvedHosting,
     scope: resolvedScope,
   });
+  const chatApiBase = useMemo(() => {
+    const scope = resolvedScope === "global" ? "global" : "personal";
+    return resolveApiBaseForHosting({
+      scope,
+      hosting: resolvedHosting,
+    });
+  }, [resolvedScope, resolvedHosting]);
   const [localRerankBackend, setLocalRerankBackend] =
     useState<LedgeIndexRerankBackendId>(() =>
       resolveAllowedRerankBackend(rerankBackend, isAdmin),
@@ -176,6 +184,9 @@ export function StreamingChatPanel({
   const sourceNameRef = useRef(sourceName);
   const thinkingLevelRef = useRef<ChatThinkingLevel>("off");
   const rerankBackendRef = useRef(rerankBackend);
+  const retrievalStrictnessRef = useRef(
+    toolbar?.retrievalStrictness ?? "strict",
+  );
   const docsUrlPrefixRef = useRef<string | undefined>(undefined);
   const docsCrawlRootRef = useRef<string | undefined>(undefined);
   const sourceScopeRef = useRef(resolvedScope);
@@ -237,6 +248,8 @@ export function StreamingChatPanel({
   sourceNameRef.current = sourceName;
   thinkingLevelRef.current = resolvedThinkingLevel;
   rerankBackendRef.current = effectiveRerankBackend;
+  retrievalStrictnessRef.current =
+    toolbar?.retrievalStrictness ?? "strict";
   docsUrlPrefixRef.current = activePath?.startUrl;
   docsCrawlRootRef.current = activePath?.startUrl;
   sourceScopeRef.current = resolvedScope;
@@ -245,7 +258,7 @@ export function StreamingChatPanel({
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
-        api: mastraChatUrl(agent),
+        api: mastraChatUrl(agent, chatApiBase),
         fetch: authenticatedFetch,
         body: () =>
           mastraChatTransportBody({
@@ -256,11 +269,12 @@ export function StreamingChatPanel({
             sourceHosting: sourceHostingRef.current,
             thinkingLevel: thinkingLevelRef.current,
             rerankBackend: rerankBackendRef.current,
+            retrievalStrictness: retrievalStrictnessRef.current,
             docsUrlPrefix: docsUrlPrefixRef.current,
             docsCrawlRoot: docsCrawlRootRef.current,
           }),
       }),
-    [agent],
+    [agent, chatApiBase],
   );
 
   const { messages, sendMessage, status, error } = useChat({
@@ -486,6 +500,9 @@ export function StreamingChatPanel({
                               <ChatRetrievalCard
                                 key={`${message.id}-retrieval-${index}`}
                                 meta={retrieval}
+                                retrievalStrictness={
+                                  retrievalStrictnessRef.current
+                                }
                               />
                             );
                           }
@@ -727,7 +744,11 @@ export function StreamingChatPanel({
                 </div>
               ) : (
                 retrievalNewestFirst.map((entry) => (
-                  <ChatRetrievalCard key={entry.key} meta={entry.meta} />
+                  <ChatRetrievalCard
+                    key={entry.key}
+                    meta={entry.meta}
+                    retrievalStrictness={retrievalStrictnessRef.current}
+                  />
                 ))
               )}
             </div>

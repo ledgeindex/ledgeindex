@@ -8,9 +8,11 @@
  *   npm run release:desktop -- --release       # tag current version on public
  *   npm run release:desktop -- 0.2.0 --release # set exact version + tag
  *
+ * Bumps refresh ledgeindex/package-lock.json (@ledgeindex/desktop workspace entry).
  * Loads PAT from env or monorepo-root .env key PAT_LEDDGEINDEX / PAT_LEDGEINDEX
  * (classic PAT scopes: repo + workflow).
  */
+import { execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -86,9 +88,23 @@ function writeVersion(version) {
   }
   const pkg = readPkg();
   const prev = pkg.version;
+  if (prev === version) {
+    console.log(`Version already ${version}`);
+    return false;
+  }
   pkg.version = version;
   writeFileSync(pkgPath, `${JSON.stringify(pkg, null, 2)}\n`);
   console.log(`Version: ${prev} → ${version}`);
+  return true;
+}
+
+/** Keep workspace lockfile in sync with apps/desktop/package.json (same as release:packages). */
+function refreshLockfile() {
+  console.log("\n→ refreshing ledgeindex/package-lock.json");
+  execSync(
+    "npm install --package-lock-only --no-audit --no-fund -w @ledgeindex/desktop",
+    { cwd: ledgeRoot, stdio: "inherit" },
+  );
 }
 
 function loadTokenFromFile(filePath) {
@@ -278,8 +294,8 @@ if (!versionArg && !wantsBump && !doRelease) {
   console.log(`Current desktop version: ${pkg.version}`);
   console.log(`
 Flow:
-  1. npm run release:desktop -- 0.1.1          # set version
-  2. Commit + push private main → wait for Sync
+  1. npm run release:desktop -- 0.1.1          # set version (+ lockfile)
+  2. Commit package.json + package-lock.json + push private main → wait for Sync
   3. npm run release:desktop -- 0.1.1 --release  # tag that version on public
 
 Or use VS Code tasks (prompts for version):
@@ -289,17 +305,23 @@ Or use VS Code tasks (prompts for version):
   process.exit(0);
 }
 
+let versionChanged = false;
+
 if (versionArg) {
   version = versionArg;
-  writeVersion(version);
+  versionChanged = writeVersion(version);
 } else if (wantsBump) {
   version = bumpSemver(pkg.version, bumpLevel);
-  writeVersion(version);
+  versionChanged = writeVersion(version);
+}
+
+if (versionChanged) {
+  refreshLockfile();
 }
 
 if (!doRelease) {
   console.log(
-    `Version set to ${version}. Commit + push, wait for Sync, then run with --release.`,
+    `Version set to ${version}. Commit package.json + package-lock.json, push, wait for Sync, then run with --release.`,
   );
   process.exit(0);
 }

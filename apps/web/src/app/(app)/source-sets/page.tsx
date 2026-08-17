@@ -9,6 +9,7 @@ import {
   KnowledgeIndexApiError,
   listSourceSets,
   listSources,
+  resolveRemoteApiBaseUrl,
   type SourceSetLimits,
   type SourceSetSummary,
   type SourceSummary,
@@ -16,6 +17,14 @@ import {
 } from "@/lib/ledgeindex-api";
 import { useAuth } from "@/lib/auth-context";
 import { usePlanBilling } from "@/contexts/plan-billing-context";
+import {
+  KnowledgeSetScopeToggle,
+  type KnowledgeSetScope,
+} from "@/components/sources/knowledge-set-scope-toggle";
+import { formatSourceListMeta } from "@/components/sources/source-display";
+import { FilterBadge } from "@/components/sources/source-category-filter";
+import { resolveSourceStorage } from "@/components/sources/source-cloud-badge";
+import { syncDesktopApiBaseForScope } from "@/lib/desktop-api-routing";
 import { cn } from "@/lib/utils";
 
 const UNLIMITED: SourceSetLimits = {
@@ -26,12 +35,18 @@ const UNLIMITED: SourceSetLimits = {
   canCreate: true,
 };
 
+type PersonalStorageFilter = "all" | "local" | "cloud";
+
 export default function SourceSetsPage() {
   const { profile, isAdmin } = useAuth();
   const { planLimitsEnabled, openUpgradeModal, showPlanLimit } = usePlanBilling();
   const [sourceSets, setSourceSets] = useState<SourceSetSummary[]>([]);
   const [limits, setLimits] = useState<SourceSetLimits>(UNLIMITED);
   const [sources, setSources] = useState<SourceSummary[]>([]);
+  const [sourceScopeTab, setSourceScopeTab] =
+    useState<KnowledgeSetScope>("personal");
+  const [personalStorageFilter, setPersonalStorageFilter] =
+    useState<PersonalStorageFilter>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -46,6 +61,52 @@ export default function SourceSetsPage() {
     () => sourceSets.find((set) => set.id === selectedId) ?? null,
     [sourceSets, selectedId],
   );
+
+  const personalSources = useMemo(
+    () =>
+      sources.filter((source) => (source.scope ?? "personal") !== "global"),
+    [sources],
+  );
+  const publicSources = useMemo(
+    () => sources.filter((source) => source.scope === "global"),
+    [sources],
+  );
+
+  const personalStorageCounts = useMemo(() => {
+    let local = 0;
+    let cloud = 0;
+    for (const source of personalSources) {
+      if (resolveSourceStorage(source) === "cloud") cloud += 1;
+      else local += 1;
+    }
+    return { all: personalSources.length, local, cloud };
+  }, [personalSources]);
+
+  const visibleSources = useMemo(() => {
+    if (sourceScopeTab === "global") return publicSources;
+    if (personalStorageFilter === "all") return personalSources;
+    return personalSources.filter((source) => {
+      const storage = resolveSourceStorage(source);
+      return personalStorageFilter === "cloud"
+        ? storage === "cloud"
+        : storage === "local";
+    });
+  }, [
+    sourceScopeTab,
+    publicSources,
+    personalSources,
+    personalStorageFilter,
+  ]);
+
+  const hiddenSelectedCount = useMemo(() => {
+    const visibleIds = new Set(visibleSources.map((source) => source.id));
+    return selectedSourceIds.filter((id) => !visibleIds.has(id)).length;
+  }, [selectedSourceIds, visibleSources]);
+
+  function handleSourceScopeTabChange(next: KnowledgeSetScope) {
+    setSourceScopeTab(next);
+    syncDesktopApiBaseForScope(next);
+  }
 
   async function loadData() {
     setLoading(true);
@@ -293,14 +354,21 @@ export default function SourceSetsPage() {
                       <div className="flex flex-wrap items-center gap-2">
                         <Layers className="h-4 w-4 shrink-0 text-primary" />
                         <span className="font-medium">{set.name}</span>
-                        <span className="rounded bg-muted px-2 py-0.5 font-mono text-xs text-muted-foreground">
-                          {set.slug}
-                        </span>
+                        {set.slug ? (
+                          <span className="rounded-md border border-border bg-card-solid px-2 py-0.5 font-mono text-[0.6875rem] text-foreground/80">
+                            {set.slug}
+                          </span>
+                        ) : null}
                       </div>
                       <p className="mt-1 text-sm text-muted-foreground">
                         {set.sourceCount} source
                         {set.sourceCount === 1 ? "" : "s"}
                       </p>
+                      {set.sources.length > 0 ? (
+                        <p className="mt-0.5 line-clamp-2 text-xs text-foreground/70">
+                          {set.sources.map((source) => source.name).join(" · ")}
+                        </p>
+                      ) : null}
                     </button>
                     <Button
                       type="button"
@@ -375,21 +443,91 @@ export default function SourceSetsPage() {
                 </p>
               )}
               <div className="space-y-2">
-                <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
                   <label className="text-sm font-medium">Sources</label>
-                  {maxSourcesPerSet !== null ? (
-                    <span className="text-xs text-muted-foreground">
-                      {selectedSourceIds.length}/{maxSourcesPerSet} selected
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                    <span>
+                      {selectedSourceIds.length} selected
+                      {hiddenSelectedCount > 0
+                        ? ` (${hiddenSelectedCount} on another tab)`
+                        : null}
+                      {maxSourcesPerSet !== null
+                        ? ` · max ${maxSourcesPerSet}`
+                        : null}
                     </span>
-                  ) : null}
+                    {selectedSourceIds.length > 0 ? (
+                      <button
+                        type="button"
+                        className="font-medium text-foreground/80 underline-offset-2 hover:underline"
+                        onClick={() => setSelectedSourceIds([])}
+                      >
+                        Clear all
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
+                <KnowledgeSetScopeToggle
+                  value={sourceScopeTab}
+                  onChange={handleSourceScopeTabChange}
+                  size="compact"
+                  publicLocked={!isAdmin}
+                />
+                {sourceScopeTab === "personal" ? (
+                  <div className="flex flex-wrap items-center gap-1">
+                    <FilterBadge
+                      active={personalStorageFilter === "local"}
+                      onClick={() =>
+                        setPersonalStorageFilter(
+                          personalStorageFilter === "local" ? "all" : "local",
+                        )
+                      }
+                    >
+                      Local
+                      <span className="opacity-60">
+                        ({personalStorageCounts.local})
+                      </span>
+                    </FilterBadge>
+                    <FilterBadge
+                      active={personalStorageFilter === "cloud"}
+                      onClick={() =>
+                        setPersonalStorageFilter(
+                          personalStorageFilter === "cloud" ? "all" : "cloud",
+                        )
+                      }
+                    >
+                      Cloud
+                      <span className="opacity-60">
+                        ({personalStorageCounts.cloud})
+                      </span>
+                    </FilterBadge>
+                  </div>
+                ) : null}
+                {hiddenSelectedCount > 0 ? (
+                  <p className="rounded-md border border-border/80 bg-muted/30 px-2.5 py-2 text-xs text-muted-foreground">
+                    Selection applies across Just me and Public tabs. Switch
+                    tabs to uncheck sources you do not want, or use Clear all.
+                  </p>
+                ) : null}
+                <p className="text-xs text-muted-foreground">
+                  {sourceScopeTab === "personal"
+                    ? "Just me — private sources on this device (Local) or your LedgeIndex cloud account (Cloud)."
+                    : `${publicSources.length} public catalog source${
+                        publicSources.length === 1 ? "" : "s"
+                      }`}
+                </p>
                 <div className="max-h-64 space-y-2 overflow-y-auto rounded-lg border border-border p-3">
-                  {sources.length === 0 ? (
+                  {visibleSources.length === 0 ? (
                     <p className="text-sm text-muted-foreground">
-                      No sources available yet.
+                      {sourceScopeTab === "personal"
+                        ? "No private sources yet. Index one from the dashboard or web crawl."
+                        : isAdmin
+                          ? resolveRemoteApiBaseUrl()
+                            ? "No public catalog sources returned. Check sign-in and that api.ledgeindex.com is reachable."
+                            : "Set NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL=https://api.ledgeindex.com in apps/web/.env.local and restart the web dev server to list the hosted public catalog locally."
+                          : "Public catalog sources are admin-only."}
                     </p>
                   ) : (
-                    sources.map((source) => {
+                    visibleSources.map((source) => {
                       const checked = selectedSourceIds.includes(source.id);
                       const disabled =
                         !checked &&
@@ -418,7 +556,7 @@ export default function SourceSetsPage() {
                             {source.slug}
                           </span>
                           <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {source.scope} · {source.pageCount} pages
+                            {formatSourceListMeta(source)}
                           </span>
                         </span>
                       </label>

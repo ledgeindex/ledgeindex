@@ -8,6 +8,13 @@ type StructuredGenerateOptions = {
     schema: ZodTypeAny;
     jsonPromptInjection: "auto";
   };
+  modelSettings?: {
+    temperature?: number;
+  };
+};
+
+export type AgentStructuredOutputOptions = {
+  temperature?: number;
 };
 
 /**
@@ -17,6 +24,7 @@ export async function agentStructuredOutput<T extends ZodTypeAny>(
   agent: Agent,
   prompt: string,
   schema: T,
+  callOptions?: AgentStructuredOutputOptions,
 ): Promise<zod.infer<T> | null> {
   const options: StructuredGenerateOptions = {
     maxSteps: 1,
@@ -24,6 +32,9 @@ export async function agentStructuredOutput<T extends ZodTypeAny>(
       schema,
       jsonPromptInjection: "auto",
     },
+    ...(typeof callOptions?.temperature === "number"
+      ? { modelSettings: { temperature: callOptions.temperature } }
+      : {}),
   };
 
   const result = await agent.generate(prompt, options as never);

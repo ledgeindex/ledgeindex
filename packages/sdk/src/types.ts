@@ -55,6 +55,12 @@ export type LedgeIndexAskOptions = {
   provider?: ChatProvider;
   /** `retrieve-only` skips the agent — hits only, no chat key required. */
   mode?: "agent" | "retrieve-only";
+  /** strict | balanced (weak fallback) | permissive (lower threshold + weak). */
+  retrievalStrictness?: "strict" | "balanced" | "permissive";
+  /** Override prune threshold (0–1). `null` disables pruning. */
+  relevanceThreshold?: number | null;
+  /** Include below-threshold rerank hits when strict pruning finds nothing. */
+  includeWeakEvidence?: boolean;
 };
 
 export type LedgeIndexAskAcrossSourceMode = "picker" | "all";
@@ -113,6 +119,8 @@ export type LedgeIndexCrawlConfigOverrides = {
 export type LedgeIndexCrawlOptions = {
   url: string;
   name?: string;
+  /** Optional source slug; defaults to preflight site slug. */
+  slug?: string;
   maxPages?: number;
   /**
    * LLM URL cleanup after crawl. Default `false` — crawl + index does not need a chat model.

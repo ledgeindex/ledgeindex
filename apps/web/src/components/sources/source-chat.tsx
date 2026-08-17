@@ -18,54 +18,44 @@ import { cn } from "@/lib/utils";
 
 export const SOURCE_CHAT_SUGGESTIONS: ChatSuggestion[] = [
   {
-    text: "tell me about durable agents",
-    tag: "Single · Tier 1 full",
-    tagVariant: "full",
-  },
-  {
-    text: "What is Time travel in Mastra workflows?",
-    tag: "Single · Tier 2 full",
+    text: "what are the primitives",
+    tag: "Golden · vague · reference",
     tagVariant: "tier2",
   },
   {
-    text: "What can you tell me about workspaces?",
-    tag: "Single · Tier 2 partial",
+    text: "what is the Mastra class",
+    tag: "Golden · reference",
     tagVariant: "tier2",
   },
   {
-    text: "are microphones supported?",
-    tag: "Single · below threshold",
-    tagVariant: "below",
-  },
-  {
-    text: "How do I set up A2A agents and MCP servers in Mastra?",
-    tag: "Multi · Tier 1 full",
-    tagVariant: "full",
-  },
-  {
-    text: "Was sind Workspaces und wie übergebe ich Daten zwischen Workflow-Schritten?",
-    tag: "Multi · Tier 2 none",
-    tagVariant: "multi",
-  },
-  {
-    text: "Wie übergebe ich bei Workflows Daten zwischen Schritten?",
-    tag: "Single · DE",
-    tagVariant: "single",
-  },
-  {
-    text: "What is the setup for createDurableAgent with Redis cache?",
-    tag: "Single · niche doc",
-    tagVariant: "single",
-  },
-  {
-    text: "workspace overview and capabilities",
-    tag: "Single · Catalog Q2 fallback",
+    text: "what are things you build with mastra",
+    tag: "Golden · confusable-page",
     tagVariant: "catalog",
   },
   {
-    text: "What capabilities are documented on the Mastra workspace overview page?",
-    tag: "Single · Catalog Q2 fallback",
-    tagVariant: "catalog",
+    text: "how do I create an agent",
+    tag: "Golden · guide",
+    tagVariant: "single",
+  },
+  {
+    text: "how do workflows work in mastra",
+    tag: "Golden · guide",
+    tagVariant: "single",
+  },
+  {
+    text: "how does memory work",
+    tag: "Golden · guide",
+    tagVariant: "single",
+  },
+  {
+    text: "how do I add a tool to my agent",
+    tag: "Golden · guide",
+    tagVariant: "single",
+  },
+  {
+    text: "how do I use MCP with mastra",
+    tag: "Golden · guide",
+    tagVariant: "single",
   },
 ];
 
@@ -173,8 +163,8 @@ export function SourceChat({
 
   return (
     <StreamingChatPanel
-      key={`${sourceId}-${modelId}-${effectiveRerankBackend}-${sourceScope}-${sourceHosting}`}
-      chatId={`source-chat-${sourceId}-${modelId}-${effectiveRerankBackend}`}
+      key={`${sourceId}-${modelId}-${effectiveRerankBackend}-${sourceScope}-${sourceHosting}-${toolbar?.retrievalStrictness ?? "strict"}`}
+      chatId={`source-chat-${sourceId}-${modelId}-${effectiveRerankBackend}-${toolbar?.retrievalStrictness ?? "strict"}`}
       agent="docsAgent"
       modelId={modelId}
       sourceId={sourceId}

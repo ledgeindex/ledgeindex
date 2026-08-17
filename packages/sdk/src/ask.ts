@@ -24,5 +24,14 @@ export async function askQuestion(
   return askSource(sourceId, question, {
     ...(rerankBackend ? { rerankBackend } : {}),
     ...(options.mode ? { mode: options.mode } : {}),
+    ...(options.retrievalStrictness
+      ? { retrievalStrictness: options.retrievalStrictness }
+      : {}),
+    ...(options.relevanceThreshold !== undefined
+      ? { relevanceThreshold: options.relevanceThreshold }
+      : {}),
+    ...(typeof options.includeWeakEvidence === "boolean"
+      ? { includeWeakEvidence: options.includeWeakEvidence }
+      : {}),
   });
 }

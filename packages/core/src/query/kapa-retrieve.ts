@@ -9,15 +9,25 @@ import {
   PAGE_EXPANSION_MAX_CHUNKS,
   PAGE_EXPANSION_TOP_URLS,
   RELEVANCE_THRESHOLD,
-  SEARCH_TOP_K,
   LEDGEINDEX_CHUNKS_INDEX,
   LEXICAL_TOP_K,
+  WEAK_EVIDENCE_MIN_SCORE,
+  WEAK_EVIDENCE_TOP_K,
 } from "../vector/constants.js";
 import { embedQuery } from "../vector/embedding.js";
 import { ensureChunksIndex, getVectorStore } from "../vector/store.js";
-import { fuseDenseAndLexical } from "./hybrid-fuse.js";
+import {
+  fuseDenseAndLexical,
+  fuseRankedListsByRrf,
+  mergeFusedCandidatePoolsMany,
+  type FusedQueryResult,
+} from "./hybrid-fuse.js";
 import { applyLastMileRank, lastMileRankEnabled } from "./last-mile-rank.js";
 import { searchLexical } from "./lexical-store.js";
+import {
+  buildRerankQuery,
+  mergeFusionQueries,
+} from "./query-intent.js";
 import {
   effectiveRerankBackend,
   executeKapaRerank,
@@ -69,7 +79,7 @@ function urlMatchesPathPrefix(pageUrl: string, pathStartUrl: string): boolean {
 
 function applyUrlPrefixFilter<T extends { url: string }>(
   chunks: T[],
-  urlPrefix: string | undefined,
+  urlPrefix: string | undefined
 ): T[] {
   if (!urlPrefix?.trim()) return chunks;
   return chunks.filter((chunk) => urlMatchesPathPrefix(chunk.url, urlPrefix));
@@ -117,9 +127,17 @@ export type KapaRetrieveResult = {
   directHitCount: number;
   /** Rerank scores of direct hits, highest first. */
   directHitScores: number[];
+  /** Top rerank scores before threshold (for UI when direct hits are empty). */
+  rerankTopScores: number[];
   /** Chunks after page expansion (sibling context). */
   prunedCount: number;
   insufficient: boolean;
+  /** True when below-threshold rerank hits were included as a fallback. */
+  weakEvidenceUsed?: boolean;
+  /** True when candidates were supplied from multi-query RRF fusion. */
+  fusionRetrieveUsed?: boolean;
+  /** True when escalation rerank re-scored the pool with a second query phrase. */
+  escalatedRerankUsed?: boolean;
   chunks: KapaRetrievedChunk[];
   pruned: KapaRetrievedChunk[];
   timings?: KapaRetrieveStepTimings;
@@ -128,7 +146,7 @@ export type KapaRetrieveResult = {
 function toRetrievedChunk(
   result: QueryResult,
   score: number,
-  details?: RerankResult["details"],
+  details?: RerankResult["details"]
 ): KapaRetrievedChunk {
   const metadata = (result.metadata ?? {}) as Record<string, unknown>;
   const headingPath = Array.isArray(metadata.headingPath)
@@ -189,6 +207,7 @@ export type KapaRetrieveManyResult = {
     rerankedCount: number;
     directHitCount: number;
     directHitScores: number[];
+    rerankTopScores: number[];
     prunedCount: number;
     /** Direct hits before cross-query dedupe. */
     rawPrunedCount: number;
@@ -254,7 +273,7 @@ function dedupeChunks(chunks: KapaRetrievedChunk[]): KapaRetrievedChunk[] {
  */
 function capDirectHitsPerPage(
   chunks: KapaRetrievedChunk[],
-  maxPerPage = MAX_DIRECT_HITS_PER_PAGE,
+  maxPerPage = MAX_DIRECT_HITS_PER_PAGE
 ): KapaRetrievedChunk[] {
   const countByPage = new Map<string, number>();
   const kept: KapaRetrievedChunk[] = [];
@@ -275,7 +294,7 @@ function capDirectHitsPerPage(
  * page's chunks in reading order so the generator sees coherent context.
  */
 function orderChunksForContext(
-  chunks: KapaRetrievedChunk[],
+  chunks: KapaRetrievedChunk[]
 ): KapaRetrievedChunk[] {
   const pages = new Map<string, KapaRetrievedChunk[]>();
   for (const chunk of chunks) {
@@ -287,11 +306,11 @@ function orderChunksForContext(
 
   const rankedPages = [...pages.values()].sort(
     (a, b) =>
-      Math.max(...b.map((c) => c.score)) - Math.max(...a.map((c) => c.score)),
+      Math.max(...b.map((c) => c.score)) - Math.max(...a.map((c) => c.score))
   );
 
   return rankedPages.flatMap((pageChunks) =>
-    [...pageChunks].sort((a, b) => a.chunkIndex - b.chunkIndex),
+    [...pageChunks].sort((a, b) => a.chunkIndex - b.chunkIndex)
   );
 }
 
@@ -369,7 +388,7 @@ async function expandTopPages(input: {
 
         const anchorScore = anchorScoreByUrl.get(url) ?? 0.5;
         const mapped = results.map((result) =>
-          toRetrievedChunk(result, Math.max(0, anchorScore - 0.01)),
+          toRetrievedChunk(result, Math.max(0, anchorScore - 0.01))
         );
 
         if (!concentrated || queryTerms.length === 0) {
@@ -418,7 +437,7 @@ async function expandTopPages(input: {
         });
         return [] as KapaRetrievedChunk[];
       }
-    }),
+    })
   );
 
   const known = new Set(input.pruned.map((chunk) => chunkDedupeKey(chunk)));
@@ -505,7 +524,7 @@ function extractExpansionTerms(query: string): string[] {
 
 function chunkMatchesExpansionTerms(
   chunk: KapaRetrievedChunk,
-  terms: string[],
+  terms: string[]
 ): boolean {
   if (terms.length === 0) return false;
   const haystack = [
@@ -522,16 +541,25 @@ function chunkMatchesExpansionTerms(
 }
 
 function mergePrunedChunks(
-  byQuery: KapaRetrieveManyResult["byQuery"],
+  byQuery: KapaRetrieveManyResult["byQuery"]
 ): KapaRetrievedChunk[] {
-  return orderChunksForContext(
-    dedupeChunks(byQuery.flatMap((entry) => entry.pruned)),
-  );
+  const lists = byQuery.map((entry) => entry.pruned);
+  const total = lists.reduce((sum, list) => sum + list.length, 0);
+  if (total === 0) return [];
+
+  const fused = fuseRankedListsByRrf({
+    lists,
+    id: chunkDedupeKey,
+    limit: total,
+    score: (chunk) => chunk.score,
+  });
+
+  return orderChunksForContext(dedupeChunks(fused));
 }
 
 /** Drop chunks already returned by an earlier query in the same multi-search call. */
 function dedupeAcrossQueries(
-  byQuery: KapaRetrieveManyResult["byQuery"],
+  byQuery: KapaRetrieveManyResult["byQuery"]
 ): KapaRetrieveManyResult["byQuery"] {
   const seen = new Set<string>();
 
@@ -558,22 +586,23 @@ function dedupeAcrossQueries(
 export type KapaRetrieveQueryMode = "short_circuit" | "merge_all";
 
 /**
- * short_circuit: Q1 first — skip Q2+ if Q1 has direct hits (single-topic).
- * merge_all: run all queries and merge (multi-topic); Q1 then Q2+ in parallel.
+ * LlamaIndex-style multi-query retrieve: hybrid each NL variant (same text for
+ * vector + BM25), RRF fuse candidates, rerank once on the user question.
  */
 export async function kapaRetrieveMany(input: {
+  /** Generated NL query variants from rewrite (original question merged at retrieve). */
   queries: string[];
   sourceId: string;
-  /**
-   * The user's original question. Used as the rerank query so the cross-encoder
-   * scores intent instead of the keyword rewrite, and so scores stay comparable
-   * across queries when their results are merged.
-   */
+  /** User question — always included in fusion; drives cross-encoder rerank. */
   question?: string;
   filter?: KapaRetrieveFilter;
   relevanceThreshold?: number;
+  /** Ignored — all fusion queries always run (LlamaIndex merge pattern). */
   queryMode?: KapaRetrieveQueryMode;
-  /** Q1-miss fallback: retry Q1 scoped to this catalog page URL when score is high enough. */
+  allowWeakEvidence?: boolean;
+  weakEvidenceMinScore?: number;
+  weakEvidenceTopK?: number;
+  expandPages?: boolean;
   catalogUrlFilter?: {
     url: string;
     score: number;
@@ -581,21 +610,55 @@ export async function kapaRetrieveMany(input: {
   };
 }): Promise<KapaRetrieveManyResult> {
   const wallStarted = performance.now();
-  const queries = [
+  const generatedQueries = [
     ...new Set(
-      input.queries.map((query) => query.trim()).filter((query) => query.length > 0),
+      input.queries
+        .map((query) => query.trim())
+        .filter((query) => query.length > 0),
     ),
   ];
 
-  if (queries.length === 0) {
+  const question = input.question?.trim();
+  const fusionQueries = question
+    ? mergeFusionQueries(question, generatedQueries)
+    : generatedQueries;
+
+  if (fusionQueries.length === 0) {
     throw new Error("At least one non-empty query is required");
   }
 
-  const retrieveOpts = {
-    sourceId: input.sourceId,
-    filter: input.filter,
-    relevanceThreshold: input.relevanceThreshold,
-    rerankQuery: input.question?.trim() || undefined,
+  const rerankQuery = buildRerankQuery({
+    originalQuestion: question || fusionQueries[0],
+  });
+  const candidateCount = getSearchRerankCandidates();
+
+  const fusionRetrieve = async (filterOverride?: KapaRetrieveFilter) => {
+    const filter = filterOverride ?? input.filter;
+    const fused = await fuseHybridCandidates({
+      fusionQueries,
+      sourceId: input.sourceId,
+      filter,
+      candidateCount,
+    });
+    return kapaRetrieve({
+      query: fusionQueries[0],
+      rerankQuery,
+      escalationRerankQuery: rerankQuery,
+      prefused: {
+        initialResults: fused.results,
+        queryVector: fused.queryVector,
+        fusionMeta: fused.fused,
+        embedMs: fused.embedMs,
+        vectorMs: fused.vectorMs,
+      },
+      sourceId: input.sourceId,
+      filter,
+      relevanceThreshold: input.relevanceThreshold,
+      allowWeakEvidence: input.allowWeakEvidence,
+      weakEvidenceMinScore: input.weakEvidenceMinScore,
+      weakEvidenceTopK: input.weakEvidenceTopK,
+      expandPages: input.expandPages,
+    });
   };
 
   const toByQueryEntry = (
@@ -603,9 +666,10 @@ export async function kapaRetrieveMany(input: {
     extras?: {
       attemptType?: KapaRetrieveAttemptType;
       catalogMatchScore?: number;
+      fusionLabel?: string;
     },
   ): KapaRetrieveManyResult["byQuery"][number] => ({
-    query: result.query,
+    query: extras?.fusionLabel ?? result.query,
     attemptType: extras?.attemptType ?? "query",
     filter: result.filter,
     catalogMatchScore: extras?.catalogMatchScore,
@@ -614,18 +678,23 @@ export async function kapaRetrieveMany(input: {
     rerankedCount: result.rerankedCount,
     directHitCount: result.directHitCount,
     directHitScores: result.directHitScores,
+    rerankTopScores: result.rerankTopScores,
     prunedCount: result.prunedCount,
     rawPrunedCount: result.directHitCount,
     chunks: result.chunks,
     pruned: result.pruned,
   });
 
+  const fusionLabel =
+    fusionQueries.length === 1
+      ? fusionQueries[0]
+      : `${fusionQueries[0]} (+${fusionQueries.length - 1} variants)`;
+
   const byQueryRaw: KapaRetrieveManyResult["byQuery"] = [];
   const queryTimings: KapaRetrieveStepTimings[] = [];
-  const queryMode = input.queryMode ?? "short_circuit";
 
-  const first = await kapaRetrieve({ query: queries[0], ...retrieveOpts });
-  byQueryRaw.push(toByQueryEntry(first));
+  const first = await fusionRetrieve();
+  byQueryRaw.push(toByQueryEntry(first, { fusionLabel }));
   if (first.timings) queryTimings.push(first.timings);
 
   let skippedQueries: string[] = [];
@@ -633,35 +702,30 @@ export async function kapaRetrieveMany(input: {
   let catalogSucceeded = false;
 
   const shouldTryCatalogUrl =
-    queryMode === "short_circuit" &&
-    first.directHitCount === 0 &&
-    Boolean(input.catalogUrlFilter?.url);
+    first.directHitCount === 0 && Boolean(input.catalogUrlFilter?.url);
 
   if (shouldTryCatalogUrl && input.catalogUrlFilter) {
     const catalogMatch = input.catalogUrlFilter;
     logVerbose(
-      "Kapa retrieve: Q1 missed, trying catalog URL filter",
+      "Kapa retrieve: fusion missed, trying catalog URL filter",
       "KapaRetrieve",
       {
-        query: queries[0],
+        fusionQueries,
         url: catalogMatch.url,
         catalogScore: catalogMatch.score,
       },
     );
 
-    const catalogAttempt = await kapaRetrieve({
-      query: queries[0],
-      ...retrieveOpts,
-      filter: {
-        ...retrieveOpts.filter,
-        url: catalogMatch.url,
-      },
+    const catalogAttempt = await fusionRetrieve({
+      ...input.filter,
+      url: catalogMatch.url,
     });
 
     byQueryRaw.push(
       toByQueryEntry(catalogAttempt, {
         attemptType: "catalog_url_fallback",
         catalogMatchScore: catalogMatch.score,
+        fusionLabel: `${fusionLabel} @ ${catalogMatch.url}`,
       }),
     );
     if (catalogAttempt.timings) queryTimings.push(catalogAttempt.timings);
@@ -674,49 +738,6 @@ export async function kapaRetrieveMany(input: {
       applied: true,
       succeeded: catalogSucceeded,
     };
-
-    if (catalogSucceeded) {
-      skippedQueries = queries.slice(1);
-      logVerbose("Kapa retrieve: catalog URL filter succeeded", "KapaRetrieve", {
-        query: queries[0],
-        url: catalogMatch.url,
-        directHitCount: catalogAttempt.directHitCount,
-        skipped: skippedQueries,
-      });
-    }
-  }
-
-  const shouldRunRest =
-    queries.length > 1 &&
-    (queryMode === "merge_all" ||
-      (first.directHitCount === 0 && !catalogSucceeded));
-
-  if (queryMode === "short_circuit" && first.directHitCount > 0) {
-    skippedQueries = queries.slice(1);
-    if (skippedQueries.length > 0) {
-      logVerbose("Kapa retrieve: Q1 sufficient, skipping remaining queries", "KapaRetrieve", {
-        query: queries[0],
-        directHitCount: first.directHitCount,
-        skipped: skippedQueries,
-      });
-    }
-  } else if (shouldRunRest) {
-    const rest = queries.slice(1);
-    logVerbose(
-      queryMode === "merge_all"
-        ? "Kapa retrieve: multi-topic, running all queries"
-        : "Kapa retrieve: Q1 missed, running remaining in parallel",
-      "KapaRetrieve",
-      { query: queries[0], parallel: rest, queryMode },
-    );
-
-    const parallelResults = await Promise.all(
-      rest.map((query) => kapaRetrieve({ query, ...retrieveOpts })),
-    );
-    byQueryRaw.push(...parallelResults.map((r) => toByQueryEntry(r)));
-    for (const result of parallelResults) {
-      if (result.timings) queryTimings.push(result.timings);
-    }
   }
 
   const byQuery = dedupeAcrossQueries(byQueryRaw);
@@ -726,11 +747,10 @@ export async function kapaRetrieveMany(input: {
     queryTimings.reduce((sum, row) => sum + row[key], 0);
 
   return {
-    queries,
+    queries: fusionQueries,
     skippedQueries,
     filter: input.filter ?? {},
     insufficient: merged.length === 0,
-    // Every query hits the same source, so they all resolve the same backend.
     rerankBackendUsed: first.rerankBackendUsed,
     catalogUrlFilter: catalogUrlFilterResult,
     byQuery,
@@ -746,38 +766,28 @@ export async function kapaRetrieveMany(input: {
   };
 }
 
-/**
- * Kapa-style retrieval: metadata filter → wide vector search → rerank → pruner threshold.
- * Rerank backend: auto — `vector` on code sources, else the local MiniLM cross-encoder.
- */
-export async function kapaRetrieve(input: {
-  query: string;
+type HybridSearchOutcome = {
+  results: FusedQueryResult[];
+  fused: {
+    denseCount: number;
+    lexicalCount: number;
+    lexicalOnlyCount: number;
+  };
+  embedMs: number;
+  vectorMs: number;
+  queryVector: number[];
+};
+
+async function hybridCandidateSearch(input: {
   sourceId: string;
-  /**
-   * Text scored by the reranker. Defaults to `query`.
-   * Pass the user's original question so the cross-encoder judges intent rather
-   * than the compressed keyword rewrite, which can match a confusable page.
-   */
-  rerankQuery?: string;
+  embedText: string;
+  lexicalText: string;
   filter?: KapaRetrieveFilter;
-  relevanceThreshold?: number;
-  /**
-   * When true (default), expand top pages to fuller page context for answer agents.
-   * When false, return score-pruned direct hits only (MCP / evidence tools).
-   */
-  expandPages?: boolean;
-}): Promise<KapaRetrieveResult> {
-  const totalStarted = performance.now();
-  await ensureChunksIndex();
-
-  const threshold = input.relevanceThreshold ?? RELEVANCE_THRESHOLD;
-  const rerankQuery = input.rerankQuery?.trim() || input.query;
-  const expandPages = input.expandPages !== false;
-  const candidateCount = getSearchRerankCandidates();
-
+  candidateCount: number;
+}): Promise<HybridSearchOutcome> {
   const store = getVectorStore();
   const embedStarted = performance.now();
-  const queryVector = await embedQuery(input.query);
+  const queryVector = await embedQuery(input.embedText);
   const embedMs = Math.round(performance.now() - embedStarted);
 
   const metadataFilter: Record<string, string> = {
@@ -786,28 +796,26 @@ export async function kapaRetrieve(input: {
   if (input.filter?.url) metadataFilter.url = input.filter.url;
   if (input.filter?.category) metadataFilter.category = input.filter.category;
   if (input.filter?.section) metadataFilter.section = input.filter.section;
-  if (input.filter?.crawlRoot) metadataFilter.crawlRoot = input.filter.crawlRoot;
+  if (input.filter?.crawlRoot)
+    metadataFilter.crawlRoot = input.filter.crawlRoot;
 
   const vectorStarted = performance.now();
-  // Both legs run against the same source; the lexical one needs no embedding
-  // so it costs a single indexed query in parallel with the vector search.
   const [denseInitial, lexicalHits] = await Promise.all([
     store.query({
       indexName: LEDGEINDEX_CHUNKS_INDEX,
       queryVector,
-      topK: candidateCount,
+      topK: input.candidateCount,
       filter: metadataFilter,
     }),
     searchLexical({
       sourceId: input.sourceId,
-      query: input.query,
+      query: input.lexicalText,
       topK: LEXICAL_TOP_K,
       url: input.filter?.url,
     }),
   ]);
 
   let denseResults = denseInitial;
-  // Older chunks may lack crawlRoot — fall back to source-wide search + URL prefix.
   if (
     input.filter?.crawlRoot &&
     denseResults.length === 0 &&
@@ -817,7 +825,7 @@ export async function kapaRetrieve(input: {
     denseResults = await store.query({
       indexName: LEDGEINDEX_CHUNKS_INDEX,
       queryVector,
-      topK: candidateCount,
+      topK: input.candidateCount,
       filter: withoutCrawlRoot,
     });
   }
@@ -825,14 +833,145 @@ export async function kapaRetrieve(input: {
   const fused = fuseDenseAndLexical({
     dense: denseResults,
     lexical: lexicalHits,
-    limit: candidateCount,
+    limit: input.candidateCount,
   });
-  const initialResults = fused.results;
   const vectorMs = Math.round(performance.now() - vectorStarted);
 
-  // Whether this source is code decides how it should be ranked, and the
-  // candidates are the cheapest place to find out: repo chunks carry a filePath,
-  // crawled pages do not.
+  return {
+    results: fused.results,
+    fused: {
+      denseCount: fused.denseCount,
+      lexicalCount: fused.lexicalCount,
+      lexicalOnlyCount: fused.lexicalOnlyCount,
+    },
+    embedMs,
+    vectorMs,
+    queryVector,
+  };
+}
+
+async function fuseHybridCandidates(input: {
+  fusionQueries: string[];
+  sourceId: string;
+  filter?: KapaRetrieveFilter;
+  candidateCount: number;
+}): Promise<HybridSearchOutcome> {
+  const hybrids = await Promise.all(
+    input.fusionQueries.map((query) =>
+      hybridCandidateSearch({
+        sourceId: input.sourceId,
+        embedText: query,
+        lexicalText: query,
+        filter: input.filter,
+        candidateCount: input.candidateCount,
+      }),
+    ),
+  );
+
+  const results = mergeFusedCandidatePoolsMany(
+    hybrids.map((hybrid) => hybrid.results),
+    input.candidateCount,
+  );
+
+  return {
+    results,
+    fused: {
+      denseCount: hybrids.reduce((sum, hybrid) => sum + hybrid.fused.denseCount, 0),
+      lexicalCount: hybrids.reduce(
+        (sum, hybrid) => sum + hybrid.fused.lexicalCount,
+        0,
+      ),
+      lexicalOnlyCount: hybrids.reduce(
+        (sum, hybrid) => sum + hybrid.fused.lexicalOnlyCount,
+        0,
+      ),
+    },
+    embedMs: hybrids.reduce((sum, hybrid) => sum + hybrid.embedMs, 0),
+    vectorMs: hybrids.reduce((sum, hybrid) => sum + hybrid.vectorMs, 0),
+    queryVector: hybrids[0]?.queryVector ?? [],
+  };
+}
+
+/**
+ * Kapa-style retrieval: metadata filter → wide vector search → rerank → pruner threshold.
+ * Rerank backend: auto — `vector` on code sources, else the local MiniLM cross-encoder.
+ */
+export async function kapaRetrieve(input: {
+  query: string;
+  sourceId: string;
+  /**
+   * Natural-language sentence for cross-encoder reranking. Defaults to `query`.
+   */
+  rerankQuery?: string;
+  /**
+   * When primary rerank yields zero hits, re-score the same pool with this phrase.
+   */
+  escalationRerankQuery?: string;
+  /** Pre-fused hybrid candidates (multi-query RRF path). */
+  prefused?: {
+    initialResults: FusedQueryResult[];
+    queryVector: number[];
+    fusionMeta: {
+      denseCount: number;
+      lexicalCount: number;
+      lexicalOnlyCount: number;
+    };
+    embedMs: number;
+    vectorMs: number;
+  };
+  filter?: KapaRetrieveFilter;
+  relevanceThreshold?: number;
+  /**
+   * When true (default), expand top pages to fuller page context for answer agents.
+   * When false, return score-pruned direct hits only (MCP / evidence tools).
+   */
+  expandPages?: boolean;
+  /** Include top reranked chunks when nothing passes `relevanceThreshold`. */
+  allowWeakEvidence?: boolean;
+  weakEvidenceMinScore?: number;
+  weakEvidenceTopK?: number;
+}): Promise<KapaRetrieveResult> {
+  const totalStarted = performance.now();
+  await ensureChunksIndex();
+
+  const threshold = input.relevanceThreshold ?? RELEVANCE_THRESHOLD;
+  const intentRerank = input.rerankQuery?.trim() || input.query;
+  const expandPages = input.expandPages !== false;
+  const candidateCount = getSearchRerankCandidates();
+  const prefused = input.prefused;
+  const fusionRetrieveUsed = Boolean(prefused);
+
+  let embedMs = 0;
+  let vectorMs = 0;
+  let queryVector: number[];
+  let initialResults: FusedQueryResult[];
+  let fusionMeta = {
+    denseCount: 0,
+    lexicalCount: 0,
+    lexicalOnlyCount: 0,
+  };
+
+  if (prefused) {
+    embedMs = prefused.embedMs;
+    vectorMs = prefused.vectorMs;
+    queryVector = prefused.queryVector;
+    initialResults = prefused.initialResults;
+    fusionMeta = prefused.fusionMeta;
+  } else {
+    const single = await hybridCandidateSearch({
+      sourceId: input.sourceId,
+      embedText: input.query,
+      lexicalText: input.query,
+      filter: input.filter,
+      candidateCount,
+    });
+    embedMs = single.embedMs;
+    vectorMs = single.vectorMs;
+    queryVector = single.queryVector;
+    initialResults = single.results;
+    fusionMeta = single.fused;
+  }
+
   const codeCandidateRatio = initialResults.length
     ? initialResults.filter(
         (result) => typeof result.metadata?.filePath === "string",
@@ -842,50 +981,35 @@ export async function kapaRetrieve(input: {
   logVerbose("Kapa retrieve: hybrid candidate search", "KapaRetrieve", {
     sourceId: input.sourceId,
     initialCount: initialResults.length,
+    fusionRetrieveUsed,
     codeCandidateRatio: Number(codeCandidateRatio.toFixed(2)),
-    denseCount: fused.denseCount,
-    lexicalCount: fused.lexicalCount,
-    lexicalOnlyCount: fused.lexicalOnlyCount,
+    denseCount: fusionMeta.denseCount,
+    lexicalCount: fusionMeta.lexicalCount,
+    lexicalOnlyCount: fusionMeta.lexicalOnlyCount,
     candidateCount,
-    filter: metadataFilter,
+    filter: input.filter ?? {},
     urlPrefix: input.filter?.urlPrefix ?? null,
   });
 
-  // Resolved here as well as inside the reranker so the answer can report which
-  // backend actually scored it; the decision is a pure function of the ratio.
   const { backend: rerankBackendUsed } =
     effectiveRerankBackend(codeCandidateRatio);
 
   const rerankStarted = performance.now();
-  const reranked = await executeKapaRerank({
-    query: rerankQuery,
+  let reranked = await executeKapaRerank({
+    query: intentRerank,
     results: initialResults,
     queryVector,
-    topK: SEARCH_TOP_K,
+    topK: initialResults.length,
     codeCandidateRatio,
   });
-  const rerankMs = Math.round(performance.now() - rerankStarted);
 
-  const pruned = reranked.filter(
-    (entry) => entry.score >= threshold,
-  );
+  let escalatedRerankUsed = false;
+  let pruned = reranked.filter((entry) => entry.score >= threshold);
 
-  // Code corpora need a final metadata-aware pass: see last-mile-rank.ts. It is
-  // a no-op on docs-only candidate sets, and runs before the per-page cap so the
-  // cap keeps the best chunk of each file rather than the first one retrieved.
   const lastMile = <T extends KapaRetrievedChunk>(list: T[]): T[] =>
-    lastMileRankEnabled() ? applyLastMileRank(list, rerankQuery) : list;
+    lastMileRankEnabled() ? applyLastMileRank(list, intentRerank) : list;
 
-  const chunks = lastMile(
-    applyUrlPrefixFilter(
-      reranked.map((entry) =>
-        toRetrievedChunk(entry.result, entry.score, entry.details),
-      ),
-      input.filter?.urlPrefix,
-    ),
-  );
-
-  const directHits = capDirectHitsPerPage(
+  let directHits = capDirectHitsPerPage(
     lastMile(
       applyUrlPrefixFilter(
         dedupeChunks(
@@ -898,6 +1022,89 @@ export async function kapaRetrieve(input: {
     ),
   );
 
+  const escalation = input.escalationRerankQuery?.trim();
+  if (
+    directHits.length === 0 &&
+    escalation &&
+    escalation !== intentRerank &&
+    initialResults.length > 0
+  ) {
+    reranked = await executeKapaRerank({
+      query: escalation,
+      results: initialResults,
+      queryVector,
+      topK: initialResults.length,
+      codeCandidateRatio,
+    });
+    escalatedRerankUsed = true;
+    pruned = reranked.filter((entry) => entry.score >= threshold);
+    directHits = capDirectHitsPerPage(
+      lastMile(
+        applyUrlPrefixFilter(
+          dedupeChunks(
+            pruned.map((entry) =>
+              toRetrievedChunk(entry.result, entry.score, entry.details),
+            ),
+          ),
+          input.filter?.urlPrefix,
+        ),
+      ),
+    );
+    logVerbose("Kapa retrieve: escalation rerank", "KapaRetrieve", {
+      sourceId: input.sourceId,
+      escalation,
+      directHits: directHits.length,
+      topScore: directHits[0]?.score,
+    });
+  }
+
+  const rerankMs = Math.round(performance.now() - rerankStarted);
+
+  const chunks = lastMile(
+    applyUrlPrefixFilter(
+      reranked.map((entry) =>
+        toRetrievedChunk(entry.result, entry.score, entry.details),
+      ),
+      input.filter?.urlPrefix,
+    ),
+  );
+
+  let weakEvidenceUsed = false;
+  let effectiveDirectHits = directHits;
+
+  if (
+    input.allowWeakEvidence &&
+    directHits.length === 0 &&
+    reranked.length > 0
+  ) {
+    const weakMin = input.weakEvidenceMinScore ?? WEAK_EVIDENCE_MIN_SCORE;
+    const weakTopK = input.weakEvidenceTopK ?? WEAK_EVIDENCE_TOP_K;
+    const weakEntries = reranked
+      .filter((entry) => entry.score >= weakMin)
+      .slice(0, weakTopK);
+
+    if (weakEntries.length > 0) {
+      effectiveDirectHits = capDirectHitsPerPage(
+        lastMile(
+          applyUrlPrefixFilter(
+            weakEntries.map((entry) =>
+              toRetrievedChunk(entry.result, entry.score, entry.details),
+            ),
+            input.filter?.urlPrefix,
+          ),
+        ),
+      );
+      weakEvidenceUsed = effectiveDirectHits.length > 0;
+      logVerbose("Kapa retrieve: weak-evidence fallback", "KapaRetrieve", {
+        sourceId: input.sourceId,
+        weakMin,
+        weakTopK,
+        count: effectiveDirectHits.length,
+        topScore: effectiveDirectHits[0]?.score,
+      });
+    }
+  }
+
   const expandStarted = performance.now();
   const prunedChunks = expandPages
     ? applyUrlPrefixFilter(
@@ -905,19 +1112,27 @@ export async function kapaRetrieve(input: {
           sourceId: input.sourceId,
           query: input.query,
           queryVector,
-          pruned: directHits,
+          pruned: effectiveDirectHits,
         }),
         input.filter?.urlPrefix,
       )
-    : directHits;
+    : effectiveDirectHits;
   const expandMs = Math.round(performance.now() - expandStarted);
 
+  const rerankTopScores = reranked
+    .map((entry) => entry.score)
+    .sort((a, b) => b - a)
+    .slice(0, 8);
+
   logVerbose("Kapa retrieve: pruned + page-expanded", "KapaRetrieve", {
-    directHits: directHits.length,
-    directHitPages: new Set(directHits.map((chunk) => chunk.url)).size,
+    directHits: effectiveDirectHits.length,
+    directHitPages: new Set(effectiveDirectHits.map((chunk) => chunk.url)).size,
     withExpansion: prunedChunks.length,
     expandPages,
-    rerankedOnQuestion: rerankQuery !== input.query,
+    weakEvidenceUsed,
+    fusionRetrieveUsed,
+    escalatedRerankUsed,
+    rerankedOnIntent: intentRerank !== input.query,
   });
 
   return {
@@ -926,12 +1141,16 @@ export async function kapaRetrieve(input: {
     rerankBackendUsed,
     initialCount: initialResults.length,
     rerankedCount: reranked.length,
-    directHitCount: directHits.length,
-    directHitScores: directHits
+    directHitCount: effectiveDirectHits.length,
+    directHitScores: effectiveDirectHits
       .map((chunk) => chunk.score)
       .sort((a, b) => b - a),
+    rerankTopScores,
     prunedCount: prunedChunks.length,
-    insufficient: directHits.length === 0,
+    insufficient: effectiveDirectHits.length === 0,
+    weakEvidenceUsed,
+    fusionRetrieveUsed,
+    escalatedRerankUsed,
     chunks,
     pruned: prunedChunks,
     timings: {

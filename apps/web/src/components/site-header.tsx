@@ -6,9 +6,10 @@ import { SiteBrand } from "@/components/site-brand";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/lib/auth-context";
 import { isFirebaseConfigured } from "@/lib/firebase";
+import { docsSiteHref } from "@/lib/docs-site-url";
 import { cn } from "@/lib/utils";
 
-const DOCS_HREF = "/docs";
+const DOCS_HREF = docsSiteHref();
 
 function GithubIcon({ className }: { className?: string }) {
   return (
@@ -32,7 +33,7 @@ const SOCIAL_LINKS = [
 ] as const;
 
 export function SiteHeader() {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
@@ -94,25 +95,13 @@ export function SiteHeader() {
 
               <ThemeToggle />
               {isFirebaseConfigured && user ? (
-                <>
-                  <Button
-                    href="/dashboard"
-                    variant="secondary"
-                    className="hidden h-9 px-3.5 text-xs sm:inline-flex sm:text-sm"
-                  >
-                    Open app
-                  </Button>
-                  <span className="hidden max-w-[10rem] truncate text-xs text-muted xl:inline">
-                    {user.email}
-                  </span>
-                  <Button
-                    variant="secondary"
-                    className="h-9 px-3.5 text-xs sm:text-sm"
-                    onClick={() => void signOut()}
-                  >
-                    Sign out
-                  </Button>
-                </>
+                <Button
+                  href="/dashboard"
+                  variant="secondary"
+                  className="h-9 px-3.5 text-xs sm:text-sm"
+                >
+                  Open app
+                </Button>
               ) : isFirebaseConfigured ? (
                 <Button
                   href="/login"

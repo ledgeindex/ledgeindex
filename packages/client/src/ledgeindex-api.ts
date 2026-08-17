@@ -67,23 +67,74 @@ function isLoopbackApiUrl(url: string): boolean {
   }
 }
 
+/** Lazily resolved so Next can inline NEXT_PUBLIC_* at app build time. */
+let remoteApiBaseUrl: string | null = null;
+
 /**
- * Hosted API for Just-me cloud / public corpus. Never a loopback URL.
+ * Hosted API for Just-me cloud + public corpus listing. Never a loopback URL.
  * Used when the active API base is local so the client can list cloud personal
- * sources without Cloud SQL proxy. Null when unset (OSS local-only).
+ * and global sources without Cloud SQL proxy. Null when unset (OSS local-only).
  */
 export function resolveRemoteApiBaseUrl(): string | null {
+  if (remoteApiBaseUrl) return remoteApiBaseUrl;
+
   const candidates = [
-    envTrim("NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL"),
-    envTrim("NEXT_PUBLIC_KNOWLEDGEINDEX_REMOTE_API_URL"),
-    envTrim("LEDGEINDEX_REMOTE_API_URL"),
+    typeof process !== "undefined"
+      ? process.env.NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL
+      : undefined,
+    typeof process !== "undefined"
+      ? process.env.NEXT_PUBLIC_KNOWLEDGEINDEX_REMOTE_API_URL
+      : undefined,
+    typeof process !== "undefined" ? process.env.LEDGEINDEX_REMOTE_API_URL : undefined,
   ];
+
   for (const candidate of candidates) {
-    if (!candidate) continue;
-    if (isLoopbackApiUrl(candidate)) continue;
-    return candidate;
+    const trimmed =
+      typeof candidate === "string" && candidate.trim()
+        ? candidate.trim().replace(/\/$/, "")
+        : undefined;
+    if (!trimmed) continue;
+    if (isLoopbackApiUrl(trimmed)) continue;
+    return trimmed;
   }
   return null;
+}
+
+export function setLedgeIndexRemoteApiBaseUrl(url: string | null): void {
+  if (!url?.trim()) {
+    remoteApiBaseUrl = null;
+    return;
+  }
+  const trimmed = url.trim().replace(/\/$/, "");
+  remoteApiBaseUrl = isLoopbackApiUrl(trimmed) ? null : trimmed;
+}
+
+export type SourceRoutingHint = {
+  scope?: SourceScope;
+  hosting?: SourceHosting;
+};
+
+/** Cloud personal + public catalog rows live on the hosted API when dev uses :3010. */
+export function shouldRouteSourceToRemoteApi(source: SourceRoutingHint): boolean {
+  const remoteBase = resolveRemoteApiBaseUrl();
+  const activeBase = getLedgeIndexApiBaseUrl();
+  if (
+    !remoteBase ||
+    !isLoopbackApiUrl(activeBase) ||
+    sameApiOrigin(activeBase, remoteBase)
+  ) {
+    return false;
+  }
+  if (source.scope === "global") return true;
+  return source.hosting === "cloud";
+}
+
+function apiBaseOptionsForSource(
+  source?: SourceRoutingHint,
+): { baseUrl: string } | undefined {
+  if (!source || !shouldRouteSourceToRemoteApi(source)) return undefined;
+  const remoteBase = resolveRemoteApiBaseUrl();
+  return remoteBase ? { baseUrl: remoteBase } : undefined;
 }
 
 function sameApiOrigin(a: string, b: string): boolean {
@@ -632,6 +683,7 @@ export type PreflightResult = {
   ok: boolean;
   status: number;
   siteName: string;
+  siteSlug: string;
   title?: string;
   ogImage?: string;
   faviconUrl?: string;
@@ -856,6 +908,7 @@ export async function checkSourceDuplicates(input: {
 export async function createSource(input: {
   projectId?: string;
   name: string;
+  slug?: string;
   scope?: SourceScope;
   hosting?: SourceHosting;
   config: WebCrawlConfig;
@@ -870,8 +923,50 @@ export async function createSource(input: {
   });
 }
 
-export async function getSource(id: string) {
-  return api<{ source: Source }>(`/api/sources/${id}`);
+function isRemoteFallbackableSourceError(err: unknown): boolean {
+  if (!(err instanceof KnowledgeIndexApiError)) return false;
+  if (err.status === 404 || err.status === 503) return true;
+  return /5432|postgres|ECONNREFUSED|Cloud Postgres|CLOUD_POSTGRES/i.test(
+    err.message,
+  );
+}
+
+async function apiWithRemoteSourceFallback<T>(
+  path: string,
+  init?: RequestInit,
+  routing?: SourceRoutingHint,
+): Promise<T> {
+  const remoteOpts = apiBaseOptionsForSource(routing);
+  if (remoteOpts) {
+    return api<T>(path, init, remoteOpts);
+  }
+
+  try {
+    return await api<T>(path, init);
+  } catch (err) {
+    const remoteBase = resolveRemoteApiBaseUrl();
+    const activeBase = getLedgeIndexApiBaseUrl();
+    if (
+      remoteBase &&
+      isLoopbackApiUrl(activeBase) &&
+      !sameApiOrigin(activeBase, remoteBase) &&
+      isRemoteFallbackableSourceError(err)
+    ) {
+      return api<T>(path, init, { baseUrl: remoteBase });
+    }
+    throw err;
+  }
+}
+
+export async function getSource(
+  id: string,
+  routing?: SourceRoutingHint,
+) {
+  return apiWithRemoteSourceFallback<{ source: Source }>(
+    `/api/sources/${id}`,
+    undefined,
+    routing,
+  );
 }
 
 export async function updateSource(
@@ -886,11 +981,16 @@ export async function updateSource(
     categories?: string[];
     displayOrder?: number | null;
   },
+  routing?: SourceRoutingHint,
 ) {
-  return api<{ source: SourceSummary }>(`/api/sources/${id}`, {
-    method: "PUT",
-    body: JSON.stringify(input),
-  });
+  return api<{ source: SourceSummary }>(
+    `/api/sources/${id}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(input),
+    },
+    apiBaseOptionsForSource(routing),
+  );
 }
 
 export async function reorderSources(
@@ -1039,10 +1139,15 @@ export async function deleteSourceSiteProfile(id: string) {
   }
 }
 
-export async function deleteSource(id: string) {
-  return api<{ deleted: boolean; sourceId: string }>(`/api/sources/${id}`, {
-    method: "DELETE",
-  });
+export async function deleteSource(
+  id: string,
+  routing?: SourceRoutingHint,
+) {
+  return api<{ deleted: boolean; sourceId: string }>(
+    `/api/sources/${id}`,
+    { method: "DELETE" },
+    apiBaseOptionsForSource(routing),
+  );
 }
 
 export async function getAccountSourceLimits(scope: SourceScope = "personal") {
@@ -1063,45 +1168,123 @@ export type AccountSourceLimits = {
   canCreate: boolean;
 };
 
+function mergeSourceSummaries(
+  base: SourceSummary[],
+  additions: SourceSummary[],
+): SourceSummary[] {
+  const byId = new Map<string, SourceSummary>();
+  for (const source of base) byId.set(source.id, source);
+  for (const source of additions) byId.set(source.id, source);
+  return [...byId.values()];
+}
+
+type ListSourcesResponse = {
+  sources: SourceSummary[];
+  meta?: { limits: AccountSourceLimits };
+};
+
 export async function listSources(scope?: SourceScope | "all") {
   const query =
     scope && scope !== "all" ? `?scope=${encodeURIComponent(scope)}` : "";
-  const primary = await api<{
-    sources: SourceSummary[];
-    meta?: { limits: AccountSourceLimits };
-  }>(`/api/sources${query}`);
-
-  // Local API base: also pull Just-me cloud rows from the hosted API (HTTP),
-  // so desktop/local web does not need Cloud SQL proxy for personal cloud.
-  if (scope === "global") return primary;
 
   const activeBase = getLedgeIndexApiBaseUrl();
-  if (!isLoopbackApiUrl(activeBase)) return primary;
-
   const remoteBase = resolveRemoteApiBaseUrl();
-  if (!remoteBase || sameApiOrigin(activeBase, remoteBase)) return primary;
+  const canMergeRemote =
+    isLoopbackApiUrl(activeBase) &&
+    remoteBase &&
+    !sameApiOrigin(activeBase, remoteBase);
 
+  let primary: ListSourcesResponse;
   try {
-    const remote = await api<{ sources: SourceSummary[] }>(
-      "/api/sources?scope=personal",
-      undefined,
-      { baseUrl: remoteBase },
-    );
-    const cloudPersonal = remote.sources.filter(
-      (source) =>
-        (source.scope ?? "personal") !== "global" &&
-        (source.hosting === "cloud" || source.hosting == null),
-    );
-    if (cloudPersonal.length === 0) return primary;
-
-    const byId = new Map<string, SourceSummary>();
-    for (const source of primary.sources) byId.set(source.id, source);
-    for (const source of cloudPersonal) byId.set(source.id, source);
-    return { sources: [...byId.values()] };
-  } catch {
-    // Hosted API unreachable — keep local-only list.
-    return primary;
+    primary = await api<ListSourcesResponse>(`/api/sources${query}`);
+  } catch (err) {
+    const postgresLike =
+      err instanceof KnowledgeIndexApiError &&
+      (err.status === 503 ||
+        /postgres|5432|cloud.?sql|CLOUD_POSTGRES|Public sources need|Public catalog/i.test(
+          err.message,
+        ));
+    const degradable =
+      canMergeRemote && scope !== "personal" && postgresLike;
+    if (!degradable) {
+      if (
+        scope === "global" &&
+        postgresLike &&
+        !canMergeRemote
+      ) {
+        throw new KnowledgeIndexApiError(
+          "Public catalog is not on your local API. Add NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL=https://api.ledgeindex.com to apps/web/.env.local and restart the web dev server (npm run dev:ledgeindex).",
+          err instanceof KnowledgeIndexApiError ? err.status : 503,
+        );
+      }
+      throw err;
+    }
+    primary = { sources: [] };
   }
+
+  if (!canMergeRemote) return primary;
+
+  const includePersonalRemote = scope !== "global";
+  const includeGlobalRemote = scope !== "personal";
+
+  let merged = primary.sources;
+
+  if (includePersonalRemote) {
+    try {
+      const remote = await api<{ sources: SourceSummary[] }>(
+        "/api/sources?scope=personal",
+        undefined,
+        { baseUrl: remoteBase },
+      );
+      const cloudPersonal = remote.sources.filter(
+        (source) =>
+          (source.scope ?? "personal") !== "global" &&
+          (source.hosting === "cloud" || source.hosting == null),
+      );
+      merged = mergeSourceSummaries(merged, cloudPersonal);
+    } catch {
+      // Hosted API unreachable — keep local-only list.
+    }
+  }
+
+  if (includeGlobalRemote) {
+    try {
+      const remote = await api<{ sources: SourceSummary[] }>(
+        "/api/sources?scope=global",
+        undefined,
+        { baseUrl: remoteBase },
+      );
+      const globalSources = remote.sources.filter(
+        (source) => (source.scope ?? "personal") === "global",
+      );
+      merged = mergeSourceSummaries(merged, globalSources);
+    } catch (err) {
+      if (
+        scope === "global" &&
+        err instanceof KnowledgeIndexApiError &&
+        err.status === 401
+      ) {
+        throw new KnowledgeIndexApiError(
+          "Sign in to load the public catalog from the hosted API.",
+          401,
+        );
+      }
+      if (
+        scope === "global" &&
+        err instanceof KnowledgeIndexApiError &&
+        remoteBase
+      ) {
+        throw new KnowledgeIndexApiError(
+          `Could not load public catalog from ${remoteBase}: ${err.message}`,
+          err.status,
+        );
+      }
+      // Hosted API unreachable — keep local list.
+    }
+  }
+
+  if (merged.length === primary.sources.length) return primary;
+  return { ...primary, sources: merged };
 }
 
 export async function listSourceCategories(scope?: SourceScope | "all") {
@@ -1112,8 +1295,15 @@ export async function listSourceCategories(scope?: SourceScope | "all") {
   );
 }
 
-export async function getSourceSummary(id: string) {
-  return api<{ summary: SourceSummary }>(`/api/sources/${id}/summary`);
+export async function getSourceSummary(
+  id: string,
+  routing?: SourceRoutingHint,
+) {
+  return apiWithRemoteSourceFallback<{ summary: SourceSummary }>(
+    `/api/sources/${id}/summary`,
+    undefined,
+    routing,
+  );
 }
 
 export type RepoProfilePrimitive = {
@@ -1295,6 +1485,10 @@ export async function askSource(
   options?: {
     rerankBackend?: DocsAskRerankBackend | string;
     model?: DocsAskModelSelection;
+    mode?: "agent" | "retrieve-only";
+    retrievalStrictness?: "strict" | "balanced" | "permissive";
+    relevanceThreshold?: number | null;
+    includeWeakEvidence?: boolean;
   },
 ) {
   return api<SourceAskResult>(`/api/sources/${sourceId}/ask`, {
@@ -1305,6 +1499,16 @@ export async function askSource(
         ? { rerankBackend: options.rerankBackend }
         : {}),
       ...(options?.model ? { model: options.model } : {}),
+      ...(options?.mode ? { mode: options.mode } : {}),
+      ...(options?.retrievalStrictness
+        ? { retrievalStrictness: options.retrievalStrictness }
+        : {}),
+      ...(options?.relevanceThreshold !== undefined
+        ? { relevanceThreshold: options.relevanceThreshold }
+        : {}),
+      ...(typeof options?.includeWeakEvidence === "boolean"
+        ? { includeWeakEvidence: options.includeWeakEvidence }
+        : {}),
     }),
   });
 }

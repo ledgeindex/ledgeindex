@@ -32,8 +32,16 @@ async function countPersonalSourceFamilies(userId: string): Promise<number> {
 }
 
 async function countGlobalSourceFamilies(): Promise<number> {
-  const sources = await getStore().listGlobalSources();
-  return countSourceFamilies(sources);
+  try {
+    const sources = await getStore().listGlobalSources();
+    return countSourceFamilies(sources);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/ECONNREFUSED|5432|postgres|Cloud Postgres|CLOUD_POSTGRES/i.test(message)) {
+      return 0;
+    }
+    throw error;
+  }
 }
 
 export async function getAccountSourceLimitsForUser(

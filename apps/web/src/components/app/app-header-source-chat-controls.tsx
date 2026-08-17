@@ -5,10 +5,16 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { MessageSquarePlus } from "lucide-react";
 import { ChatTestPromptsSheet } from "@/components/chat/chat-test-prompts-sheet";
+import { HeaderSelect } from "@/components/ui/header-select";
 import { SourceCatalogButton } from "@/components/sources/source-catalog-dialog";
 import { useOptionalSourceChatToolbar } from "@/contexts/source-chat-toolbar-context";
 import { useAuth } from "@/lib/auth-context";
 import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
+import {
+  DEFAULT_CHAT_RETRIEVAL_STRICTNESS,
+  RETRIEVAL_STRICTNESS_OPTIONS,
+  resetRetrievalStrictness,
+} from "@/lib/retrieval-strictness";
 import { cn } from "@/lib/utils";
 
 const SOURCE_CHAT_PATH = /^\/sources\/[^/]+\/chat$/;
@@ -30,6 +36,8 @@ export function AppHeaderSourceChatControls() {
     submitTestPrompt,
     newChatAvailable,
     requestNewChat,
+    retrievalStrictness,
+    setRetrievalStrictness,
   } = toolbar;
   const sourceName = activeSource?.sourceName ?? "Chat";
   const sourceId = activeSource?.sourceId;
@@ -100,6 +108,30 @@ export function AppHeaderSourceChatControls() {
             )}
           >
             TP
+          </button>
+        ) : null}
+        <HeaderSelect
+          ariaLabel="Retrieval strictness"
+          value={retrievalStrictness}
+          onChange={setRetrievalStrictness}
+          options={RETRIEVAL_STRICTNESS_OPTIONS.map((option) => ({
+            value: option.value,
+            label: option.label,
+          }))}
+          className="h-8 max-w-[7.5rem] text-xs"
+        />
+        {retrievalStrictness !== DEFAULT_CHAT_RETRIEVAL_STRICTNESS ? (
+          <button
+            type="button"
+            onClick={() => setRetrievalStrictness(resetRetrievalStrictness())}
+            title="Reset retrieval to default (Strict)"
+            className={cn(
+              "inline-flex h-8 shrink-0 items-center rounded-lg border border-border bg-card-solid px-2",
+              "text-[0.68rem] font-medium text-muted transition-colors",
+              "hover:bg-surface-raised hover:text-foreground",
+            )}
+          >
+            Reset
           </button>
         ) : null}
         {sourceId ? (

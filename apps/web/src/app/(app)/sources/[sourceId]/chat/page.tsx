@@ -6,7 +6,7 @@ import { SourceChat } from "@/components/sources/source-chat";
 import { useSourceChatToolbar } from "@/contexts/source-chat-toolbar-context";
 import { DASHBOARD_SCOPE_STORAGE_KEY } from "@/contexts/dashboard-toolbar-context";
 import { syncApiBaseForHosting, syncDesktopApiBaseForScope } from "@/lib/desktop-api-routing";
-import { getSource } from "@/lib/ledgeindex-api";
+import { getSource, type SourceRoutingHint } from "@/lib/ledgeindex-api";
 import { resolveSourceHosting } from "@/lib/rerank-backend";
 
 export default function SourceChatPage() {
@@ -30,7 +30,12 @@ export default function SourceChatPage() {
             : "personal";
         syncDesktopApiBaseForScope(storedScope);
 
-        const { source } = await getSource(sourceId);
+        const loadRouting: SourceRoutingHint =
+          storedScope === "global"
+            ? { scope: "global", hosting: "cloud" }
+            : { scope: "personal" };
+
+        const { source } = await getSource(sourceId, loadRouting);
         if (cancelled) return;
         const scope =
           (source.scope ?? "personal") === "global" ? "global" : "personal";

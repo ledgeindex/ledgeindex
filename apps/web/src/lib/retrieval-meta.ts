@@ -36,6 +36,8 @@ export type RetrievalSearchAttempt = {
   rerankedCount?: number;
   directHitCount?: number;
   directHitScores?: number[];
+  /** Top rerank scores when nothing passed the threshold. */
+  rerankTopScores?: number[];
   prunedCount?: number;
 };
 
@@ -57,6 +59,8 @@ export type CoverageTier = "tier0" | "tier1_heuristic" | "tier2_llm";
 export type RetrievalMeta = {
   question: string;
   rewrittenQueries: string[];
+  intentForRerank?: string;
+  rerankQuery?: string;
   rewriteMethod?: "llm" | "catalog" | "fallback" | "cascade";
   rewriteModelId?: string;
   topicScope?: "single" | "multi";
@@ -73,6 +77,10 @@ export type RetrievalMeta = {
     succeeded: boolean;
   };
   relaxedPassUsed?: boolean;
+  weakEvidenceUsed?: boolean;
+  retrievalStrictness?: "strict" | "balanced" | "permissive";
+  relevanceThreshold?: number;
+  relaxedThreshold?: number;
   /** Cheap vector early-exit skipped rewrite + rerank. */
   cascadePassUsed?: boolean;
   cascadeTopScore?: number;
@@ -95,6 +103,10 @@ export type RetrievalMeta = {
 };
 
 export type CoverageLevel = "high" | "partial" | "none";
+
+export type MeterThresholdNote = "relaxed" | "weak" | "balanced" | "permissive";
+
+export type RetrievalStrictness = "strict" | "balanced" | "permissive";
 
 /** Aligns with planned coverage tiers (strict 0.65, full ≥0.82 max + ≥0.75 avgTop3). */
 export const COVERAGE_THRESHOLDS = {
@@ -150,6 +162,69 @@ export function assessHitCoverageLevel(input: {
   }
 
   return "partial";
+}
+
+/** Merge API meta with the chat toolbar strictness when the stream omits it. */
+export function resolveMeterMeta(
+  meta: RetrievalMeta,
+  strictnessOverride?: RetrievalStrictness,
+): RetrievalMeta {
+  const strictness = meta.retrievalStrictness ?? strictnessOverride;
+  if (
+    strictness === meta.retrievalStrictness &&
+    meta.relevanceThreshold != null &&
+    meta.relaxedThreshold != null
+  ) {
+    return meta;
+  }
+
+  return {
+    ...meta,
+    ...(strictness ? { retrievalStrictness: strictness } : {}),
+    relevanceThreshold: meta.relevanceThreshold ?? COVERAGE_THRESHOLDS.strict,
+    relaxedThreshold: meta.relaxedThreshold ?? COVERAGE_THRESHOLDS.relaxed,
+  };
+}
+
+/** Threshold line for score meters — reflects strictness mode, not only the winning pass. */
+export function meterRelevanceThreshold(meta: {
+  relaxedPassUsed?: boolean;
+  weakEvidenceUsed?: boolean;
+  retrievalStrictness?: "strict" | "balanced" | "permissive";
+  relevanceThreshold?: number;
+  relaxedThreshold?: number;
+  partial?: boolean;
+}): number {
+  const strictThr = meta.relevanceThreshold ?? COVERAGE_THRESHOLDS.strict;
+  const relaxedThr = meta.relaxedThreshold ?? COVERAGE_THRESHOLDS.relaxed;
+
+  if (meta.relaxedPassUsed || meta.weakEvidenceUsed) {
+    return relaxedThr;
+  }
+
+  if (
+    meta.retrievalStrictness === "balanced" ||
+    meta.retrievalStrictness === "permissive"
+  ) {
+    return relaxedThr;
+  }
+  if (meta.partial) {
+    return relaxedThr;
+  }
+
+  return strictThr;
+}
+
+export function meterThresholdNote(meta: {
+  relaxedPassUsed?: boolean;
+  weakEvidenceUsed?: boolean;
+  retrievalStrictness?: "strict" | "balanced" | "permissive";
+}): MeterThresholdNote | undefined {
+  if (meta.weakEvidenceUsed) return "weak";
+  if (meta.relaxedPassUsed) return "relaxed";
+  if (meta.retrievalStrictness === "balanced") return "balanced";
+  if (meta.retrievalStrictness === "permissive") return "permissive";
+  return undefined;
 }
 
 export function readRewrittenQueries(meta: RetrievalMeta): string[] {

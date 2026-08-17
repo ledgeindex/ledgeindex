@@ -1,0 +1,708 @@
+{
+  "generatedAt": "2026-08-16T22:19:00.474Z",
+  "golden": "scripts/golden/mastra.json",
+  "dataDir": "../ledgeindex-api/.data",
+  "sourceId": "6cabf272-42f5-4d48-bf10-cac53fca40de",
+  "sourceSlug": "mastra",
+  "settings": {
+    "strictness": "strict",
+    "hosting": "local",
+    "scope": "personal",
+    "expandPages": false
+  },
+  "mode": "full-pipeline",
+  "aggregate": {
+    "cases": 8,
+    "hitAt1": 3,
+    "hitAt3": 4,
+    "hitAt5": 6,
+    "misses": 0,
+    "rejectHits": 0,
+    "mrr": 0.4751
+  },
+  "cases": [
+    {
+      "id": "primitives-vague",
+      "question": "what are the primitives",
+      "tags": [
+        "vague",
+        "reference"
+      ],
+      "expectUrls": [
+        "/reference/core/mastra-class",
+        "mastra-class"
+      ],
+      "rejectUrls": [],
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "rank": null,
+        "mrr": 0,
+        "miss": false,
+        "rejectHit": false,
+        "chunkCount": 1,
+        "topPages": [
+          "https://mastra.ai/reference/file-based-agents/config"
+        ],
+        "topChunks": [
+          {
+            "score": 0.7219900558475723,
+            "url": "https://mastra.ai/reference/file-based-agents/config",
+            "title": "config.ts"
+          }
+        ]
+      },
+      "rewrite": {
+        "queries": [
+          "core primitives overview"
+        ],
+        "plans": [
+          {
+            "coreGoal": "core primitives overview",
+            "keywords": [
+              "Mastra",
+              "Agent",
+              "Workflow",
+              "Tool",
+              "Memory",
+              "Vector"
+            ]
+          }
+        ],
+        "intentForRerank": "What are the core primitives and building blocks available in Mastra?",
+        "topicScope": "single",
+        "method": "llm"
+      },
+      "mode": "full-pipeline",
+      "relaxedPassUsed": false,
+      "weakEvidenceUsed": false,
+      "rerankBackendUsed": "local-auto",
+      "elapsedMs": 5823
+    },
+    {
+      "id": "mastra-class-direct",
+      "question": "what is the Mastra class",
+      "tags": [
+        "reference"
+      ],
+      "expectUrls": [
+        "/reference/core/mastra-class",
+        "mastra-class"
+      ],
+      "rejectUrls": [],
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "rank": 7,
+        "mrr": 0.14285714285714285,
+        "miss": false,
+        "rejectHit": false,
+        "chunkCount": 11,
+        "topPages": [
+          "https://mastra.ai/reference/auth/google",
+          "https://mastra.ai/reference/editor/mastra-editor",
+          "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "https://mastra.ai/reference/voice/mastra-voice",
+          "https://mastra.ai/reference/auth/okta"
+        ],
+        "topChunks": [
+          {
+            "score": 0.9278880571987167,
+            "url": "https://mastra.ai/reference/auth/google",
+            "title": "MastraAuthGoogle and MastraRBACGoogle class"
+          },
+          {
+            "score": 0.9115749508081552,
+            "url": "https://mastra.ai/reference/editor/mastra-editor",
+            "title": "MastraEditor class"
+          },
+          {
+            "score": 0.9080584834000951,
+            "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+            "title": "Mastra class"
+          },
+          {
+            "score": 0.9058076002275101,
+            "url": "https://mastra.ai/reference/voice/mastra-voice",
+            "title": "MastraVoice"
+          },
+          {
+            "score": 0.8913581952443156,
+            "url": "https://mastra.ai/reference/auth/okta",
+            "title": "MastraAuthOkta and MastraRBACOkta class"
+          },
+          {
+            "score": 0.8786777515798117,
+            "url": "https://mastra.ai/reference/auth/jwt",
+            "title": "MastraJwtAuth class"
+          },
+          {
+            "score": 0.8614580854048678,
+            "url": "https://mastra.ai/reference/core/mastra-class",
+            "title": "Mastra class"
+          },
+          {
+            "score": 0.804001700123017,
+            "url": "https://mastra.ai/reference/workspace/workspace-class",
+            "title": "Workspace class"
+          }
+        ]
+      },
+      "rewrite": {
+        "queries": [
+          "Mastra class reference"
+        ],
+        "plans": [
+          {
+            "coreGoal": "Mastra class reference",
+            "keywords": [
+              "Mastra class",
+              "reference core mastra class"
+            ],
+            "domainHints": [
+              "reference",
+              "core"
+            ]
+          }
+        ],
+        "intentForRerank": "What is the Mastra class and how is it used in the core architecture?",
+        "topicScope": "single",
+        "method": "llm"
+      },
+      "mode": "full-pipeline",
+      "relaxedPassUsed": false,
+      "weakEvidenceUsed": false,
+      "rerankBackendUsed": "local-auto",
+      "elapsedMs": 1827
+    },
+    {
+      "id": "build-with-confusable",
+      "question": "what are things you build with mastra",
+      "tags": [
+        "confusable-page"
+      ],
+      "expectUrls": [
+        "/docs/use-cases",
+        "/docs",
+        "overview"
+      ],
+      "rejectUrls": [
+        "build-with-ai"
+      ],
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "rank": 1,
+        "mrr": 1,
+        "miss": false,
+        "rejectHit": false,
+        "chunkCount": 2,
+        "topPages": [
+          "https://mastra.ai/reference/templates/overview",
+          "https://mastra.ai/reference/project-structure"
+        ],
+        "topChunks": [
+          {
+            "score": 0.9328965235966371,
+            "url": "https://mastra.ai/reference/templates/overview",
+            "title": "Templates"
+          },
+          {
+            "score": 0.7755609690191279,
+            "url": "https://mastra.ai/reference/project-structure",
+            "title": "Project structure"
+          }
+        ]
+      },
+      "rewrite": {
+        "queries": [
+          "templates overview"
+        ],
+        "plans": [
+          {
+            "coreGoal": "templates overview",
+            "keywords": [
+              "Templates",
+              "build with ai"
+            ]
+          }
+        ],
+        "intentForRerank": "What can you build with Mastra and what are the available templates or core features?",
+        "topicScope": "single",
+        "method": "llm"
+      },
+      "mode": "full-pipeline",
+      "relaxedPassUsed": false,
+      "weakEvidenceUsed": false,
+      "rerankBackendUsed": "local-auto",
+      "elapsedMs": 1263
+    },
+    {
+      "id": "agents-how-to",
+      "question": "how do I create an agent",
+      "tags": [
+        "guide"
+      ],
+      "expectUrls": [
+        "/docs/agents",
+        "/agents"
+      ],
+      "rejectUrls": [],
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": true,
+        "rank": 8,
+        "mrr": 0.125,
+        "miss": false,
+        "rejectHit": false,
+        "chunkCount": 15,
+        "topPages": [
+          "https://mastra.ai/reference/coding-agent/create-coding-agent",
+          "https://mastra.ai/reference/acp/create-acp-tool",
+          "https://mastra.ai/reference/tools/mcp-server",
+          "https://mastra.ai/reference/workflows/step",
+          "https://mastra.ai/reference/agents/inngest-agent"
+        ],
+        "topChunks": [
+          {
+            "score": 0.9343988455174432,
+            "url": "https://mastra.ai/reference/coding-agent/create-coding-agent",
+            "title": "createCodingAgent()"
+          },
+          {
+            "score": 0.9136977162731729,
+            "url": "https://mastra.ai/reference/coding-agent/create-coding-agent",
+            "title": "createCodingAgent()"
+          },
+          {
+            "score": 0.7127634955508486,
+            "url": "https://mastra.ai/reference/coding-agent/create-coding-agent",
+            "title": "createCodingAgent()"
+          },
+          {
+            "score": 0.889050772400314,
+            "url": "https://mastra.ai/reference/acp/create-acp-tool",
+            "title": "createACPTool()"
+          },
+          {
+            "score": 0.7099918234411199,
+            "url": "https://mastra.ai/reference/acp/create-acp-tool",
+            "title": "createACPTool()"
+          },
+          {
+            "score": 0.85623747424524,
+            "url": "https://mastra.ai/reference/tools/mcp-server",
+            "title": "MCPServer"
+          },
+          {
+            "score": 0.7977244725719619,
+            "url": "https://mastra.ai/reference/workflows/step",
+            "title": "Step class"
+          },
+          {
+            "score": 0.792375835494713,
+            "url": "https://mastra.ai/reference/agents/inngest-agent",
+            "title": "`createInngestAgent()`"
+          }
+        ]
+      },
+      "rewrite": {
+        "queries": [
+          "create agent"
+        ],
+        "plans": [
+          {
+            "coreGoal": "create agent",
+            "keywords": [
+              "Agent class",
+              "createInngestAgent()",
+              "createCodingAgent()",
+              "reference agents agent"
+            ],
+            "domainHints": [
+              "reference"
+            ]
+          }
+        ],
+        "intentForRerank": "How do I create and configure an agent in Mastra using the agent creation functions?",
+        "topicScope": "single",
+        "method": "llm"
+      },
+      "mode": "full-pipeline",
+      "relaxedPassUsed": false,
+      "weakEvidenceUsed": false,
+      "rerankBackendUsed": "local-auto",
+      "elapsedMs": 1520
+    },
+    {
+      "id": "workflows-overview",
+      "question": "how do workflows work in mastra",
+      "tags": [
+        "guide"
+      ],
+      "expectUrls": [
+        "/docs/workflows",
+        "/workflows"
+      ],
+      "rejectUrls": [],
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "rank": 3,
+        "mrr": 0.3333333333333333,
+        "miss": false,
+        "rejectHit": false,
+        "chunkCount": 18,
+        "topPages": [
+          "https://mastra.ai/reference/core/listWorkflows",
+          "https://mastra.ai/reference/agents/listWorkflows",
+          "https://mastra.ai/reference/client-js/workflows",
+          "https://mastra.ai/reference/workflows/run-methods/restart",
+          "https://mastra.ai/reference/file-based-agents/workflows"
+        ],
+        "topChunks": [
+          {
+            "score": 0.9362439446954673,
+            "url": "https://mastra.ai/reference/core/listWorkflows",
+            "title": "Mastra.listWorkflows()"
+          },
+          {
+            "score": 0.9062562669800122,
+            "url": "https://mastra.ai/reference/agents/listWorkflows",
+            "title": "Agent.listWorkflows()"
+          },
+          {
+            "score": 0.9043212491727285,
+            "url": "https://mastra.ai/reference/client-js/workflows",
+            "title": "Workflows API"
+          },
+          {
+            "score": 0.8365890326489347,
+            "url": "https://mastra.ai/reference/client-js/workflows",
+            "title": "Workflows API"
+          },
+          {
+            "score": 0.8392322029272293,
+            "url": "https://mastra.ai/reference/client-js/workflows",
+            "title": "Workflows API"
+          },
+          {
+            "score": 0.8738357250974169,
+            "url": "https://mastra.ai/reference/workflows/run-methods/restart",
+            "title": "Run.restart()"
+          },
+          {
+            "score": 0.8455518143637705,
+            "url": "https://mastra.ai/reference/file-based-agents/workflows",
+            "title": "Workflows"
+          },
+          {
+            "score": 0.8414579048801674,
+            "url": "https://mastra.ai/reference/workflows/run-methods/cancel",
+            "title": "Run.cancel()"
+          }
+        ]
+      },
+      "rewrite": {
+        "queries": [
+          "Workflows"
+        ],
+        "plans": [
+          {
+            "coreGoal": "Workflows",
+            "keywords": [
+              "Workflow class",
+              "Workflows",
+              "Step class",
+              "Workflow.then()",
+              "Workflow.createRun()",
+              "Run class"
+            ],
+            "domainHints": [
+              "reference workflows workflow",
+              "reference file based agents workflows"
+            ]
+          }
+        ],
+        "intentForRerank": "How do workflows work in Mastra and how do I define and run workflow steps?",
+        "topicScope": "single",
+        "method": "llm"
+      },
+      "mode": "full-pipeline",
+      "relaxedPassUsed": false,
+      "weakEvidenceUsed": false,
+      "rerankBackendUsed": "local-auto",
+      "elapsedMs": 1708
+    },
+    {
+      "id": "memory",
+      "question": "how does memory work",
+      "tags": [
+        "guide"
+      ],
+      "expectUrls": [
+        "/docs/memory",
+        "/memory",
+        "/reference/memory"
+      ],
+      "rejectUrls": [],
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "rank": 1,
+        "mrr": 1,
+        "miss": false,
+        "rejectHit": false,
+        "chunkCount": 3,
+        "topPages": [
+          "https://mastra.ai/reference/migrations/upgrade-to-v1/memory",
+          "https://mastra.ai/reference/memory/cloneThread",
+          "https://mastra.ai/reference/client-js/memory"
+        ],
+        "topChunks": [
+          {
+            "score": 0.8328488746721072,
+            "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/memory",
+            "title": "Memory"
+          },
+          {
+            "score": 0.8233822965636277,
+            "url": "https://mastra.ai/reference/memory/cloneThread",
+            "title": "Memory.cloneThread()"
+          },
+          {
+            "score": 0.7282446863574706,
+            "url": "https://mastra.ai/reference/client-js/memory",
+            "title": "Memory API"
+          }
+        ]
+      },
+      "rewrite": {
+        "queries": [
+          "Memory overview and classes"
+        ],
+        "plans": [
+          {
+            "coreGoal": "Memory overview and classes",
+            "keywords": [
+              "Memory",
+              "Memory class",
+              "Memory.recall",
+              "Memory.createThread",
+              "Memory.getThreadById",
+              "Memory.listThreads"
+            ],
+            "domainHints": [
+              "reference memory"
+            ]
+          }
+        ],
+        "intentForRerank": "How does memory work in Mastra, and how do memory recall, threads, and persistence function?",
+        "topicScope": "single",
+        "method": "llm"
+      },
+      "mode": "full-pipeline",
+      "relaxedPassUsed": false,
+      "weakEvidenceUsed": false,
+      "rerankBackendUsed": "local-auto",
+      "elapsedMs": 1424
+    },
+    {
+      "id": "tools",
+      "question": "how do I add a tool to my agent",
+      "tags": [
+        "guide"
+      ],
+      "expectUrls": [
+        "/docs/tools",
+        "/tools"
+      ],
+      "rejectUrls": [],
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": true,
+        "rank": 5,
+        "mrr": 0.2,
+        "miss": false,
+        "rejectHit": false,
+        "chunkCount": 16,
+        "topPages": [
+          "https://mastra.ai/reference/workflows/dynamic-workflow-definition",
+          "https://mastra.ai/reference/agents/listTools",
+          "https://mastra.ai/reference/agents/getTools",
+          "https://mastra.ai/reference/voice/voice.addTools",
+          "https://mastra.ai/reference/tools/mcp-server"
+        ],
+        "topChunks": [
+          {
+            "score": 0.9350662297530068,
+            "url": "https://mastra.ai/reference/workflows/dynamic-workflow-definition",
+            "title": "Dynamic workflow definition"
+          },
+          {
+            "score": 0.9150445454491138,
+            "url": "https://mastra.ai/reference/agents/listTools",
+            "title": "Agent.listTools()"
+          },
+          {
+            "score": 0.9037639082904463,
+            "url": "https://mastra.ai/reference/agents/getTools",
+            "title": "Agent.getTools()"
+          },
+          {
+            "score": 0.8920496148264448,
+            "url": "https://mastra.ai/reference/voice/voice.addTools",
+            "title": "voice.addTools()"
+          },
+          {
+            "score": 0.788058189620605,
+            "url": "https://mastra.ai/reference/tools/mcp-server",
+            "title": "MCPServer"
+          },
+          {
+            "score": 0.8770140017113031,
+            "url": "https://mastra.ai/reference/tools/mcp-server",
+            "title": "MCPServer"
+          },
+          {
+            "score": 0.8612005823326109,
+            "url": "https://mastra.ai/reference/tools/submit-plan-tool",
+            "title": "submitPlanTool"
+          },
+          {
+            "score": 0.8521447438884607,
+            "url": "https://mastra.ai/reference/core/getToolById",
+            "title": "Mastra.getToolById()"
+          }
+        ]
+      },
+      "rewrite": {
+        "queries": [
+          "add tool to agent"
+        ],
+        "plans": [
+          {
+            "coreGoal": "add tool to agent",
+            "keywords": [
+              "Agent.getTools",
+              "Agent.listTools",
+              "createTool",
+              "Tools",
+              "Mastra.getTool"
+            ]
+          }
+        ],
+        "intentForRerank": "How do I add a tool to my agent using Mastra?",
+        "topicScope": "single",
+        "method": "llm"
+      },
+      "mode": "full-pipeline",
+      "relaxedPassUsed": false,
+      "weakEvidenceUsed": false,
+      "rerankBackendUsed": "local-auto",
+      "elapsedMs": 1471
+    },
+    {
+      "id": "mcp",
+      "question": "how do I use MCP with mastra",
+      "tags": [
+        "guide"
+      ],
+      "expectUrls": [
+        "/mcp",
+        "/docs/mcp"
+      ],
+      "rejectUrls": [],
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "rank": 1,
+        "mrr": 1,
+        "miss": false,
+        "rejectHit": false,
+        "chunkCount": 11,
+        "topPages": [
+          "https://mastra.ai/reference/tools/mcp-server",
+          "https://mastra.ai/reference/core/listMCPServers",
+          "https://mastra.ai/reference/core/getMCPServerById",
+          "https://mastra.ai/reference/build-with-ai",
+          "https://mastra.ai/reference/tools/mcp-client"
+        ],
+        "topChunks": [
+          {
+            "score": 0.9164365518662755,
+            "url": "https://mastra.ai/reference/tools/mcp-server",
+            "title": "MCPServer"
+          },
+          {
+            "score": 0.9104863628057804,
+            "url": "https://mastra.ai/reference/core/listMCPServers",
+            "title": "Mastra.listMCPServers()"
+          },
+          {
+            "score": 0.9050304541649741,
+            "url": "https://mastra.ai/reference/core/getMCPServerById",
+            "title": "Mastra.getMCPServerById()"
+          },
+          {
+            "score": 0.852014563485823,
+            "url": "https://mastra.ai/reference/build-with-ai",
+            "title": "Build with AI"
+          },
+          {
+            "score": 0.8603125571970801,
+            "url": "https://mastra.ai/reference/build-with-ai",
+            "title": "Build with AI"
+          },
+          {
+            "score": 0.8262627613701535,
+            "url": "https://mastra.ai/reference/build-with-ai",
+            "title": "Build with AI"
+          },
+          {
+            "score": 0.8090027838473915,
+            "url": "https://mastra.ai/reference/tools/mcp-client",
+            "title": "MCPClient"
+          },
+          {
+            "score": 0.7193363319196524,
+            "url": "https://mastra.ai/reference/tools/mcp-client",
+            "title": "MCPClient"
+          }
+        ]
+      },
+      "rewrite": {
+        "queries": [
+          "MCPServer"
+        ],
+        "plans": [
+          {
+            "coreGoal": "MCPServer",
+            "keywords": [
+              "MCPServer",
+              "MCPClient",
+              "Mastra.getMCPServer",
+              "Mastra.listMCPServers"
+            ]
+          }
+        ],
+        "intentForRerank": "How do I use Model Context Protocol (MCP) servers and clients with Mastra?",
+        "topicScope": "single",
+        "method": "llm"
+      },
+      "mode": "full-pipeline",
+      "relaxedPassUsed": false,
+      "weakEvidenceUsed": false,
+      "rerankBackendUsed": "local-auto",
+      "elapsedMs": 1524
+    }
+  ]
+}

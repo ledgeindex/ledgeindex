@@ -19,10 +19,10 @@ let store: Store | null = null;
 
 /**
  * Local FileStore for personal/local data + cloud Postgres read-through for
- * **public/global** sources when LEDGEINDEX_CLOUD_POSTGRES_URI is set (proxy).
+ * **public/global** source writes when LEDGEINDEX_CLOUD_POSTGRES_URI is set (proxy).
  *
- * Just-me cloud sources are listed via the hosted HTTP API from the client —
- * not via this Postgres read-through.
+ * Just-me cloud and public/global **listing** use the hosted HTTP API from the
+ * client when the active API is loopback — not this Postgres read-through.
  */
 class LocalWithCloudGlobalStore implements Store {
   constructor(

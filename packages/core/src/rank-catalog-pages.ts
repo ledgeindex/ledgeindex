@@ -115,3 +115,86 @@ export function resolveCatalogUrlFilter(
     title: top.title,
   };
 }
+
+/** Prefer the URL prefix with the longer pathname (more specific scope). */
+export function pickNarrowerUrlPrefix(
+  a?: string,
+  b?: string,
+): string | undefined {
+  const left = a?.trim();
+  const right = b?.trim();
+  if (!left) return right || undefined;
+  if (!right) return left;
+
+  try {
+    const pathA = new URL(left).pathname.replace(/\/+$/, "") || "/";
+    const pathB = new URL(right).pathname.replace(/\/+$/, "") || "/";
+    return pathB.length >= pathA.length ? right : left;
+  } catch {
+    return right.length >= left.length ? right : left;
+  }
+}
+
+const DOMAIN_HINT_ALIASES: Record<string, string[]> = {
+  api: ["api", "reference"],
+  reference: ["reference", "api"],
+  guides: ["guides", "guide", "docs"],
+  docs: ["docs", "documentation", "guide"],
+};
+
+function normalizeHintToken(hint: string): string {
+  return hint.trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function hintMatchesPathSegment(segment: string, hint: string): boolean {
+  const normalizedSegment = segment.toLowerCase();
+  const normalizedHint = normalizeHintToken(hint);
+  if (!normalizedHint) return false;
+  if (normalizedSegment === normalizedHint) return true;
+  const aliases = DOMAIN_HINT_ALIASES[normalizedHint] ?? [normalizedHint];
+  return aliases.some(
+    (alias) =>
+      normalizedSegment === alias || normalizedSegment.includes(alias),
+  );
+}
+
+/**
+ * Map rewrite `domainHints` (reference, guides, API) to a catalog URL prefix.
+ * Requires several indexed pages under that path segment to avoid noise.
+ */
+export function resolveDomainHintsUrlPrefix(
+  hints: string[],
+  pages: MetadataCatalogPage[],
+  options?: { minPages?: number },
+): string | undefined {
+  const minPages = options?.minPages ?? 3;
+  const normalizedHints = [...new Set(hints.map((h) => h.trim()).filter(Boolean))];
+  if (normalizedHints.length === 0 || pages.length === 0) return undefined;
+
+  for (const hint of normalizedHints) {
+    const matching = pages.filter((page) => {
+      try {
+        const segments = new URL(page.url).pathname
+          .split("/")
+          .filter(Boolean);
+        return segments.some((segment) => hintMatchesPathSegment(segment, hint));
+      } catch {
+        return false;
+      }
+    });
+
+    if (matching.length < minPages) continue;
+
+    const sample = new URL(matching[0].url);
+    const segments = sample.pathname.split("/").filter(Boolean);
+    const segmentIndex = segments.findIndex((segment) =>
+      hintMatchesPathSegment(segment, hint),
+    );
+    if (segmentIndex < 0) continue;
+
+    const prefixPath = `/${segments.slice(0, segmentIndex + 1).join("/")}`;
+    return `${sample.origin}${prefixPath}`;
+  }
+
+  return undefined;
+}

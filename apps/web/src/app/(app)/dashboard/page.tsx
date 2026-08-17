@@ -178,7 +178,17 @@ function DashboardContent() {
     setDeletingId(sourceId);
     setError(null);
     try {
-      await deleteSource(sourceId);
+      const summary = sources.find(
+        (source) =>
+          source.id === sourceId ||
+          source.versions.some((version) => version.id === sourceId),
+      );
+      await deleteSource(
+        sourceId,
+        summary
+          ? { scope: summary.scope, hosting: summary.hosting }
+          : undefined,
+      );
       setSources((current) =>
         current.filter(
           (source) =>
@@ -341,8 +351,9 @@ function DashboardContent() {
     profile?.plan !== "pro" &&
     sourceLimits?.apply &&
     sourceLimits.maxSources !== null;
-  /** Dashboard management (context menu, shelves, delete) — admins only. */
+  /** Dashboard management (shelves, catalog metadata) — admins on Public; actions on Just me for owners. */
   const canAdminManage = isAdmin;
+  const canUseSourceActions = scope === "personal" || isAdmin;
   const canReorderList =
     canAdminManage &&
     viewMode === "list" &&
@@ -516,7 +527,7 @@ function DashboardContent() {
                 </p>
                 <p className="mt-1 text-sm text-muted">
                   Click a set to chat
-                  {canAdminManage ? " · right-click for admin actions" : ""}
+                  {canUseSourceActions ? " · right-click for actions" : ""}
                   {canReorderList ? " · drag to reorder" : ""}
                   {canAdminManage &&
                   viewMode === "list" &&
@@ -589,14 +600,14 @@ function DashboardContent() {
                           rank={catalogRankById.get(rowId)}
                           highlighted={source.id === indexedFlashId}
                           onDelete={
-                            canAdminManage ? handleDeleteSource : undefined
+                            canUseSourceActions ? handleDeleteSource : undefined
                           }
                           deleting={deletingId === source.id}
                           canEditSlug={canAdminManage}
                           canEditName={canAdminManage}
                           canEditCategories={canAdminManage}
                           canReorder={canReorderList}
-                          showActionsMenu={canAdminManage}
+                          showActionsMenu={canUseSourceActions}
                           onSlugUpdated={handleSlugUpdated}
                           onNameUpdated={handleNameUpdated}
                           onCategoriesUpdated={handleCategoriesUpdated}
@@ -645,11 +656,11 @@ function DashboardContent() {
                           source={source}
                           highlighted={source.id === indexedFlashId}
                           onDelete={
-                            canAdminManage ? handleDeleteSource : undefined
+                            canUseSourceActions ? handleDeleteSource : undefined
                           }
                           deleting={deletingId === source.id}
                           canEditCategories={canAdminManage}
-                          showContextMenu={canAdminManage}
+                          showContextMenu={canUseSourceActions}
                           onCategoriesUpdated={handleCategoriesUpdated}
                           onNameUpdated={handleNameUpdated}
                           onSlugUpdated={handleSlugUpdated}
@@ -680,11 +691,11 @@ function DashboardContent() {
                           source={source}
                           highlighted={source.id === indexedFlashId}
                           onDelete={
-                            canAdminManage ? handleDeleteSource : undefined
+                            canUseSourceActions ? handleDeleteSource : undefined
                           }
                           deleting={deletingId === source.id}
                           canEditCategories={canAdminManage}
-                          showContextMenu={canAdminManage}
+                          showContextMenu={canUseSourceActions}
                           onCategoriesUpdated={handleCategoriesUpdated}
                           onNameUpdated={handleNameUpdated}
                           onSlugUpdated={handleSlugUpdated}

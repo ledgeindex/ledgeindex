@@ -40,6 +40,45 @@ function rrfWeight(rank: number): number {
   return 1 / (RRF_K + rank + 1);
 }
 
+/**
+ * LlamaIndex-style reciprocal rank fusion across multiple ordered lists.
+ * Uses rank position only — safe when lists come from different queries or paths.
+ */
+export function fuseRankedListsByRrf<T>(input: {
+  lists: T[][];
+  id: (item: T) => string;
+  limit: number;
+  /** When the same id appears in multiple lists, keep the item with the higher score. */
+  score?: (item: T) => number;
+}): T[] {
+  const fused = new Map<string, { item: T; rrf: number }>();
+
+  for (const list of input.lists) {
+    for (const [rank, item] of list.entries()) {
+      const id = input.id(item);
+      if (!id) continue;
+      const weight = rrfWeight(rank);
+      const existing = fused.get(id);
+      if (existing) {
+        existing.rrf += weight;
+        if (
+          input.score &&
+          input.score(item) > input.score(existing.item)
+        ) {
+          existing.item = item;
+        }
+        continue;
+      }
+      fused.set(id, { item, rrf: weight });
+    }
+  }
+
+  return [...fused.values()]
+    .sort((a, b) => b.rrf - a.rrf)
+    .slice(0, input.limit)
+    .map((entry) => entry.item);
+}
+
 export function fuseDenseAndLexical(input: {
   dense: QueryResult[];
   lexical: LexicalHit[];
@@ -115,4 +154,52 @@ export function fuseDenseAndLexical(input: {
     lexicalCount: lexical.length,
     lexicalOnlyCount,
   };
+}
+
+/** RRF merge across multiple hybrid candidate pools (query variants or dual paths). */
+export function mergeFusedCandidatePoolsMany(
+  pools: FusedQueryResult[][],
+  limit: number,
+): FusedQueryResult[] {
+  const lists = pools.filter((pool) => pool.length > 0);
+  if (lists.length === 0) return [];
+  if (lists.length === 1) return lists[0].slice(0, limit);
+
+  const fused = new Map<string, { result: FusedQueryResult; rrf: number }>();
+
+  for (const list of lists) {
+    for (const [rank, result] of list.entries()) {
+      const id = String(result.id ?? "");
+      if (!id) continue;
+      const weight = rrfWeight(rank);
+      const existing = fused.get(id);
+      if (existing) {
+        existing.rrf += weight;
+        existing.result.denseScore = Math.max(
+          existing.result.denseScore ?? 0,
+          result.denseScore ?? 0,
+        );
+        continue;
+      }
+      fused.set(id, { result: { ...result }, rrf: weight });
+    }
+  }
+
+  return [...fused.values()]
+    .sort((left, right) => right.rrf - left.rrf)
+    .slice(0, limit)
+    .map((entry) => ({
+      ...entry.result,
+      score: entry.rrf,
+      denseScore: entry.result.denseScore,
+    }));
+}
+
+/** Dual-path merge: RRF across Path A and Path B (LlamaIndex fusion pattern). */
+export function mergeFusedCandidatePools(
+  a: FusedQueryResult[],
+  b: FusedQueryResult[],
+  limit: number,
+): FusedQueryResult[] {
+  return mergeFusedCandidatePoolsMany([a, b], limit);
 }

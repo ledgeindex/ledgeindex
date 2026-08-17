@@ -2,10 +2,13 @@
 
 import { useState, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import type { RetrievalMeta, CoverageLevel } from "@/lib/retrieval-meta";
+import type { RetrievalMeta, CoverageLevel, RetrievalStrictness } from "@/lib/retrieval-meta";
 import {
   assessCoverageLevel,
   assessHitCoverageLevel,
+  meterRelevanceThreshold,
+  meterThresholdNote,
+  resolveMeterMeta,
   readRewrittenQueries,
 } from "@/lib/retrieval-meta";
 
@@ -72,25 +75,60 @@ function attemptKindLabel(
 
 function hitScoresLabel(attempt: RetrievalMeta["searchAttempts"][number]): string {
   const scores = attempt.directHitScores ?? [];
-  if (scores.length === 0) return "";
+  const rerank = attempt.rerankTopScores ?? [];
+  const display = scores.length > 0 ? scores : rerank;
+  if (display.length === 0) return "";
 
-  const formatted = scores.map(formatScore).join(", ");
-  const max = scores[0];
-  const top3 = scores.slice(0, 3);
+  const prefix =
+    scores.length > 0 ? "hit scores" : "best rerank (below thr)";
+  const formatted = display.map(formatScore).join(", ");
+  const max = display[0];
+  const top3 = display.slice(0, 3);
   const avgTop3 =
     top3.reduce((sum, score) => sum + score, 0) / top3.length;
 
-  return `hit scores: ${formatted} · max ${formatScore(max)} · avg top-3 ${formatScore(avgTop3)}`;
+  return `${prefix}: ${formatted} · max ${formatScore(max)} · avg top-3 ${formatScore(avgTop3)}`;
 }
 
 function attemptScoreSummary(
   attempt: RetrievalMeta["searchAttempts"][number],
-): { max: number; avgTop3: number } | null {
+): { max: number; avgTop3: number; belowThreshold: boolean } | null {
   const scores = attempt.directHitScores ?? [];
-  if (scores.length === 0) return null;
-  const top3 = scores.slice(0, 3);
+  if (scores.length > 0) {
+    const top3 = scores.slice(0, 3);
+    return {
+      max: scores[0],
+      avgTop3: top3.reduce((sum, score) => sum + score, 0) / top3.length,
+      belowThreshold: false,
+    };
+  }
+
+  const rerank = attempt.rerankTopScores ?? [];
+  if (rerank.length === 0) return null;
+  const top3 = rerank.slice(0, 3);
   return {
-    max: scores[0],
+    max: rerank[0],
+    avgTop3: top3.reduce((sum, score) => sum + score, 0) / top3.length,
+    belowThreshold: true,
+  };
+}
+
+function combinedScoreSummaryFromAttempts(
+  attempts: RetrievalMeta["searchAttempts"],
+): { max: number; avgTop3: number } | null {
+  const flatScores = attempts
+    .flatMap((attempt) =>
+      (attempt.directHitScores?.length
+        ? attempt.directHitScores
+        : attempt.rerankTopScores) ?? [],
+    )
+    .sort((a, b) => b - a);
+
+  if (flatScores.length === 0) return null;
+
+  const top3 = flatScores.slice(0, 3);
+  return {
+    max: flatScores[0],
     avgTop3: top3.reduce((sum, score) => sum + score, 0) / top3.length,
   };
 }
@@ -116,6 +154,8 @@ function ScoreRangeMeter({
   maxScore,
   avgTop3,
   relaxed,
+  belowThreshold,
+  thresholdNote,
   label = "Score range",
   compact = false,
 }: {
@@ -123,6 +163,8 @@ function ScoreRangeMeter({
   maxScore?: number;
   avgTop3?: number;
   relaxed?: boolean;
+  belowThreshold?: boolean;
+  thresholdNote?: "relaxed" | "weak" | "balanced" | "permissive";
   /** e.g. "Combined (injected)" vs per-query "Score range". */
   label?: string;
   compact?: boolean;
@@ -138,10 +180,12 @@ function ScoreRangeMeter({
   return (
     <div className={cn("space-y-1", compact ? "mt-1" : "mt-1.5")}>
       <div className="flex items-center justify-between gap-2 text-[0.5625rem] text-muted">
-        <span className="uppercase tracking-wide">{label}</span>
+        <span className="uppercase tracking-wide">
+          {belowThreshold ? "Best rerank (below thr)" : label}
+        </span>
         <span className="font-mono tabular-nums">
           thr {formatScore(t)}
-          {relaxed ? " (relaxed)" : ""}
+          {thresholdNote ? ` (${thresholdNote})` : relaxed ? " (relaxed)" : ""}
           {avg != null ? ` · avg ${formatScore(avg)}` : ""}
           {max != null ? ` · max ${formatScore(max)}` : ""}
         </span>
@@ -397,11 +441,13 @@ function AttemptRow({
   index,
   total,
   threshold,
+  thresholdNote,
 }: {
   attempt: RetrievalMeta["searchAttempts"][number];
   index: number;
   total: number;
   threshold: number;
+  thresholdNote?: "relaxed" | "weak" | "balanced" | "permissive";
 }) {
   const [open, setOpen] = useState(false);
   const query = attempt.query?.trim() || `Query ${index + 1}`;
@@ -468,6 +514,8 @@ function AttemptRow({
           threshold={threshold}
           maxScore={scoreSummary.max}
           avgTop3={scoreSummary.avgTop3}
+          belowThreshold={scoreSummary.belowThreshold}
+          thresholdNote={thresholdNote}
         />
       ) : null}
 
@@ -569,10 +617,18 @@ function TimingBreakdown({
   );
 }
 
-export function ChatRetrievalCard({ meta }: { meta: RetrievalMeta }) {
+export function ChatRetrievalCard({
+  meta,
+  retrievalStrictness,
+}: {
+  meta: RetrievalMeta;
+  /** Toolbar strictness when streamed meta omits retrievalStrictness. */
+  retrievalStrictness?: RetrievalStrictness;
+}) {
   const [expanded, setExpanded] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [timingOpen, setTimingOpen] = useState(false);
+  const meterMeta = resolveMeterMeta(meta, retrievalStrictness);
   const rewrittenQueries = readRewrittenQueries(meta);
   const skippedSet = new Set(meta.skippedQueries ?? []);
   const attempts = meta.searchAttempts ?? [];
@@ -584,10 +640,15 @@ export function ChatRetrievalCard({ meta }: { meta: RetrievalMeta }) {
   const usedFallback = meta.rewriteMethod === "fallback";
   const usedCascade =
     meta.rewriteMethod === "cascade" || Boolean(meta.cascadePassUsed);
-  const threshold = meta.relaxedPassUsed || meta.partial ? 0.5 : 0.65;
+  const threshold = meterRelevanceThreshold(meterMeta);
+  const thresholdNote = meterThresholdNote(meterMeta);
+  const combinedRerank = combinedScoreSummaryFromAttempts(attempts);
+  const displayMaxScore = meta.maxChunkScore ?? combinedRerank?.max;
+  const displayAvgTop3 = meta.avgTop3Score ?? combinedRerank?.avgTop3;
   const hasScoreRange =
-    typeof meta.maxChunkScore === "number" ||
-    typeof meta.avgTop3Score === "number";
+    typeof displayMaxScore === "number" || typeof displayAvgTop3 === "number";
+  const scoreBelowThreshold =
+    meta.insufficient && typeof meta.maxChunkScore !== "number" && combinedRerank;
   const coverageLevel =
     coverageLevelFromAnswerMode(meta.answerMode) ??
     assessCoverageLevel(meta);
@@ -666,13 +727,15 @@ export function ChatRetrievalCard({ meta }: { meta: RetrievalMeta }) {
               {summaryBits.join(" · ")}
             </p>
 
-            {hasScoreRange || !meta.insufficient ? (
+            {hasScoreRange ? (
               <ScoreRangeMeter
                 label={attempts.length > 1 ? "Combined" : "Score"}
                 threshold={threshold}
-                maxScore={meta.maxChunkScore}
-                avgTop3={meta.avgTop3Score}
-                relaxed={Boolean(meta.relaxedPassUsed || meta.partial)}
+                maxScore={displayMaxScore}
+                avgTop3={displayAvgTop3}
+                relaxed={Boolean(meta.relaxedPassUsed)}
+                thresholdNote={thresholdNote}
+                belowThreshold={Boolean(scoreBelowThreshold)}
               />
             ) : null}
 
@@ -742,6 +805,11 @@ export function ChatRetrievalCard({ meta }: { meta: RetrievalMeta }) {
               {rewriteLabel ? (
                 <MetaBadge variant="neutral">{rewriteLabel}</MetaBadge>
               ) : null}
+              {meterMeta.retrievalStrictness ? (
+                <MetaBadge variant="neutral">
+                  {meterMeta.retrievalStrictness}
+                </MetaBadge>
+              ) : null}
             </div>
 
             {rewrittenQueries.length > 0 ? (
@@ -766,6 +834,7 @@ export function ChatRetrievalCard({ meta }: { meta: RetrievalMeta }) {
                     index={index}
                     total={attempts.length}
                     threshold={threshold}
+                    thresholdNote={thresholdNote}
                   />
                 ))}
               </div>

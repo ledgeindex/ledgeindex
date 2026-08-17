@@ -13,7 +13,7 @@ import {
   assessCoverage,
   instructionForAnswerMode,
 } from "../../retrieval/assess-coverage.js";
-import { rewriteQueries } from "../../retrieval/rewrite-queries.js";
+import { rewriteQueries, type RewriteResult } from "../../retrieval/rewrite-queries.js";
 import { ensureCatalogHasPages } from "../../retrieval/page-catalog-rebuild.js";
 import { getMetadataCatalog } from "../../retrieval/metadata-catalog-store.js";
 import { formatCatalogForAgent } from "../../retrieval/search-query-planner.js";
@@ -23,7 +23,10 @@ import {
   primaryAuxiliaryModelId,
   resolveRewriteModelConfig,
 } from "../../llm/chat-model-config.js";
-import { listGlobalSourceSummaries, listSourceSummariesForOwner } from "../../services/source-summary.js";
+import {
+  listGlobalSourceSummaries,
+  listSourceSummariesForOwner,
+} from "../../services/source-summary.js";
 import { getStore } from "../../db/index.js";
 import type { SourceContentType } from "../../db/types.js";
 import { logVerbose, logWarn } from "../../lib/logger.js";
@@ -91,7 +94,7 @@ function textFromMessage(message: MastraDBMessage): string {
     .map((part) =>
       part && typeof part === "object" && "text" in part
         ? String((part as { text?: unknown }).text ?? "")
-        : "",
+        : ""
     )
     .join(" ")
     .replace(/\s+/g, " ")
@@ -114,7 +117,9 @@ function buildHistory(messages: MastraDBMessage[]): string {
   return turns.length > 0 ? turns.join("\n") : "(no prior messages)";
 }
 
-function readAuthToken(requestContext: ProcessInputArgs["requestContext"]): string {
+function readAuthToken(
+  requestContext: ProcessInputArgs["requestContext"]
+): string {
   if (typeof requestContext?.get !== "function") return "";
   const token = requestContext.get("auth_token");
   return typeof token === "string" ? token.trim() : "";
@@ -122,7 +127,7 @@ function readAuthToken(requestContext: ProcessInputArgs["requestContext"]): stri
 
 /** Set id or slug chosen ahead of the turn; empty means the whole catalog. */
 function readSourceSetRef(
-  requestContext: ProcessInputArgs["requestContext"],
+  requestContext: ProcessInputArgs["requestContext"]
 ): string {
   if (typeof requestContext?.get !== "function") return "";
   const raw =
@@ -137,7 +142,7 @@ function readSourceSetRef(
  * saving a set (SDK/CLI). Accepts an array or a comma-separated string.
  */
 function readSourceSlugs(
-  requestContext: ProcessInputArgs["requestContext"],
+  requestContext: ProcessInputArgs["requestContext"]
 ): string[] {
   if (typeof requestContext?.get !== "function") return [];
   const raw = requestContext.get("explore_source_slugs");
@@ -153,14 +158,16 @@ function readSourceSlugs(
 
 /** `picker` = LLM chooses subset; `all` = read every allowed source. */
 function readSourceMode(
-  requestContext: ProcessInputArgs["requestContext"],
+  requestContext: ProcessInputArgs["requestContext"]
 ): "picker" | "all" {
   if (typeof requestContext?.get !== "function") return "picker";
   const raw = requestContext.get("explore_source_mode");
   return raw === "all" ? "all" : "picker";
 }
 
-function readUserId(requestContext: ProcessInputArgs["requestContext"]): string {
+function readUserId(
+  requestContext: ProcessInputArgs["requestContext"]
+): string {
   if (typeof requestContext?.get !== "function") return "";
   const raw =
     requestContext.get("user_id") ?? requestContext.get("userId") ?? "";
@@ -173,7 +180,7 @@ function personalOwnerIds(primaryUserId: string): string[] {
   if (primaryUserId) ids.add(primaryUserId);
   if (process.env.LEDGEINDEX_AUTH_REQUIRED !== "1") {
     ids.add(
-      process.env.LEDGEINDEX_LOCAL_USER_ID?.trim() || "ledgeindex-desktop-local",
+      process.env.LEDGEINDEX_LOCAL_USER_ID?.trim() || "ledgeindex-desktop-local"
     );
   }
   return [...ids];
@@ -235,7 +242,7 @@ function hitToChunk(
     section?: string;
   },
   sourceName: string,
-  index: number,
+  index: number
 ): KapaRetrievedChunk {
   return {
     id: `explore-${index}`,
@@ -276,9 +283,11 @@ function dedupeChunks(chunks: KapaRetrievedChunk[]): KapaRetrievedChunk[] {
  */
 function mergeAcrossSources(
   groups: KapaRetrievedChunk[][],
-  limit: number,
+  limit: number
 ): KapaRetrievedChunk[] {
-  const queues = groups.filter((group) => group.length > 0).map((group) => [...group]);
+  const queues = groups
+    .filter((group) => group.length > 0)
+    .map((group) => [...group]);
   const seen = new Set<string>();
   const out: KapaRetrievedChunk[] = [];
 
@@ -299,14 +308,12 @@ function mergeAcrossSources(
   return out;
 }
 
-async function loadPersonalSources(
-  userId: string,
-): Promise<ExploreSource[]> {
+async function loadPersonalSources(userId: string): Promise<ExploreSource[]> {
   const ownerIds = personalOwnerIds(userId);
   if (ownerIds.length === 0) return [];
 
   const batches = await Promise.all(
-    ownerIds.map((id) => listSourceSummariesForOwner(id)),
+    ownerIds.map((id) => listSourceSummariesForOwner(id))
   );
   const seen = new Set<string>();
   const out: ExploreSource[] = [];
@@ -355,7 +362,7 @@ async function loadLocalGlobalSources(): Promise<ExploreSource[]> {
  * - Otherwise → local globals only (never call remote by accident)
  */
 async function loadPlatformSources(
-  authToken: string,
+  authToken: string
 ): Promise<{ sources: ExploreSource[]; error?: string }> {
   const remoteBase = getRemotePlatformApiBase();
   if (remoteBase && authToken) {
@@ -428,7 +435,7 @@ async function loadExploreSources(input: {
   if (input.sourceSlugs.length > 0) {
     const allowed = new Set(input.sourceSlugs);
     sources = sources.filter((source) =>
-      allowed.has(source.slug.toLowerCase()),
+      allowed.has(source.slug.toLowerCase())
     );
   }
 
@@ -466,7 +473,7 @@ function usesRemoteCorpus(source: ExploreSource): boolean {
  */
 function withSourceRetrievalContext<T>(
   source: ExploreSource,
-  fn: () => Promise<T>,
+  fn: () => Promise<T>
 ): Promise<T> {
   const sourceScope = source.scope === "global" ? "global" : "personal";
   const sourceHosting =
@@ -478,7 +485,7 @@ function withSourceRetrievalContext<T>(
       backend:
         sourceHosting === "cloud" ? "cohere-auto" : getRequestRerankBackend(),
     },
-    fn,
+    fn
   );
 }
 
@@ -490,7 +497,7 @@ async function loadSourceCatalogText(input: {
     if (!input.authToken) return "No catalog available.";
     const remote = await remoteGetMetadataCatalog(
       input.authToken,
-      input.source.id,
+      input.source.id
     );
     if (!remote.ok) {
       logWarn(remote.message, "ExploreQuery", {
@@ -510,8 +517,8 @@ async function loadSourceCatalogText(input: {
 
 async function retrieveSourceHits(input: {
   source: ExploreSource;
-  queries: string[];
-  /** Original user question — reranked against, not the keyword rewrites. */
+  rewrite: RewriteResult;
+  /** Original user question — fusion retrieve + rerank on this text. */
   question: string;
   authToken: string;
 }): Promise<{
@@ -523,58 +530,57 @@ async function retrieveSourceHits(input: {
   byQuery: Array<{ query: string; chunkCount: number; insufficient: boolean }>;
 }> {
   const queries =
-    input.queries.length > 0 ? input.queries.slice(0, 3) : ["documentation"];
+    input.rewrite.queries.length > 0
+      ? input.rewrite.queries.slice(0, 3)
+      : ["documentation"];
 
   if (usesRemoteCorpus(input.source)) {
     const rerankBackend = getRequestRerankBackend();
-    // Parallel retrieve-only asks per rewritten query against this source.
-    const results = await Promise.all(
-      queries.map(async (query) => {
-        const remote = await remoteAskSource(
-          input.authToken,
-          input.source.id,
-          query,
-          rerankBackend ? { rerankBackend } : undefined,
-        );
-        if (!remote.ok) {
-          logWarn(remote.message, "ExploreQuery", {
-            sourceId: input.source.id,
-            query,
-          });
-          return {
-            query,
-            chunks: [] as KapaRetrievedChunk[],
-            insufficient: true,
-          };
-        }
-        const hits = Array.isArray(remote.result.chunks)
-          ? remote.result.chunks
-          : [];
-        const insufficient =
-          remote.result.insufficient !== undefined
-            ? Boolean(remote.result.insufficient)
-            : hits.length === 0;
-        return {
-          query,
-          insufficient,
-          chunks: hits.map((hit, index) =>
-            hitToChunk(hit, input.source.name, index),
-          ),
-        };
-      }),
+    const remote = await remoteAskSource(
+      input.authToken,
+      input.source.id,
+      input.question,
+      rerankBackend ? { rerankBackend } : undefined,
     );
-
-    const chunks = dedupeChunks(results.flatMap((entry) => entry.chunks));
+    if (!remote.ok) {
+      logWarn(remote.message, "ExploreQuery", {
+        sourceId: input.source.id,
+        question: input.question,
+      });
+      return {
+        chunks: [],
+        insufficient: true,
+        relaxedPassUsed: false,
+        byQuery: [
+          {
+            query: input.question,
+            chunkCount: 0,
+            insufficient: true,
+          },
+        ],
+      };
+    }
+    const hits = Array.isArray(remote.result.chunks)
+      ? remote.result.chunks
+      : [];
+    const insufficient =
+      remote.result.insufficient !== undefined
+        ? Boolean(remote.result.insufficient)
+        : hits.length === 0;
+    const chunks = hits.map((hit, index) =>
+      hitToChunk(hit, input.source.name, index),
+    );
     return {
       chunks,
-      insufficient: chunks.length === 0,
-      // Remote ask does not yet expose whether its internal relaxed pass ran.
+      insufficient,
       relaxedPassUsed: false,
-      byQuery: results.map((entry) => ({
-        query: entry.query,
-        chunkCount: entry.chunks.length,
-        insufficient: entry.insufficient,
-      })),
+      byQuery: [
+        {
+          query: input.question,
+          chunkCount: chunks.length,
+          insufficient,
+        },
+      ],
     };
   }
 
@@ -584,7 +590,6 @@ async function retrieveSourceHits(input: {
       queries,
       question: input.question,
       sourceId: input.source.id,
-      queryMode: queries.length > 1 ? "merge_all" : "short_circuit",
     });
 
     if (retrieval.merged.length === 0) {
@@ -592,7 +597,6 @@ async function retrieveSourceHits(input: {
         queries,
         question: input.question,
         sourceId: input.source.id,
-        queryMode: queries.length > 1 ? "merge_all" : "short_circuit",
         relevanceThreshold: RELAXED_RELEVANCE_THRESHOLD,
       });
       relaxedPassUsed = retrieval.merged.length > 0;
@@ -654,7 +658,7 @@ Rules:
         "Available sources:",
         input.catalogText,
       ].join("\n"),
-      routerSchema,
+      routerSchema
     );
     if (object) {
       return { intent: object.intent, reason: object.reason };
@@ -662,7 +666,7 @@ Rules:
   } catch (error) {
     logWarn(
       error instanceof Error ? error.message : "Explore router failed",
-      "ExploreQuery",
+      "ExploreQuery"
     );
   }
   return null;
@@ -748,7 +752,7 @@ Routing rules:
         "Catalog:",
         formatCatalog(input.sources),
       ].join("\n"),
-      pickerSchema,
+      pickerSchema
     );
     if (!object) return input.sources.slice(0, 1).map((s) => s.slug);
 
@@ -762,7 +766,7 @@ Routing rules:
   } catch (error) {
     logWarn(
       error instanceof Error ? error.message : "Explore picker failed",
-      "ExploreQuery",
+      "ExploreQuery"
     );
   }
 
@@ -771,7 +775,7 @@ Routing rules:
 
 function appendSystem(
   systemMessages: ProcessInputArgs["systemMessages"],
-  content: string,
+  content: string
 ) {
   const trimmed = content.trim();
   if (!trimmed) return systemMessages ?? [];
@@ -823,7 +827,7 @@ export class ExploreQueryProcessor implements Processor {
         systemMessages: appendSystem(
           systemMessages,
           `${loaded.sourceSetError}
-Tell the user the selected source set is unavailable and that they should pick another set or ask without one.`,
+Tell the user the selected source set is unavailable and that they should pick another set or ask without one.`
         ),
       };
     }
@@ -839,7 +843,7 @@ Tell the user the selected source set is unavailable and that they should pick a
         systemMessages: appendSystem(
           systemMessages,
           `${loaded.platformError}
-Tell the user they need to sign in to explore remote global sources, or index a personal source locally first.`,
+Tell the user they need to sign in to explore remote global sources, or index a personal source locally first.`
         ),
       };
     }
@@ -865,7 +869,8 @@ Tell the user they need to sign in to explore remote global sources, or index a 
       intent: routed.intent,
       reason: routed.reason,
       sourceCount: loaded.sources.length,
-      personalCount: loaded.sources.filter((s) => s.scope === "personal").length,
+      personalCount: loaded.sources.filter((s) => s.scope === "personal")
+        .length,
       platformError: loaded.platformError,
       sourceMode,
       forceRetrieve,
@@ -878,7 +883,7 @@ Tell the user they need to sign in to explore remote global sources, or index a 
         systemMessages: appendSystem(
           systemMessages,
           `The user does not need corpus retrieval for this turn.
-Answer helpfully. If useful, mention they can ask about available sources (personal or global) or ask a docs question.`,
+Answer helpfully. If useful, mention they can ask about available sources (personal or global) or ask a docs question.`
         ),
       };
     }
@@ -890,7 +895,7 @@ Answer helpfully. If useful, mention they can ask about available sources (perso
           systemMessages: appendSystem(
             systemMessages,
             `The source set "${loaded.sourceSetName}" has no indexed sources in it.
-Tell the user to add a source to that set, or to ask without a set selected.`,
+Tell the user to add a source to that set, or to ask without a set selected.`
           ),
         };
       }
@@ -901,7 +906,7 @@ Tell the user to add a source to that set, or to ask without a set selected.`,
           `No knowledge sources are available yet.
 Tell the user clearly that there are no personal or platform sources indexed.${
             loaded.platformError ? `\nAlso note: ${loaded.platformError}` : ""
-          }`,
+          }`
         ),
       };
     }
@@ -918,7 +923,7 @@ Tell the user clearly that there are no personal or platform sources indexed.${
 List them clearly using this catalog (name + slug + scope). Do not invent sources.
 
 Available sources:
-${catalogText}${platformNote}`,
+${catalogText}${platformNote}`
         ),
       };
     }
@@ -934,7 +939,7 @@ ${catalogText}${platformNote}`,
           });
     const picked = pickedSlugs
       .map((slug) =>
-        loaded.sources.find((s) => s.slug.toLowerCase() === slug.toLowerCase()),
+        loaded.sources.find((s) => s.slug.toLowerCase() === slug.toLowerCase())
       )
       .filter((s): s is ExploreSource => Boolean(s))
       .slice(0, MAX_PICKED_SOURCES);
@@ -957,7 +962,7 @@ ${catalogText}${platformNote}`,
             tryCascadeRetrieve({
               query: question,
               sourceId: source.id,
-            }),
+            })
           );
           if (cascade) {
             const chunks = cascade.chunks.map((chunk, index) => ({
@@ -1000,7 +1005,7 @@ ${catalogText}${platformNote}`,
         });
         const result = await retrieveSourceHits({
           source,
-          queries: rewrite.queries,
+          rewrite,
           question,
           authToken,
         });
@@ -1011,12 +1016,12 @@ ${catalogText}${platformNote}`,
           cascadePassUsed: false as const,
           cascadeTopScore: undefined as number | undefined,
         };
-      }),
+      })
     );
 
     const agentChunks = mergeAcrossSources(
       perSource.map((entry) => entry.chunks),
-      AGENT_CHUNK_BUDGET,
+      AGENT_CHUNK_BUDGET
     );
     const insufficient = agentChunks.length === 0;
     const relaxedPassUsed = perSource.some((entry) => entry.relaxedPassUsed);
@@ -1045,7 +1050,7 @@ ${catalogText}${platformNote}`,
         ? ("llm" as const)
         : ("fallback" as const);
     const anyMulti = perSource.some(
-      (entry) => entry.rewrite.topicScope === "multi",
+      (entry) => entry.rewrite.topicScope === "multi"
     );
     const rewriteModelId =
       perSource[0]?.rewrite.rewriteModelId ??
@@ -1057,7 +1062,7 @@ ${catalogText}${platformNote}`,
       ...new Set(
         perSource
           .map((entry) => entry.rerankBackendUsed)
-          .filter((backend): backend is string => Boolean(backend)),
+          .filter((backend): backend is string => Boolean(backend))
       ),
     ];
     const rerankRuntime = describeRerankRuntimeMeta({
@@ -1074,8 +1079,7 @@ ${catalogText}${platformNote}`,
         rewrittenQueries.length > 0 ? rewrittenQueries : [question],
       rewriteMethod,
       rewriteModelId,
-      topicScope:
-        picked.length > 1 || anyMulti ? "multi" : "single",
+      topicScope: picked.length > 1 || anyMulti ? "multi" : "single",
       insufficient,
       partial: coverage.answerMode === "partial" || relaxedPassUsed,
       relaxedPassUsed,
@@ -1108,11 +1112,10 @@ ${catalogText}${platformNote}`,
           insufficient: attempt.insufficient,
           attemptType: "query" as const,
           prunedCount: attempt.chunkCount,
-        })),
+        }))
       ),
       chunks: agentChunks.map(toRetrievalMetaChunk),
-      queries:
-        rewrittenQueries.length > 0 ? rewrittenQueries : [question],
+      queries: rewrittenQueries.length > 0 ? rewrittenQueries : [question],
     };
     requestContext?.set?.(LEDGEINDEX_RETRIEVAL_META_KEY, meta);
 
@@ -1130,7 +1133,7 @@ ${catalogText}${platformNote}`,
 
     const retrievalInstruction = instructionForAnswerMode(
       coverage.answerMode,
-      coverage.coverageReason,
+      coverage.coverageReason
     );
     const pickedLine = `Selected sources: ${picked
       .map((s) => `${s.name} (${s.slug}, ${describeKind(s.sourceType)})`)
@@ -1152,7 +1155,7 @@ ${catalogText}${platformNote}`,
         [retrievalInstruction, pickedLine, mixedKindNote, sourceBlock]
           .map((part) => part.trim())
           .filter(Boolean)
-          .join("\n\n"),
+          .join("\n\n")
       ),
     };
   }

@@ -19,11 +19,16 @@ const rerankBackendSchema = z.enum([
   "cohere-mastra",
 ]);
 
+const retrievalStrictnessSchema = z.enum(["strict", "balanced", "permissive"]);
+
 const askBodySchema = z.object({
   message: z.string().min(1).max(4000),
   /** retrieve-only — evidence hits for MCP/explore; agent — synthesize (default). */
   mode: z.enum(["agent", "retrieve-only"]).optional(),
   rerankBackend: rerankBackendSchema.optional(),
+  retrievalStrictness: retrievalStrictnessSchema.optional(),
+  relevanceThreshold: z.number().min(0).max(1).nullable().optional(),
+  includeWeakEvidence: z.boolean().optional(),
   model: z
     .object({
       backend: z.string().min(1),
@@ -63,6 +68,15 @@ export async function chatRoutes(fastify: FastifyInstance) {
         ...(body.data.mode ? { mode: body.data.mode } : {}),
         ...(body.data.rerankBackend
           ? { rerankBackend: body.data.rerankBackend }
+          : {}),
+        ...(body.data.retrievalStrictness
+          ? { retrievalStrictness: body.data.retrievalStrictness }
+          : {}),
+        ...(body.data.relevanceThreshold !== undefined
+          ? { relevanceThreshold: body.data.relevanceThreshold }
+          : {}),
+        ...(typeof body.data.includeWeakEvidence === "boolean"
+          ? { includeWeakEvidence: body.data.includeWeakEvidence }
           : {}),
         ...(body.data.model ? { model: body.data.model } : {}),
         sourceScope: source.scope === "global" ? "global" : "personal",

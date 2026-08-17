@@ -3,7 +3,7 @@ import { z } from "zod";
 import { discoverUrls } from "../crawler/discover.js";
 import { estimateChunkCountFromMarkdown } from "../indexing/index-size-estimate.js";
 import { getStore } from "../db/index.js";
-import type { SourceScope } from "../db/types.js";
+import type { SourceScope, SourceSummary } from "../db/types.js";
 import { normalizeCreateHosting } from "../db/types.js";
 import { logError, logInfo, logVerbose } from "../lib/logger.js";
 import { parsePage } from "../parser/extract-content.js";
@@ -58,6 +58,24 @@ const parsePreviewBodySchema = z.object({
   contentSelectors: z.array(z.string()).optional(),
   excludeSelectors: z.array(z.string()).optional(),
 });
+
+function isCloudPostgresUnavailableError(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /ECONNREFUSED|5432|postgres|Cloud Postgres|CLOUD_POSTGRES/i.test(
+    message,
+  );
+}
+
+async function listGlobalSourceSummariesWhenAvailable(): Promise<
+  SourceSummary[]
+> {
+  try {
+    return await listGlobalSourceSummaries();
+  } catch (error) {
+    if (isCloudPostgresUnavailableError(error)) return [];
+    throw error;
+  }
+}
 
 const listSourcesQuerySchema = z.object({
   scope: z.enum(["personal", "global", "all"]).default("all"),
@@ -133,7 +151,7 @@ export async function sourceRoutes(fastify: FastifyInstance) {
 
       if (query.data.scope === "global") {
         const [sources, limits] = await Promise.all([
-          listGlobalSourceSummaries(),
+          listGlobalSourceSummariesWhenAvailable(),
           getAccountSourceLimitsForUser(userId, "global"),
         ]);
         return { sources, meta: { limits } };
@@ -141,19 +159,18 @@ export async function sourceRoutes(fastify: FastifyInstance) {
 
       const [personal, global] = await Promise.all([
         listSourceSummariesForOwner(userId),
-        listGlobalSourceSummaries(),
+        listGlobalSourceSummariesWhenAvailable(),
       ]);
       return { sources: [...global, ...personal] };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const cloudDown =
-        /ECONNREFUSED|5432|postgres|Cloud Postgres|CLOUD_POSTGRES/i.test(
-          message,
-        );
-      if (cloudDown && query.data.scope !== "personal") {
+      if (
+        isCloudPostgresUnavailableError(error) &&
+        query.data.scope !== "personal"
+      ) {
         return reply.status(503).send({
           error:
-            "Public sources need Cloud SQL Auth Proxy on :5432 (`cloud-sql-proxy … --port 5432`). Start it, then retry — or use Just me for local sources.",
+            "Local API cannot load public sources without Cloud Postgres. For local dev, set NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL (e.g. https://api.ledgeindex.com) in apps/web/.env.local and restart the web app — or start cloud-sql-proxy on :5432.",
           detail: message,
         });
       }
@@ -174,11 +191,11 @@ export async function sourceRoutes(fastify: FastifyInstance) {
     if (query.data.scope === "personal") {
       sources = await listSourceSummariesForOwner(userId);
     } else if (query.data.scope === "global") {
-      sources = await listGlobalSourceSummaries();
+      sources = await listGlobalSourceSummariesWhenAvailable();
     } else {
       const [personal, global] = await Promise.all([
         listSourceSummariesForOwner(userId),
-        listGlobalSourceSummaries(),
+        listGlobalSourceSummariesWhenAvailable(),
       ]);
       sources = [...global, ...personal];
     }
