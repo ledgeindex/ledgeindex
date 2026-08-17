@@ -7,7 +7,11 @@ async function registerDesktopAuth(app: FastifyInstance): Promise<void> {
   const firebaseAuthMiddleware = (
     await import("@ledgeindex/docs/runtime/middleware/firebase-auth.js")
   ).default;
+  const { registerOpenMcpDiscoveryRoutes } = await import(
+    "@ledgeindex/docs/runtime/routes/mcp-open-discovery.js"
+  );
   await app.register(firebaseAuthMiddleware);
+  await registerOpenMcpDiscoveryRoutes(app);
 }
 
 function parseProfiles(): Array<"docs" | "profile"> {

@@ -78,8 +78,8 @@ export default function ExploreChatPage(): React.JSX.Element {
       />
     ) : null;
 
-  // Playground falls back to cloud when there are no local keys, so this gate
-  // should only appear in edge cases (e.g. misconfigured remote catalog).
+  // Playground uses the hosted API when no local keys exist, but model choices
+  // still follow configured provider keys (add keys in Settings to pick a model).
   if (needsProviderKeys) {
     return (
       <div className="mx-auto flex w-full max-w-lg flex-1 flex-col items-start justify-center gap-3 p-6">
@@ -88,9 +88,8 @@ export default function ExploreChatPage(): React.JSX.Element {
             Add a model API key
           </h2>
           <p className="mt-2 text-sm text-muted">
-            Cloud Playground should work without local keys. If you see this,
-            add OpenAI, Gemini, or DeepSeek for local models, or check your
-            connection.
+            Add at least one provider key below to choose a chat model. Keys
+            stay on this machine and power the local API on port 3015.
           </p>
           {isDesktop ? (
             <Link

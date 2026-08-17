@@ -9,6 +9,7 @@ import {
 } from "@/lib/catalog-view";
 import { getMetadataCatalog, getSource, type MetadataCatalog } from "@/lib/ledgeindex-api";
 import {
+  computePathPageCountsByStartUrl,
   pageBelongsToSourcePath,
   pathOptionsFromStartUrls,
   pathRootSegment,
@@ -107,19 +108,16 @@ export function SourceCatalogDialog({
   const pathPageCounts = useMemo(() => {
     const counts = new Map<string, number>();
     counts.set("all", pages.length);
+    const byUrl = computePathPageCountsByStartUrl(pages, startUrls);
     for (const option of pathOptions) {
-      counts.set(
-        option.id,
-        pages.filter((page) =>
-          pageBelongsToSourcePath(page.url, option.startUrl, {
-            crawlRoot: page.crawlRoot,
-            category: page.category,
-          }),
-        ).length,
-      );
+      counts.set(option.id, byUrl.get(option.startUrl) ?? 0);
     }
     return counts;
-  }, [pages, pathOptions]);
+  }, [pages, pathOptions, startUrls]);
+
+  const startUrlPageCounts = useMemo(() => {
+    return computePathPageCountsByStartUrl(pages, startUrls);
+  }, [pages, startUrls]);
 
   const pagesForPath = useMemo(() => {
     if (pathScope === "all") return pages;
@@ -188,7 +186,10 @@ export function SourceCatalogDialog({
                   <span className="font-mono text-[0.5rem] font-semibold tracking-[0.1em] text-muted uppercase">
                     Roots
                   </span>
-                  <SourceStartUrlsHint urls={startUrls} />
+                  <SourceStartUrlsHint
+                    urls={startUrls}
+                    pageCountsByUrl={startUrlPageCounts}
+                  />
                 </div>
               ) : null}
             </div>

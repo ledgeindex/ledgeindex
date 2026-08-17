@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/desktop",
-  "version": "0.2.6",
+  "version": "0.2.7",
   "private": true,
   "description": "LedgeIndex desktop (Electron) — standalone Vite UI; sidecar = @ledgeindex/desktop-server",
   "main": "./out/main/index.js",

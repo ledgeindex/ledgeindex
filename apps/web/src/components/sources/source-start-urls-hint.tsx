@@ -4,6 +4,11 @@ import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 import { formatUrlLabel } from "@/components/sources/source-display";
+import { getMetadataCatalog } from "@/lib/ledgeindex-api";
+import {
+  computePathPageCountsByStartUrl,
+  normalizeSourcePathStartUrl,
+} from "@/lib/source-paths";
 import { cn } from "@/lib/utils";
 
 export function resolveStartUrls(source: {
@@ -30,21 +35,66 @@ export function formatStartUrlPathLabel(url: string): string {
   }
 }
 
+export function pageCountForStartUrl(
+  url: string,
+  counts: ReadonlyMap<string, number> | null,
+): number | null {
+  if (!counts) return null;
+  const normalized = normalizeSourcePathStartUrl(url) || url.trim();
+  if (counts.has(normalized)) return counts.get(normalized) ?? null;
+  return counts.get(url) ?? null;
+}
+
 /** Compact path label with optional dropdown when multiple crawl roots exist. */
 export function SourceStartUrlsHint({
   urls,
+  sourceId,
+  pageCountsByUrl,
   className,
   variant = "badge",
 }: {
   urls: string[];
+  /** When set, page counts load from the indexed catalog when the menu opens. */
+  sourceId?: string;
+  /** Precomputed counts (normalized start URL → page count). */
+  pageCountsByUrl?: ReadonlyMap<string, number>;
   className?: string;
   variant?: "badge" | "subtle";
 }) {
   const [open, setOpen] = useState(false);
   const [rect, setRect] = useState<{ top: number; left: number } | null>(null);
+  const [loadedCounts, setLoadedCounts] = useState<Map<string, number> | null>(
+    null,
+  );
+  const [countsLoading, setCountsLoading] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const count = urls.length;
+
+  const effectiveCounts = pageCountsByUrl ?? loadedCounts;
+
+  useEffect(() => {
+    if (!open || !sourceId || count <= 1 || pageCountsByUrl) return;
+
+    let cancelled = false;
+    setCountsLoading(true);
+    void getMetadataCatalog(sourceId)
+      .then(({ catalog }) => {
+        if (cancelled) return;
+        const pages = catalog?.pages ?? [];
+        setLoadedCounts(computePathPageCountsByStartUrl(pages, urls));
+      })
+      .catch(() => {
+        if (!cancelled) setLoadedCounts(null);
+      })
+      .finally(() => {
+        if (!cancelled) setCountsLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [open, sourceId, count, urls, pageCountsByUrl]);
 
   useEffect(() => {
     if (!open) return;
@@ -53,7 +103,7 @@ export function SourceStartUrlsHint({
       const button = buttonRef.current;
       if (!button) return;
       const box = button.getBoundingClientRect();
-      const width = 260;
+      const width = 280;
       const left = Math.min(
         Math.max(12, box.left),
         window.innerWidth - width - 12,
@@ -106,7 +156,7 @@ export function SourceStartUrlsHint({
               position: "fixed",
               top: rect.top,
               left: rect.left,
-              width: 260,
+              width: 280,
               zIndex: 220,
             }}
             className="max-h-56 overflow-auto rounded-lg border border-border bg-card-solid py-1.5 shadow-card"
@@ -116,20 +166,34 @@ export function SourceStartUrlsHint({
               Start URLs
             </p>
             <ul className="space-y-0.5">
-              {urls.map((url) => (
-                <li key={url}>
-                  <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    title={url}
-                    className="block truncate px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-surface-raised hover:text-accent"
-                    onClick={(event) => event.stopPropagation()}
-                  >
-                    {formatUrlLabel(url)}
-                  </a>
-                </li>
-              ))}
+              {urls.map((url) => {
+                const pageCount = pageCountForStartUrl(url, effectiveCounts);
+                return (
+                  <li key={url}>
+                    <a
+                      href={url}
+                      target="_blank"
+                      rel="noreferrer"
+                      title={url}
+                      className="flex items-center gap-2 px-3 py-1.5 text-xs text-foreground transition-colors hover:bg-surface-raised hover:text-accent"
+                      onClick={(event) => event.stopPropagation()}
+                    >
+                      <span className="min-w-0 truncate">
+                        {formatUrlLabel(url)}
+                      </span>
+                      <span
+                        className="shrink-0 font-mono text-[0.625rem] tabular-nums text-muted"
+                      >
+                        {countsLoading && sourceId && !pageCountsByUrl
+                          ? "…"
+                          : pageCount != null
+                            ? `${pageCount} pages`
+                            : "—"}
+                      </span>
+                    </a>
+                  </li>
+                );
+              })}
             </ul>
           </div>,
           document.body,
@@ -178,5 +242,80 @@ export function SourceStartUrlsHint({
       </button>
       {panel}
     </>
+  );
+}
+
+/** Inline path chips with indexed page count per crawl root (multi-path sources). */
+export function SourceStartUrlPathChips({
+  urls,
+  sourceId,
+  pageCountsByUrl,
+  refreshKey,
+  className,
+}: {
+  urls: string[];
+  sourceId?: string;
+  pageCountsByUrl?: ReadonlyMap<string, number>;
+  /** Bumps catalog reload after refresh / apply. */
+  refreshKey?: string | number | null;
+  className?: string;
+}) {
+  const [loadedCounts, setLoadedCounts] = useState<Map<string, number> | null>(
+    null,
+  );
+  const [loading, setLoading] = useState(false);
+  const effectiveCounts = pageCountsByUrl ?? loadedCounts;
+
+  useEffect(() => {
+    if (!sourceId || pageCountsByUrl || urls.length === 0) return;
+
+    let cancelled = false;
+    setLoading(true);
+    void getMetadataCatalog(sourceId)
+      .then(({ catalog }) => {
+        if (cancelled) return;
+        const pages = catalog?.pages ?? [];
+        setLoadedCounts(computePathPageCountsByStartUrl(pages, urls));
+      })
+      .catch(() => {
+        if (!cancelled) setLoadedCounts(null);
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [sourceId, urls, pageCountsByUrl, refreshKey]);
+
+  if (urls.length <= 1) return null;
+
+  return (
+    <div className={cn("mt-1 flex flex-wrap gap-1", className)}>
+      {urls.map((url) => {
+        const pageCount = pageCountForStartUrl(url, effectiveCounts);
+        return (
+          <span
+            key={url}
+            title={
+              pageCount != null
+                ? `${url} — ${pageCount} indexed pages`
+                : url
+            }
+            className="inline-flex max-w-[12rem] items-center gap-1 truncate rounded border border-accent/35 bg-accent/10 px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold text-accent"
+          >
+            <span className="truncate">{formatStartUrlPathLabel(url)}</span>
+            <span className="shrink-0 tabular-nums opacity-80">
+              {loading && sourceId && !pageCountsByUrl
+                ? "…"
+                : pageCount != null
+                  ? pageCount
+                  : "—"}
+            </span>
+          </span>
+        );
+      })}
+    </div>
   );
 }

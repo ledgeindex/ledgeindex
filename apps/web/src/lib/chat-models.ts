@@ -37,7 +37,7 @@ export type ChatProviderKeyStatus = Partial<
 export function filterChatModelsByProviderKeys(
   keys: ChatProviderKeyStatus | null | undefined,
 ): LedgeIndexChatModel[] {
-  if (!keys) return [...LEDGEINDEX_CHAT_MODELS];
+  if (!keys) return [];
   return LEDGEINDEX_CHAT_MODELS.filter((model) => Boolean(keys[model.provider]));
 }
 

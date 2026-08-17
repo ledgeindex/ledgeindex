@@ -49,7 +49,8 @@ const FULL_CATALOG: DesktopChatModelsState = {
 
 /**
  * Desktop personal (local) chat: only models with a configured provider key.
- * Web / Public remote / Explore cloud fallback: full catalog.
+ * Web / Public remote: full catalog. Explore may use the hosted API without
+ * keys, but the model picker still lists only providers you configured locally.
  */
 export function useDesktopChatModels(options?: {
   /** When true, skip local key filtering (remote Public API). */
@@ -100,9 +101,14 @@ export function useDesktopChatModels(options?: {
       };
     }
     if (!keysReady) {
-      // Avoid flashing the key gate on Explore while keys load — use cloud.
       if (fallBackToRemoteWhenNoKeys) {
-        return FULL_CATALOG;
+        return {
+          ready: false,
+          needsKeys: false,
+          useRemoteApi: true,
+          models: [],
+          preferredModelId: pickDefaultChatModelId(LEDGEINDEX_CHAT_MODELS),
+        };
       }
       return {
         ready: false,
@@ -113,15 +119,16 @@ export function useDesktopChatModels(options?: {
       };
     }
     const models = filterChatModelsByProviderKeys(toChatKeys(keys));
-    if (models.length === 0 && fallBackToRemoteWhenNoKeys) {
-      return FULL_CATALOG;
-    }
+    const useRemoteApi =
+      fallBackToRemoteWhenNoKeys && models.length === 0;
     return {
       ready: true,
-      needsKeys: models.length === 0,
-      useRemoteApi: false,
+      needsKeys: models.length === 0 && !useRemoteApi,
+      useRemoteApi,
       models,
-      preferredModelId: pickDefaultChatModelId(models),
+      preferredModelId: pickDefaultChatModelId(
+        models.length > 0 ? models : LEDGEINDEX_CHAT_MODELS,
+      ),
     };
   }, [
     desktop,

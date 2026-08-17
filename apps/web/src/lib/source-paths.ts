@@ -189,6 +189,33 @@ export function sourcePathLabelForUrl(
   return root ? labelFromSourcePathUrl(root) : null;
 }
 
+export type CatalogPageForPathCount = {
+  url: string;
+  crawlRoot?: string | null;
+  category?: string | null;
+};
+
+/** Indexed page count per crawl root (keys = normalized start URLs). */
+export function computePathPageCountsByStartUrl(
+  pages: readonly CatalogPageForPathCount[],
+  startUrls: readonly string[],
+): Map<string, number> {
+  const counts = new Map<string, number>();
+  const options = pathOptionsFromStartUrls(startUrls);
+  for (const option of options) {
+    counts.set(
+      option.startUrl,
+      pages.filter((page) =>
+        pageBelongsToSourcePath(page.url, option.startUrl, {
+          crawlRoot: page.crawlRoot,
+          category: page.category,
+        }),
+      ).length,
+    );
+  }
+  return counts;
+}
+
 /** Fallback scan tag from the first path segment when roots are unavailable. */
 export function pathSegmentLabelForUrl(pageUrl: string): string {
   try {

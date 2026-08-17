@@ -1,5 +1,9 @@
 import { RequestContext } from "@mastra/core/request-context";
+import { isApiAuthRequired } from "../../lib/firebase-admin.js";
 import { getMcpAuthContext } from "./mcp-auth-context.js";
+
+const LOCAL_DESKTOP_USER_ID =
+  process.env.LEDGEINDEX_LOCAL_USER_ID?.trim() || "ledgeindex-desktop-local";
 
 function applyMcpUserToContext(ctx: RequestContext, userId: string, token?: string) {
   ctx.set("user_id", userId);
@@ -32,6 +36,13 @@ export function mergeRequestContextFromMcp(
     applyMcpUserToContext(ctx, authInfo.extra.userId, token);
   } else if (token && !ctx.get("auth_token")) {
     ctx.set("auth_token", token);
+  }
+
+  const resolvedUserId = String(
+    ctx.get("user_id") ?? ctx.get("userId") ?? "",
+  ).trim();
+  if (!resolvedUserId && !isApiAuthRequired()) {
+    applyMcpUserToContext(ctx, LOCAL_DESKTOP_USER_ID, "local-desktop");
   }
 
   return ctx;

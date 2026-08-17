@@ -66,6 +66,7 @@ import {
 } from "@/lib/typescript-docs-catalog";
 import { CatalogPathsMaintainPanel } from "@/components/admin/catalog-paths-maintain-panel";
 import { CatalogManualPackageForm } from "@/components/admin/catalog-manual-package-form";
+import { SourceStartUrlPathChips } from "@/components/sources/source-start-urls-hint";
 import type { DocsIdentityKind } from "@/lib/source-metadata";
 
 type UpdaterTab = "sources" | "catalog";
@@ -372,23 +373,6 @@ function changelogPathBuckets(
     const totalB = b.added + b.updated + b.removed;
     return totalB - totalA || a.label.localeCompare(b.label);
   });
-}
-
-function StartUrlChips({ urls }: { urls: string[] }) {
-  if (urls.length <= 1) return null;
-  return (
-    <div className="mt-1 flex flex-wrap gap-1">
-      {urls.map((url) => (
-        <span
-          key={url}
-          title={url}
-          className="max-w-[10rem] truncate rounded border border-accent/35 bg-accent/10 px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold text-accent"
-        >
-          {formatStartPathLabel(url)}
-        </span>
-      ))}
-    </div>
-  );
 }
 
 function CrawlFiltersBadge({ source }: { source: SourceSummary }) {
@@ -769,7 +753,11 @@ function ChangesSidePanel({
           {status !== "idle" ? ` · ${statusLabel(status)}` : null}
           {source.pageCount > 0 ? ` · ${source.pageCount} indexed` : null}
         </p>
-        <StartUrlChips urls={startUrls} />
+        <SourceStartUrlPathChips
+          urls={startUrls}
+          sourceId={source.id}
+          refreshKey={reportMeta?.finishedAt ?? source.pageCount}
+        />
       </div>
 
       <div className="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
@@ -3726,13 +3714,9 @@ export default function AdminSourceUpdaterPage() {
                     const isCurrent = currentSourceId === source.id;
                     const isFocused = activeFocusId === source.id;
                     const startUrls = resolveStartUrls(source);
-                    const rowChangelog =
-                      changelogs[source.id] ?? runReports[source.id]?.changelog;
-                    const pathBuckets = changelogPathBuckets(
-                      rowChangelog,
-                      startUrls,
-                    );
                     const hasReport = Boolean(runReports[source.id]);
+                    const pathCountRefreshKey =
+                      runReports[source.id]?.finishedAt ?? source.pageCount;
                     return (
                       <li key={source.id}>
                         <div
@@ -3766,43 +3750,11 @@ export default function AdminSourceUpdaterPage() {
                                 {formatUrlLabel(source.startUrl || source.name)}{" "}
                                 · {source.pageCount} pages
                               </p>
-                              <StartUrlChips urls={startUrls} />
-                              {pathBuckets.length > 0 ? (
-                                <div className="mt-1 flex flex-wrap gap-1">
-                                  {pathBuckets.map((bucket) => {
-                                    const total =
-                                      bucket.added +
-                                      bucket.updated +
-                                      bucket.removed;
-                                    return (
-                                      <span
-                                        key={bucket.label}
-                                        title={[
-                                          bucket.added
-                                            ? `${bucket.added} added`
-                                            : null,
-                                          bucket.updated
-                                            ? `${bucket.updated} updated`
-                                            : null,
-                                          bucket.removed
-                                            ? `${bucket.removed} removed`
-                                            : null,
-                                        ]
-                                          .filter(Boolean)
-                                          .join(" · ")}
-                                        className="inline-flex max-w-[10rem] items-center gap-1 truncate rounded border border-amber-500/35 bg-amber-500/10 px-1.5 py-0.5 font-mono text-[0.5rem] font-semibold text-amber-800 dark:text-amber-300"
-                                      >
-                                        <span className="truncate">
-                                          {bucket.label}
-                                        </span>
-                                        <span className="opacity-80">
-                                          {total}
-                                        </span>
-                                      </span>
-                                    );
-                                  })}
-                                </div>
-                              ) : null}
+                              <SourceStartUrlPathChips
+                                urls={startUrls}
+                                sourceId={source.id}
+                                refreshKey={pathCountRefreshKey}
+                              />
                               {rowError[source.id] ? (
                                 <p className="mt-0.5 truncate text-[0.625rem] text-red-600 dark:text-red-300">
                                   {rowError[source.id]}

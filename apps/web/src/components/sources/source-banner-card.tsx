@@ -206,7 +206,11 @@ export function SourceBannerCard({
                   <span className="shrink-0 text-muted/50" aria-hidden>
                     ·
                   </span>
-                  <SourceStartUrlsHint urls={startUrls} variant="subtle" />
+                  <SourceStartUrlsHint
+                    urls={startUrls}
+                    sourceId={activeSource.id}
+                    variant="subtle"
+                  />
                 </>
               ) : null}
             </div>

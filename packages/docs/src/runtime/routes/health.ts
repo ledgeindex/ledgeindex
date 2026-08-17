@@ -3,6 +3,7 @@ import { LEDGEINDEX_CORE_VERSION } from "@ledgeindex/core";
 import { isLocalHostingDeployment } from "../db/types.js";
 import { inspectDbHealth } from "../db/db-health.js";
 import { describeLlmSetup, hasLlmKey } from "../llm/models.js";
+import { isApiAuthRequired } from "../lib/firebase-admin.js";
 import { getMcpHttpPath } from "../mastra/mcp/config.js";
 import { tryGetMastra } from "../mastra/instance.js";
 import { describeRerankSetup } from "../retrieval/rerank-backend.js";
@@ -48,8 +49,12 @@ export async function healthRoutes(fastify: FastifyInstance) {
         workflows: Object.keys(mastra.listWorkflows()),
         mcp: {
           url: getMcpHttpPath(),
-          oauth: "/.well-known/oauth-authorization-server",
-          connect: "/oauth/authorize",
+          ...(isApiAuthRequired()
+            ? {
+                oauth: "/.well-known/oauth-authorization-server",
+                connect: "/oauth/authorize",
+              }
+            : { auth: "none" }),
         },
       };
     })(),

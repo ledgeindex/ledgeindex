@@ -98,7 +98,7 @@ async function authenticateRequest(
 }
 
 const LOCAL_DESKTOP_USER_ID =
-  process.env.LEDGEINDEX_LOCAL_USER_ID?.trim() || "automationghost-local";
+  process.env.LEDGEINDEX_LOCAL_USER_ID?.trim() || "ledgeindex-desktop-local";
 
 function localDesktopUser(): {
   uid: string;
