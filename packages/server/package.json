@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/server",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "LedgeIndex HTTP server — createLedgeIndexServer, profiles docs + profile",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
@@ -34,10 +34,10 @@
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^10.3.0",
-    "@ledgeindex/ag": "^0.1.14",
-    "@ledgeindex/core": "^0.1.14",
-    "@ledgeindex/docs": "^0.1.14",
-    "@ledgeindex/profile": "^0.1.14",
+    "@ledgeindex/ag": "^0.1.15",
+    "@ledgeindex/core": "^0.1.15",
+    "@ledgeindex/docs": "^0.1.15",
+    "@ledgeindex/profile": "^0.1.15",
     "@mastra/core": "^1.51.0",
     "@mastra/fastify": "^1.4.7",
     "fastify": "^5.10.0",
