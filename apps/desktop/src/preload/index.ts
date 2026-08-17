@@ -34,6 +34,8 @@ const ledgeindexDesktop = {
   },
   getSidecarHealth: (): Promise<SidecarHealth> => ipcRenderer.invoke('sidecar:health'),
   restartSidecar: (): Promise<SidecarHealth> => ipcRenderer.invoke('sidecar:restart'),
+  startSidecar: (): Promise<SidecarHealth> => ipcRenderer.invoke('sidecar:start'),
+  ensureLocalApi: (): Promise<void> => ipcRenderer.invoke('local-api:ensure'),
   getApiOrigin: (): Promise<string> => ipcRenderer.invoke('sidecar:apiOrigin'),
   getProviderKeyStatus: (): Promise<ProviderKeyStatus> =>
     ipcRenderer.invoke('settings:getProviderKeyStatus'),

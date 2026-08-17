@@ -99,7 +99,18 @@ export default defineConfig(({ mode }) => {
   return {
     main: {
       define: defineEnv,
-      plugins: [externalizeDepsPlugin()]
+      plugins: [externalizeDepsPlugin()],
+      build: {
+        rollupOptions: {
+          input: {
+            index: resolve(__dirname, 'src/main/index.ts'),
+            'ledgeindex-api-worker': resolve(
+              __dirname,
+              'src/main/ledgeindex-api-worker.ts'
+            )
+          }
+        }
+      }
     },
     preload: {
       plugins: [externalizeDepsPlugin()]

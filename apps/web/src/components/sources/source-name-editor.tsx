@@ -91,20 +91,31 @@ export function SourceNameEditor({
 
   if (!editing) {
     return (
-      <button
-        type="button"
-        onClick={startEditing}
+      <div
         className={cn(
-          "group flex min-w-0 max-w-full items-center gap-1.5 rounded-md border border-transparent px-1 py-0.5 text-left transition-colors hover:border-border hover:bg-surface-raised",
+          "group flex min-w-0 max-w-full items-center gap-1",
           className,
         )}
-        title="Edit title"
       >
-        <span className="truncate text-sm font-semibold text-foreground">
+        <h2
+          className="min-w-0 truncate text-sm font-semibold text-foreground"
+          title={name}
+        >
           {name}
-        </span>
-        <PencilIcon className="size-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:text-foreground group-hover:opacity-100" />
-      </button>
+        </h2>
+        <button
+          type="button"
+          onClick={(event) => {
+            event.stopPropagation();
+            startEditing();
+          }}
+          className="shrink-0 rounded p-0.5 text-muted opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/20"
+          title="Edit title"
+          aria-label="Edit title"
+        >
+          <PencilIcon className="size-3" />
+        </button>
+      </div>
     );
   }
 

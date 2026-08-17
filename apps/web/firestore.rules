@@ -13,22 +13,15 @@ service cloud.firestore {
         && request.resource.data.uid == userId
         && request.resource.data.email is string
         && request.resource.data.plan == "free"
-        && request.resource.data.role == "user"
-        // Defaulted so an older deployed bundle that omits the field can still sign up;
-        // an explicit "approved"/"denied" from the client is still rejected.
-        && request.resource.data.get("accessStatus", "pending") == "pending";
+        && request.resource.data.role == "user";
 
-      // plan, role and accessStatus are server-owned: the Admin SDK writes them and
-      // bypasses these rules, so freezing them here blocks self-approval.
+      // plan and role are server-owned: the Admin SDK writes them and bypasses
+      // these rules, so freezing them here blocks self-approval.
       allow update: if request.auth != null
         && request.auth.uid == userId
         && request.resource.data.uid == userId
         && request.resource.data.plan == resource.data.plan
-        && request.resource.data.role == resource.data.role
-        // Defaulted read so a missing field on either side still compares equal
-        // (missing ≡ pending). Blocks the client from changing accessStatus.
-        && request.resource.data.get("accessStatus", "pending")
-           == resource.data.get("accessStatus", "pending");
+        && request.resource.data.role == resource.data.role;
     }
   }
 }

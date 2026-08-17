@@ -219,7 +219,7 @@ export default function DesktopProviderKeysPage(): React.JSX.Element {
       const next = await desktop.saveProviderKeys(keys);
       setStatus(next);
       setDraft(emptyDraft());
-      setMessage("Saved. Local server restarted with the new keys.");
+      setMessage("Saved. Local API restarted with the new keys.");
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {

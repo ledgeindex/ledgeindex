@@ -1,4 +1,5 @@
 import type { Source } from "@ledgeindex/core/db/types.js";
+import { normalizeCanonicalUrl } from "@ledgeindex/core/lib/canonical-url.js";
 import { discoverUrls, getCrawlProgress } from "../crawler/discover.js";
 import { getStore } from "../db/index.js";
 import {
@@ -18,7 +19,11 @@ import { mapWithConcurrency } from "../lib/map-with-concurrency.js";
 import { logError, logInfo } from "../lib/logger.js";
 import { parsePage } from "../parser/extract-content.js";
 import { deleteLexicalChunks } from "../retrieval/lexical-store.js";
-import { ensureCatalogHasPages } from "../retrieval/page-catalog-rebuild.js";
+import { ensureCatalogHasPages, rebuildFullCatalogFromVector } from "../retrieval/page-catalog-rebuild.js";
+import {
+  getMetadataCatalog,
+  saveMetadataCatalog,
+} from "../retrieval/metadata-catalog-store.js";
 import { LEDGEINDEX_CHUNKS_INDEX } from "../vector/constants.js";
 import { ensureChunksIndex, getVectorStore } from "../vector/store.js";
 import {
@@ -91,6 +96,154 @@ function toChangelog(result: {
     added: result.added.map((page) => ({ url: page.url, title: page.title })),
     updated: result.updated.map((page) => ({ url: page.url, title: page.title })),
     removed: result.removed.map((page) => ({ url: page.url, title: page.title })),
+  };
+}
+
+function resolveRefreshUrl(raw: string, origin: string): string {
+  const trimmed = String(raw ?? "").trim();
+  if (!trimmed) return "";
+  if (trimmed.startsWith("/") && origin) {
+    try {
+      return new URL(trimmed, origin).href;
+    } catch {
+      // fall through
+    }
+  }
+  return trimmed;
+}
+
+function refreshUrlKey(url: string, origin = ""): string {
+  const resolved = resolveRefreshUrl(url, origin);
+  const normalized = normalizeCanonicalUrl(resolved);
+  const base = normalized || resolved.toLowerCase();
+  return base.replace(/^(https?:\/\/)www\./i, "$1");
+}
+
+/**
+ * Union of saved metadata catalog + vector-backed pages for structural diff.
+ */
+async function loadIndexedPagesForRefreshDiff(sourceId: string) {
+  const byKey = new Map<
+    string,
+    { url: string; title: string; chunkCount?: number }
+  >();
+
+  const addPages = (
+    pages: Array<{ url: string; title?: string; chunkCount?: number }>,
+  ) => {
+    for (const page of pages) {
+      if (!page.url) continue;
+      const key = refreshUrlKey(page.url);
+      if (!byKey.has(key)) {
+        byKey.set(key, {
+          url: page.url,
+          title: page.title?.trim() || page.url,
+          chunkCount: page.chunkCount,
+        });
+      }
+    }
+  };
+
+  const stored = await getMetadataCatalog(sourceId);
+  if (stored?.pages?.length) addPages(stored.pages);
+
+  const vectorCatalog = await rebuildFullCatalogFromVector(sourceId);
+  if (vectorCatalog?.pages?.length) {
+    addPages(vectorCatalog.pages);
+    await saveMetadataCatalog(sourceId, vectorCatalog);
+  }
+
+  return [...byKey.values()];
+}
+
+/**
+ * Diff live discovery against indexed catalog — not snapshot baseline noise.
+ */
+function buildStructuralChangelog(
+  catalogPages: Array<{ url: string; title?: string }>,
+  incoming: PageSnapshotInput[],
+  comparison: {
+    baselineCaptured: boolean;
+    unchangedCount: number;
+    added: PageSnapshotInput[];
+    updated: PageSnapshotInput[];
+    removed: Array<{ url: string; title: string }>;
+  },
+  urlOrigin: string,
+): RefreshChangelog {
+  if (catalogPages.length === 0) {
+    if (comparison.baselineCaptured) {
+      return {
+        baselineCaptured: true,
+        unchangedCount: 0,
+        added: incoming.map((page) => ({ url: page.url, title: page.title })),
+        updated: [],
+        removed: [],
+      };
+    }
+    return toChangelog(comparison);
+  }
+
+  const incomingUrls = new Set(
+    incoming.map((snapshot) => refreshUrlKey(snapshot.url, urlOrigin)),
+  );
+  const catalogByKey = new Map<string, { url: string; title: string }>();
+  for (const page of catalogPages) {
+    if (!page.url) continue;
+    const key = refreshUrlKey(page.url, urlOrigin);
+    if (!catalogByKey.has(key)) {
+      catalogByKey.set(key, {
+        url: page.url,
+        title: page.title?.trim() || page.url,
+      });
+    }
+  }
+
+  const added: Array<{ url: string; title: string }> = [];
+  const addedKeys = new Set<string>();
+  for (const snapshot of incoming) {
+    const key = refreshUrlKey(snapshot.url, urlOrigin);
+    if (catalogByKey.has(key) || addedKeys.has(key)) continue;
+    added.push({ url: snapshot.url, title: snapshot.title });
+    addedKeys.add(key);
+  }
+
+  const removedKeys = new Set<string>();
+  const removed: Array<{ url: string; title: string }> = [];
+  for (const [key, entry] of catalogByKey) {
+    if (incomingUrls.has(key) || removedKeys.has(key)) continue;
+    removed.push({ url: entry.url, title: entry.title });
+    removedKeys.add(key);
+  }
+
+  const updatedKeys = new Set(
+    comparison.baselineCaptured
+      ? []
+      : comparison.updated.map((page) => refreshUrlKey(page.url, urlOrigin)),
+  );
+  const updated = comparison.baselineCaptured
+    ? []
+    : comparison.updated
+        .filter((page) =>
+          catalogByKey.has(refreshUrlKey(page.url, urlOrigin)),
+        )
+        .map((page) => ({ url: page.url, title: page.title }));
+
+  const unchangedCount = incoming.filter((snapshot) => {
+    const key = refreshUrlKey(snapshot.url, urlOrigin);
+    return (
+      catalogByKey.has(key) &&
+      !addedKeys.has(key) &&
+      !updatedKeys.has(key)
+    );
+  }).length;
+
+  return {
+    baselineCaptured: false,
+    added,
+    updated,
+    removed,
+    unchangedCount,
   };
 }
 
@@ -178,11 +331,20 @@ async function finalizeRefreshComparison(
     snapshots,
   });
 
-  const changelog = toChangelog(comparison);
+  const source = await getStore().getSource(sourceId);
+  const urlOrigin = source?.config?.startUrls?.find(Boolean) ?? "";
+  const indexedPages = await loadIndexedPagesForRefreshDiff(sourceId);
+
+  const changelog = buildStructuralChangelog(
+    indexedPages,
+    snapshots,
+    comparison,
+    urlOrigin,
+  );
 
   const changedUrls = new Set([
-    ...comparison.added.map((page) => page.url),
-    ...comparison.updated.map((page) => page.url),
+    ...changelog.added.map((page) => page.url),
+    ...changelog.updated.map((page) => page.url),
   ]);
 
   const parsedPagesCache: Record<string, { title: string; markdown: string }> =
@@ -210,6 +372,9 @@ async function finalizeRefreshComparison(
     sourceId,
     runId: run.runId,
     mode: run.mode,
+    indexedCatalogPages: indexedPages.length,
+    liveDiscoveredPages: snapshots.length,
+    sourcePageCount: source?.pageCount ?? null,
     added: changelog.added.length,
     updated: changelog.updated.length,
     removed: changelog.removed.length,
@@ -461,6 +626,8 @@ async function runRefreshApply(sourceId: string, run: RefreshRunSnapshot) {
       (page): page is { url: string; title: string; markdown: string } =>
         Boolean(page && page.markdown.trim().length > 0),
     );
+  let indexedChunkCount = 0;
+
   if (pagesToIndex.length > 0) {
     patchRefreshRun(sourceId, {
       status: "applying",
@@ -505,11 +672,7 @@ async function runRefreshApply(sourceId: string, run: RefreshRunSnapshot) {
       },
     });
 
-    await markSourceIndexed({
-      sourceId,
-      pageCount: changelog.unchangedCount + pagesToIndex.length,
-      chunkCount: prepared.length,
-    });
+    indexedChunkCount = prepared.length;
   }
 
   if (changelog.removed.length > 0) {
@@ -527,7 +690,27 @@ async function runRefreshApply(sourceId: string, run: RefreshRunSnapshot) {
     });
   }
 
-  await ensureCatalogHasPages(sourceId);
+  if (pagesToIndex.length > 0 || changelog.removed.length > 0) {
+    const rebuilt = await rebuildFullCatalogFromVector(sourceId);
+    if (rebuilt) {
+      await saveMetadataCatalog(sourceId, rebuilt);
+      const chunkCount = rebuilt.pages.reduce(
+        (sum, page) => sum + page.chunkCount,
+        0,
+      );
+      await markSourceIndexed({
+        sourceId,
+        pageCount: rebuilt.pages.length,
+        chunkCount,
+      });
+    } else if (pagesToIndex.length > 0) {
+      await markSourceIndexed({
+        sourceId,
+        pageCount: changelog.unchangedCount + pagesToIndex.length,
+        chunkCount: indexedChunkCount,
+      });
+    }
+  }
 
   patchRefreshRun(sourceId, {
     status: "done",

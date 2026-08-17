@@ -3,7 +3,6 @@ import Fastify, { type FastifyInstance } from "fastify";
 import { registerProfile } from "@ledgeindex/profile";
 import { registerDocsProfile, createDocsMastraContribution } from "@ledgeindex/docs";
 import { setMastraInstance } from "@ledgeindex/docs/runtime/mastra/instance.js";
-import requireApprovedAccessMiddleware from "@ledgeindex/docs/runtime/middleware/require-approved-access.js";
 import { LEDGEINDEX_CORE_VERSION } from "@ledgeindex/core";
 import { registerAgProfile } from "@ledgeindex/ag";
 import {
@@ -88,10 +87,6 @@ export async function createLedgeIndexServer(
   if (options.beforeProfiles) {
     await options.beforeProfiles(app);
   }
-
-  // After the host installs auth, before anything routable: covers the Mastra
-  // surface as well as every profile route. No-op unless auth is required.
-  await app.register(requireApprovedAccessMiddleware);
 
   const mastraProfiles = profiles.filter((p) => p === "docs" || p === "ag");
   if (mastraProfiles.length > 0) {

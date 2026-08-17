@@ -2010,7 +2010,6 @@ export function WebCrawlSetup() {
             ? err.message
             : "AI filter failed";
       summary = [summary, `AI skipped (${message}).`].filter(Boolean).join(" ");
-      setError(`Filter AI failed: ${message}`);
     }
 
     const dropped = Math.max(0, urlList.length - nextSelected.length);

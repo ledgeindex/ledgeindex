@@ -10,7 +10,6 @@ import {
   Plus,
   RefreshCw,
   Sparkles,
-  UserCheck,
 } from "lucide-react";
 
 export type AppNavItem = {
@@ -81,13 +80,6 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
     href: "/settings/providers",
     icon: Sparkles,
     desktopOnly: true,
-  },
-  {
-    id: "admin-users",
-    label: "Users",
-    href: "/admin/users",
-    icon: UserCheck,
-    adminOnly: true,
   },
   {
     id: "admin-source-updater",

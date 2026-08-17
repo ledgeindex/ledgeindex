@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
-import { setLedgeIndexApiBaseUrl } from '@ledgeindex/client'
+import { setLedgeIndexApiBaseUrl, setLedgeIndexBeforeLocalApiFetch } from '@ledgeindex/client'
 import { Providers } from '@/components/providers'
 import { RequireAuthShell } from '@/components/auth/require-auth-shell'
 import { AppShell } from '@/components/app/app-shell'
@@ -25,7 +25,6 @@ import McpConnectPage from '@/app/(app)/mcp/connect/page'
 import ApiKeysPage from '@/app/(app)/api-keys/page'
 import DesktopProviderKeysPage from '@/app/(app)/settings/providers/page'
 import ExploreChatPage from '@/app/(app)/chat/page'
-import AdminUsersPage from '@/app/(app)/admin/users/page'
 import AdminSourceUpdaterPage from '@/app/(app)/admin/source-updater/page'
 
 const FALLBACK_DESKTOP_API = 'http://127.0.0.1:3015'
@@ -56,7 +55,6 @@ function AuthenticatedApp(): React.JSX.Element {
                         path="/settings/providers"
                         element={<DesktopProviderKeysPage />}
                       />
-                      <Route path="/admin/users" element={<AdminUsersPage />} />
                       <Route
                         path="/admin/source-updater"
                         element={<AdminSourceUpdaterPage />}
@@ -77,6 +75,16 @@ function AuthenticatedApp(): React.JSX.Element {
 }
 
 export default function App(): React.JSX.Element {
+  useEffect(() => {
+    setLedgeIndexBeforeLocalApiFetch(async () => {
+      const desktop = getLedgeIndexDesktop()
+      if (desktop?.ensureLocalApi) {
+        await desktop.ensureLocalApi()
+      }
+    })
+    return () => setLedgeIndexBeforeLocalApiFetch(null)
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     // Paint the shell immediately with the known local origin; refine via IPC.

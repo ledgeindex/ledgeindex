@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { RefreshCw, SearchCheck, Square } from "lucide-react";
+import { ClipboardList, RefreshCw, SearchCheck, Square } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import type { KnowledgeSetScope } from "@/components/sources/knowledge-set-scope-toggle";
 import { IngestPipelineFlow } from "@/components/sources/ingest-pipeline-flow";
@@ -156,7 +156,74 @@ type RowStatus =
   | "error"
   | "cancelled";
 
+type SourceRunMode = "check" | "update";
+
+type SourceRunReport = {
+  changelog: RefreshChangelog;
+  status: RowStatus;
+  mode: SourceRunMode;
+  finishedAt: number;
+};
+
+type SourceRunReportMeta = {
+  mode: SourceRunMode;
+  finishedAt: number;
+  fromSaved: boolean;
+};
+
 const POLL_MS = 1500;
+
+function changelogHasDiff(
+  changelog: RefreshChangelog | null | undefined,
+): boolean {
+  if (!changelog) return false;
+  return (
+    changelog.added.length > 0 ||
+    changelog.updated.length > 0 ||
+    changelog.removed.length > 0
+  );
+}
+
+function changelogSummary(changelog: RefreshChangelog | null | undefined): string {
+  if (!changelog) return "";
+  const bits = [
+    changelog.added.length > 0 ? `${changelog.added.length} added` : null,
+    changelog.updated.length > 0 ? `${changelog.updated.length} updated` : null,
+    changelog.removed.length > 0 ? `${changelog.removed.length} removed` : null,
+  ].filter(Boolean);
+  if (bits.length > 0) return bits.join(" · ");
+  if (changelog.baselineCaptured) return "Baseline captured";
+  if (typeof changelog.unchangedCount === "number") {
+    return `${changelog.unchangedCount} unchanged`;
+  }
+  return "No page changes";
+}
+
+function normalizeStoredChangelog(changelog: RefreshChangelog): RefreshChangelog {
+  if (changelogHasDiff(changelog) && changelog.baselineCaptured) {
+    return { ...changelog, baselineCaptured: false };
+  }
+  return changelog;
+}
+
+function cloneChangelog(changelog: RefreshChangelog): RefreshChangelog {
+  return {
+    baselineCaptured: changelog.baselineCaptured,
+    unchangedCount: changelog.unchangedCount,
+    added: changelog.added.map((page) => ({ ...page })),
+    updated: changelog.updated.map((page) => ({ ...page })),
+    removed: changelog.removed.map((page) => ({ ...page })),
+  };
+}
+
+function formatReportTime(ms: number): string {
+  return new Date(ms).toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
 
 function sleep(ms: number) {
   return new Promise((resolve) => window.setTimeout(resolve, ms));
@@ -275,7 +342,8 @@ function changelogPathBuckets(
   changelog: RefreshChangelog | null | undefined,
   startUrls: string[],
 ): PathChangeBucket[] {
-  if (!changelog || changelog.baselineCaptured) return [];
+  if (!changelog || (changelog.baselineCaptured && !changelogHasDiff(changelog)))
+    return [];
 
   const buckets = new Map<string, PathChangeBucket>();
   const touch = (
@@ -407,6 +475,7 @@ function RunOverview({
   rowStatus,
   rowError,
   changelogs,
+  runReports,
   running,
   stopping,
   onFocus,
@@ -416,6 +485,7 @@ function RunOverview({
   rowStatus: Record<string, RowStatus>;
   rowError: Record<string, string>;
   changelogs: Record<string, RefreshChangelog>;
+  runReports: Record<string, SourceRunReport>;
   running: boolean;
   stopping: boolean;
   onFocus: (id: string) => void;
@@ -491,8 +561,9 @@ function RunOverview({
         <ul className="mt-2 max-h-48 space-y-1 overflow-y-auto border-t border-border pt-2">
           {listIds.map((id) => {
             const source = byId.get(id);
-            const status = rowStatus[id] ?? "idle";
-            const changelog = changelogs[id];
+            const savedReport = runReports[id];
+            const status = rowStatus[id] ?? savedReport?.status ?? "idle";
+            const changelog = changelogs[id] ?? savedReport?.changelog;
             const startUrls = source ? resolveStartUrls(source) : [];
             const pathBuckets = changelogPathBuckets(changelog, startUrls);
             const changeBits = changelog
@@ -620,6 +691,7 @@ function ChangesSidePanel({
   running,
   errorMessage,
   hasLastRun,
+  reportMeta,
   onApply,
   onDismiss,
   actionBusy = false,
@@ -630,6 +702,7 @@ function ChangesSidePanel({
   running: boolean;
   errorMessage?: string;
   hasLastRun: boolean;
+  reportMeta?: SourceRunReportMeta | null;
   onApply?: () => void;
   onDismiss?: () => void;
   actionBusy?: boolean;
@@ -649,12 +722,7 @@ function ChangesSidePanel({
     );
   }
 
-  const hasDiff =
-    changelog &&
-    !changelog.baselineCaptured &&
-    (changelog.added.length > 0 ||
-      changelog.updated.length > 0 ||
-      changelog.removed.length > 0);
+  const hasDiff = changelogHasDiff(changelog);
 
   const excludes = sourceExcludePatterns(source);
   const includes = sourceIncludePatterns(source);
@@ -662,25 +730,44 @@ function ChangesSidePanel({
   const pathBuckets = changelogPathBuckets(changelog, startUrls);
   const finished =
     !running &&
+    !actionBusy &&
+    status !== "running" &&
     (status === "updated" ||
       status === "up-to-date" ||
       status === "changes-found" ||
       status === "error" ||
       status === "cancelled");
   const isChecking = running || status === "checking";
+  const isApplying = actionBusy || status === "running";
 
   return (
     <div className="flex h-full min-h-0 flex-col rounded-xl border border-border bg-card-solid">
       <div className="shrink-0 border-b border-border px-3 py-2.5">
         <div className="flex items-start justify-between gap-2">
-          <p className="min-w-0 truncate text-sm font-medium text-foreground">
-            {source.name}
-          </p>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-foreground">
+              {source.name}
+            </p>
+            {reportMeta || status === "changes-found" ? (
+              <p className="mt-0.5 font-mono text-[0.5625rem] font-semibold tracking-[0.08em] text-muted uppercase">
+                {status === "changes-found" && !reportMeta?.fromSaved
+                  ? "Pending changes"
+                  : "Run report"}
+                {reportMeta
+                  ? ` · ${reportMeta.mode === "check" ? "check" : "update"}`
+                  : null}
+                {reportMeta?.finishedAt
+                  ? ` · ${formatReportTime(reportMeta.finishedAt)}`
+                  : null}
+              </p>
+            ) : null}
+          </div>
           <CrawlFiltersBadge source={source} />
         </div>
         <p className="truncate font-mono text-[0.625rem] text-muted">
           {formatUrlLabel(source.startUrl || source.name)}
           {status !== "idle" ? ` · ${statusLabel(status)}` : null}
+          {source.pageCount > 0 ? ` · ${source.pageCount} indexed` : null}
         </p>
         <StartUrlChips urls={startUrls} />
       </div>
@@ -713,7 +800,7 @@ function ChangesSidePanel({
                 ? "No page changes since the last index."
                 : status === "changes-found"
                   ? hasDiff
-                    ? "Review the diff below, then apply or dismiss."
+                    ? `${changelogSummary(changelog)} — review below, then apply or dismiss.`
                     : "Check finished — no diff details."
                 : status === "updated"
                   ? hasDiff
@@ -725,6 +812,25 @@ function ChangesSidePanel({
                     ? errorMessage || "Something went wrong during refresh."
                     : "This set was stopped before it finished."}
             </p>
+            {status === "changes-found" && hasDiff && changelog ? (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {changelog.added.length > 0 ? (
+                  <span className="rounded-md border border-emerald-500/35 bg-emerald-500/10 px-2 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-emerald-700 uppercase dark:text-emerald-400">
+                    {changelog.added.length} added
+                  </span>
+                ) : null}
+                {changelog.updated.length > 0 ? (
+                  <span className="rounded-md border border-amber-500/35 bg-amber-500/10 px-2 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-amber-700 uppercase dark:text-amber-400">
+                    {changelog.updated.length} updated
+                  </span>
+                ) : null}
+                {changelog.removed.length > 0 ? (
+                  <span className="rounded-md border border-red-500/35 bg-red-500/10 px-2 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-red-700 uppercase dark:text-red-300">
+                    {changelog.removed.length} removed
+                  </span>
+                ) : null}
+              </div>
+            ) : null}
             {status === "changes-found" && onApply && onDismiss ? (
               <div className="mt-2 flex flex-wrap gap-2">
                 <button
@@ -733,7 +839,7 @@ function ChangesSidePanel({
                   onClick={() => onApply()}
                   className="inline-flex h-7 items-center rounded-md border border-foreground/15 bg-foreground px-2.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-background uppercase disabled:opacity-50"
                 >
-                  Apply changes
+                  {actionBusy ? "Applying…" : "Apply changes"}
                 </button>
                 <button
                   type="button"
@@ -806,17 +912,23 @@ function ChangesSidePanel({
           </section>
         )}
 
+        {isApplying ? (
+          <p className="text-xs text-muted">
+            Applying page changes — embedding and saving…
+          </p>
+        ) : null}
+
         {isChecking && (status === "checking" || status === "running") && !changelog ? (
           <p className="text-xs text-muted">Discovering and comparing pages…</p>
         ) : null}
 
-        {changelog?.baselineCaptured ? (
+        {changelog?.baselineCaptured && !hasDiff ? (
           <p className="text-xs leading-5 text-muted">
             Baseline snapshot captured — no diff yet for this set.
           </p>
         ) : null}
 
-        {changelog && !changelog.baselineCaptured && !hasDiff ? (
+        {changelog && !hasDiff ? (
           <p className="text-xs leading-5 text-muted">
             No page changes
             {typeof changelog.unchangedCount === "number"
@@ -1656,6 +1768,9 @@ export default function AdminSourceUpdaterPage() {
   const [changelogs, setChangelogs] = useState<
     Record<string, RefreshChangelog>
   >({});
+  const [runReports, setRunReports] = useState<Record<string, SourceRunReport>>(
+    {},
+  );
   const [focusSourceId, setFocusSourceId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -1747,6 +1862,7 @@ export default function AdminSourceUpdaterPage() {
       setRowStatus({});
       setRowError({});
       setChangelogs({});
+      setRunReports({});
       setFocusSourceId(null);
       setLastRunIds([]);
       setStopping(false);
@@ -1765,6 +1881,15 @@ export default function AdminSourceUpdaterPage() {
       setSources([]);
     }
   }, []);
+
+  const refreshSourcesList = useCallback(async () => {
+    try {
+      const { sources: list } = await listSources(scope);
+      setSources(list);
+    } catch {
+      // keep the current list if refresh fails
+    }
+  }, [scope]);
 
   useEffect(() => {
     if (!isAdmin) return;
@@ -1994,18 +2119,83 @@ export default function AdminSourceUpdaterPage() {
   );
 
   const focusChangelog = useMemo(() => {
-    if (snapshot?.sourceId === activeFocusId && snapshot.changelog) {
-      return snapshot.changelog;
+    if (
+      snapshot?.sourceId === activeFocusId &&
+      snapshot.changelog &&
+      snapshot.status === "ready"
+    ) {
+      return normalizeStoredChangelog(snapshot.changelog);
     }
+    if (snapshot?.sourceId === activeFocusId && snapshot.changelog) {
+      const inProgress =
+        snapshot.status === "discovering" ||
+        snapshot.status === "parsing" ||
+        snapshot.status === "comparing" ||
+        snapshot.status === "applying";
+      if (inProgress || changelogHasDiff(snapshot.changelog)) {
+        return normalizeStoredChangelog(snapshot.changelog);
+      }
+    }
+    if (activeFocusId) {
+      const saved = runReports[activeFocusId];
+      if (saved && changelogHasDiff(saved.changelog)) {
+        return normalizeStoredChangelog(saved.changelog);
+      }
+      const pending = changelogs[activeFocusId];
+      if (pending && changelogHasDiff(pending)) {
+        return normalizeStoredChangelog(pending);
+      }
+      if (saved) return normalizeStoredChangelog(saved.changelog);
+      if (pending) return normalizeStoredChangelog(pending);
+    }
+    return null;
+  }, [activeFocusId, changelogs, runReports, snapshot]);
+
+  const focusReportMeta = useMemo((): SourceRunReportMeta | null => {
     if (!activeFocusId) return null;
-    return changelogs[activeFocusId] ?? null;
-  }, [activeFocusId, changelogs, snapshot]);
+    const saved = runReports[activeFocusId];
+    const status = rowStatus[activeFocusId] ?? saved?.status ?? "idle";
+
+    if (
+      saved &&
+      (status === "updated" ||
+        status === "up-to-date" ||
+        status === "changes-found" ||
+        status === "error" ||
+        status === "cancelled")
+    ) {
+      return {
+        mode: saved.mode,
+        finishedAt: saved.finishedAt,
+        fromSaved: status !== "changes-found",
+      };
+    }
+
+    if (
+      running &&
+      snapshot?.sourceId === activeFocusId &&
+      (snapshot.status === "discovering" ||
+        snapshot.status === "parsing" ||
+        snapshot.status === "comparing" ||
+        snapshot.status === "applying")
+    ) {
+      return {
+        mode: runningMode === "check" ? "check" : "update",
+        finishedAt: Date.now(),
+        fromSaved: false,
+      };
+    }
+
+    return null;
+  }, [activeFocusId, runReports, rowStatus, running, runningMode, snapshot]);
 
   const pipeline = useMemo(() => {
-    if (!running) {
+    const refreshPipelineActive =
+      (running && runningMode !== "catalog-crawl") || panelActionBusy;
+    if (!refreshPipelineActive && !running) {
       return IDLE_INGEST_PIPELINE.map((node) => ({ ...node }));
     }
-    if (runningMode === "catalog-crawl") {
+    if (running && runningMode === "catalog-crawl") {
       return pipelineFromCatalogIngest({
         snapshot: catalogIngestSnapshot,
         crawlPages: catalogCrawlPages,
@@ -2018,6 +2208,7 @@ export default function AdminSourceUpdaterPage() {
   }, [
     running,
     runningMode,
+    panelActionBusy,
     catalogIngestSnapshot,
     catalogCrawlPages,
     snapshot,
@@ -2089,10 +2280,18 @@ export default function AdminSourceUpdaterPage() {
       snapshot.pathTotal > 1
         ? ` · ${snapshot.activePath} (${snapshot.pathIndex}/${snapshot.pathTotal})`
         : "";
+    const progressBit =
+      snapshot &&
+      snapshot.total > 0 &&
+      (snapshot.status === "applying" || snapshot.status === "parsing")
+        ? ` · ${snapshot.current}/${snapshot.total}`
+        : "";
+    const queueBit =
+      queueTotal > 1 ? ` · ${queueIndex + 1} / ${queueTotal}` : "";
     if (!focusSource) {
-      return `Updating ${queueIndex + 1} / ${queueTotal}${pathBit}`;
+      return `Updating${queueBit}${pathBit}${progressBit}`;
     }
-    return `${focusSource.name} · ${queueIndex + 1} / ${queueTotal}${pathBit}`;
+    return `${focusSource.name}${queueBit}${pathBit}${progressBit}`;
   }, [
     catalogCrawlMode,
     catalogCrawlPackage,
@@ -2110,6 +2309,9 @@ export default function AdminSourceUpdaterPage() {
     snapshot?.activePath,
     snapshot?.pathIndex,
     snapshot?.pathTotal,
+    snapshot?.current,
+    snapshot?.total,
+    snapshot?.status,
     tab,
   ]);
 
@@ -2124,7 +2326,42 @@ export default function AdminSourceUpdaterPage() {
     next: RefreshRunSnapshot | null | undefined,
   ) {
     if (!next?.changelog) return;
-    setChangelogs((prev) => ({ ...prev, [sourceId]: next.changelog! }));
+    const incoming = next.changelog;
+    const hasIncomingDiff = changelogHasDiff(incoming);
+
+    setChangelogs((prev) => {
+      const existing = prev[sourceId];
+      if (
+        next.status === "done" &&
+        !hasIncomingDiff &&
+        changelogHasDiff(existing)
+      ) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [sourceId]: normalizeStoredChangelog(incoming),
+      };
+    });
+  }
+
+  function saveRunReport(
+    sourceId: string,
+    changelog: RefreshChangelog | null | undefined,
+    status: RowStatus,
+    mode: SourceRunMode,
+  ) {
+    if (!changelog) return;
+    const normalized = normalizeStoredChangelog(changelog);
+    setRunReports((prev) => ({
+      ...prev,
+      [sourceId]: {
+        changelog: cloneChangelog(normalized),
+        status,
+        mode,
+        finishedAt: Date.now(),
+      },
+    }));
   }
 
   function handleScopeChange(next: KnowledgeSetScope) {
@@ -2318,16 +2555,19 @@ export default function AdminSourceUpdaterPage() {
       return "cancelled";
     }
     if (ready.status === "done") {
+      saveRunReport(sourceId, ready.changelog, "up-to-date", "check");
       return "up-to-date";
     }
 
     if (!refreshHasChanges(ready)) {
       rememberChangelog(sourceId, ready);
+      saveRunReport(sourceId, ready.changelog, "up-to-date", "check");
       await dismissSourceRefresh(sourceId).catch(() => undefined);
       return "up-to-date";
     }
 
     rememberChangelog(sourceId, ready);
+    saveRunReport(sourceId, ready.changelog, "changes-found", "check");
     return "changes-found";
   }
 
@@ -2340,6 +2580,7 @@ export default function AdminSourceUpdaterPage() {
     const { snapshot: applying } = await applySourceRefresh(sourceId);
     setSnapshot(applying);
     rememberChangelog(sourceId, applying);
+    const reportChangelog = applying.changelog;
 
     const finished = await pollUntilSettled(
       sourceId,
@@ -2351,6 +2592,7 @@ export default function AdminSourceUpdaterPage() {
     if (finished.status === "cancelled") {
       return "cancelled";
     }
+    saveRunReport(sourceId, reportChangelog, "updated", "update");
     return "updated";
   }
 
@@ -2447,21 +2689,30 @@ export default function AdminSourceUpdaterPage() {
     setCurrentSourceId(null);
     currentSourceIdRef.current = null;
     setFocusSourceId(lastCompletedId ?? queue[0] ?? null);
+    void refreshSourcesList();
   }
 
   async function applyFocusedChanges() {
     if (!activeFocusId || panelActionBusy || running) return;
     setPanelActionBusy(true);
+    setRunning(true);
+    setRunningMode("refresh");
+    setQueueTotal(1);
+    setQueueIndex(0);
     setError(null);
     try {
       const result = await applyOne(activeFocusId);
       setRowStatus((prev) => ({ ...prev, [activeFocusId]: result }));
+      void refreshSourcesList();
     } catch (err) {
       const message = err instanceof Error ? err.message : "Apply failed";
       setRowStatus((prev) => ({ ...prev, [activeFocusId]: "error" }));
       setRowError((prev) => ({ ...prev, [activeFocusId]: message }));
     } finally {
+      setRunning(false);
       setPanelActionBusy(false);
+      setCurrentSourceId(null);
+      currentSourceIdRef.current = null;
     }
   }
 
@@ -2513,11 +2764,13 @@ export default function AdminSourceUpdaterPage() {
     }
 
     if (ready.status === "done") {
+      saveRunReport(sourceId, ready.changelog, "updated", "update");
       return "updated";
     }
 
     if (!refreshHasChanges(ready)) {
       rememberChangelog(sourceId, ready);
+      saveRunReport(sourceId, ready.changelog, "up-to-date", "update");
       await dismissSourceRefresh(sourceId).catch(() => undefined);
       return "up-to-date";
     }
@@ -2525,6 +2778,7 @@ export default function AdminSourceUpdaterPage() {
     const { snapshot: applying } = await applySourceRefresh(sourceId);
     setSnapshot(applying);
     rememberChangelog(sourceId, applying);
+    const reportChangelog = applying.changelog;
 
     const finished = await pollUntilSettled(
       sourceId,
@@ -2536,6 +2790,7 @@ export default function AdminSourceUpdaterPage() {
     if (finished.status === "cancelled") {
       return "cancelled";
     }
+    saveRunReport(sourceId, reportChangelog, "updated", "update");
     return "updated";
   }
 
@@ -2633,6 +2888,7 @@ export default function AdminSourceUpdaterPage() {
     setCurrentSourceId(null);
     currentSourceIdRef.current = null;
     setFocusSourceId(lastCompletedId ?? queue[0] ?? null);
+    void refreshSourcesList();
     // Keep last snapshot/changelog + run overview visible.
   }
 
@@ -3444,6 +3700,7 @@ export default function AdminSourceUpdaterPage() {
                 rowStatus={rowStatus}
                 rowError={rowError}
                 changelogs={changelogs}
+                runReports={runReports}
                 running={running}
                 stopping={stopping}
                 onFocus={setFocusSourceId}
@@ -3469,10 +3726,13 @@ export default function AdminSourceUpdaterPage() {
                     const isCurrent = currentSourceId === source.id;
                     const isFocused = activeFocusId === source.id;
                     const startUrls = resolveStartUrls(source);
+                    const rowChangelog =
+                      changelogs[source.id] ?? runReports[source.id]?.changelog;
                     const pathBuckets = changelogPathBuckets(
-                      changelogs[source.id],
+                      rowChangelog,
                       startUrls,
                     );
+                    const hasReport = Boolean(runReports[source.id]);
                     return (
                       <li key={source.id}>
                         <div
@@ -3550,30 +3810,46 @@ export default function AdminSourceUpdaterPage() {
                               ) : null}
                             </div>
                           </button>
-                          {status !== "idle" ? (
-                            <span
-                              className={cn(
-                                "shrink-0 rounded-md border px-2 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] uppercase",
-                                status === "running" &&
-                                  "border-accent/40 bg-accent/10 text-accent",
-                                status === "checking" &&
-                                  "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-                                status === "queued" &&
-                                  "border-border bg-surface-alt text-muted",
-                                (status === "updated" ||
-                                  status === "up-to-date") &&
-                                  "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-                                status === "changes-found" &&
-                                  "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300",
-                                status === "error" &&
-                                  "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
-                                status === "cancelled" &&
-                                  "border-border bg-surface-alt text-muted",
-                              )}
-                            >
-                              {statusLabel(status)}
-                            </span>
-                          ) : null}
+                          <div className="flex shrink-0 items-center gap-1.5">
+                            {hasReport ? (
+                              <button
+                                type="button"
+                                onClick={() => setFocusSourceId(source.id)}
+                                title="View run report"
+                                className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card-solid px-2 font-mono text-[0.5rem] font-semibold tracking-[0.06em] text-muted uppercase hover:border-accent/40 hover:text-foreground"
+                              >
+                                <ClipboardList
+                                  className="size-3 shrink-0"
+                                  aria-hidden
+                                />
+                                Report
+                              </button>
+                            ) : null}
+                            {status !== "idle" ? (
+                              <span
+                                className={cn(
+                                  "rounded-md border px-2 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] uppercase",
+                                  status === "running" &&
+                                    "border-accent/40 bg-accent/10 text-accent",
+                                  status === "checking" &&
+                                    "border-sky-500/40 bg-sky-500/10 text-sky-700 dark:text-sky-300",
+                                  status === "queued" &&
+                                    "border-border bg-surface-alt text-muted",
+                                  (status === "updated" ||
+                                    status === "up-to-date") &&
+                                    "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
+                                  status === "changes-found" &&
+                                    "border-amber-500/35 bg-amber-500/10 text-amber-800 dark:text-amber-300",
+                                  status === "error" &&
+                                    "border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-300",
+                                  status === "cancelled" &&
+                                    "border-border bg-surface-alt text-muted",
+                                )}
+                              >
+                                {statusLabel(status)}
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
                       </li>
                     );
@@ -3589,11 +3865,12 @@ export default function AdminSourceUpdaterPage() {
                 status={
                   activeFocusId ? (rowStatus[activeFocusId] ?? "idle") : "idle"
                 }
-                running={running}
+                running={running || panelActionBusy}
                 errorMessage={
                   activeFocusId ? rowError[activeFocusId] : undefined
                 }
                 hasLastRun={lastRunIds.length > 0}
+                reportMeta={focusReportMeta}
                 onApply={
                   activeFocusId &&
                   rowStatus[activeFocusId] === "changes-found"
@@ -3617,7 +3894,9 @@ export default function AdminSourceUpdaterPage() {
               headline={headline}
               variant="banner"
               bannerSize="strip"
-              animate={running && runningMode !== "catalog-crawl"}
+              animate={
+                (running && runningMode !== "catalog-crawl") || panelActionBusy
+              }
               className="w-full"
             />
           </div>

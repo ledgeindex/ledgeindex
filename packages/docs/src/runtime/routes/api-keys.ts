@@ -13,7 +13,6 @@ import {
   revokeUserApiKey,
 } from "../services/api-key-store.js";
 import { getUserRole, isAdminRole } from "../services/user-role.js";
-import { getUserAccessStatus } from "../services/user-access.js";
 import { isPlanLimitsEnabled } from "../services/source-set-limits.js";
 import { getUserPlan } from "../services/user-plan.js";
 
@@ -53,14 +52,12 @@ export async function apiKeyRoutes(fastify: FastifyInstance) {
     const user = await requireFirebaseUser(request, reply);
     if (!user) return;
 
-    const [role, accessStatus, plan] = await Promise.all([
+    const [role, plan] = await Promise.all([
       getUserRole(user.uid),
-      getUserAccessStatus(user.uid),
       getUserPlan(user.uid),
     ]);
     return {
       role,
-      accessStatus,
       plan,
       planLimitsEnabled: isPlanLimitsEnabled(),
     };

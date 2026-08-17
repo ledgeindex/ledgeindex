@@ -5,10 +5,9 @@ import { usePathname, useRouter } from "next/navigation";
 import { isFirebaseConfigured } from "@/lib/firebase";
 import { useAuth } from "@/lib/auth-context";
 import { useLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
-import { RequestAccessGate } from "@/components/auth/request-access-gate";
 
 export function RequireAuth({ children }: { children: ReactNode }) {
-  const { user, loading, hasAppAccess } = useAuth();
+  const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const desktop = useLedgeIndexDesktop();
@@ -46,10 +45,6 @@ export function RequireAuth({ children }: { children: ReactNode }) {
         <p className="text-sm text-muted">Redirecting to sign-in…</p>
       </div>
     );
-  }
-
-  if (!hasAppAccess) {
-    return <RequestAccessGate />;
   }
 
   return children;

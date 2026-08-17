@@ -89,17 +89,26 @@ export function SourceSlugEditor({
 
   if (!editing) {
     return (
-      <div className={cn("flex min-w-0 items-center gap-1.5", className)}>
+      <div
+        className={cn("group flex min-w-0 items-center gap-1", className)}
+      >
+        <p
+          className="min-w-0 truncate font-mono text-[0.6875rem] text-muted"
+          title={`MCP slug: ${slug}`}
+        >
+          {slug}
+        </p>
         <button
           type="button"
-          onClick={startEditing}
-          className="group flex min-w-0 items-center gap-1.5 rounded-md border border-transparent px-1 py-0.5 text-left transition-colors hover:border-border hover:bg-surface-raised"
+          onClick={(event) => {
+            event.stopPropagation();
+            startEditing();
+          }}
+          className="shrink-0 rounded p-0.5 text-muted opacity-0 transition-opacity hover:text-foreground group-hover:opacity-100 focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-foreground/20"
           title="Edit MCP slug"
+          aria-label="Edit MCP slug"
         >
-          <span className="truncate font-mono text-[0.6875rem] text-muted group-hover:text-foreground">
-            {slug}
-          </span>
-          <PencilIcon className="size-3 shrink-0 text-muted opacity-0 transition-opacity group-hover:text-foreground group-hover:opacity-100" />
+          <PencilIcon className="size-3" />
         </button>
       </div>
     );

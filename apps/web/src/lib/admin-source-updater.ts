@@ -261,10 +261,12 @@ export function pipelineFromRefreshSnapshot(
 export function refreshHasChanges(snapshot: RefreshRunSnapshot): boolean {
   const changelog = snapshot.changelog;
   if (!changelog) return false;
-  if (changelog.baselineCaptured) return false;
-  return (
+  if (
     changelog.added.length > 0 ||
     changelog.updated.length > 0 ||
     changelog.removed.length > 0
-  );
+  ) {
+    return true;
+  }
+  return !changelog.baselineCaptured;
 }

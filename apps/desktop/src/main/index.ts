@@ -177,6 +177,17 @@ app.whenReady().then(async () => {
 
   ipcMain.handle('sidecar:health', () => getSidecarHealth())
   ipcMain.handle('sidecar:restart', () => restartDesktopSidecar())
+  ipcMain.handle('sidecar:start', async () => {
+    try {
+      await ensureApiRunning()
+    } catch (error) {
+      console.error('[desktop] local API start failed', error)
+    }
+    return getSidecarHealth()
+  })
+  ipcMain.handle('local-api:ensure', async () => {
+    await ensureApiRunning()
+  })
   ipcMain.handle('sidecar:apiOrigin', () => resolveApiOrigin())
 
   ipcMain.handle('settings:getProviderKeyStatus', () => getProviderKeyStatus())
@@ -202,10 +213,10 @@ app.whenReady().then(async () => {
   scheduleStartupUpdateCheck(() => mainWindow)
   void ensureApiRunning()
     .then(() => {
-      console.log('[desktop] API origin', resolveApiOrigin(), 'port', DESKTOP_SERVER_PORT)
+      console.log('[desktop] local API ready at', resolveApiOrigin(), 'port', DESKTOP_SERVER_PORT)
     })
     .catch((error) => {
-      console.error('[desktop] could not start desktop-server sidecar', error)
+      console.error('[desktop] could not start local API worker', error)
     })
 
   app.on('activate', () => {

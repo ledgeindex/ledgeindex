@@ -476,6 +476,20 @@ export function setApiAuthTokenGetter(
   authTokenGetter = getter;
 }
 
+/** Desktop: start in-process local API before first loopback fetch. */
+let beforeLocalApiFetch: (() => Promise<void>) | null = null;
+
+export function setLedgeIndexBeforeLocalApiFetch(
+  fn: (() => Promise<void>) | null,
+): void {
+  beforeLocalApiFetch = fn;
+}
+
+async function prepareLocalApiIfNeeded(url: string): Promise<void> {
+  if (!beforeLocalApiFetch || !isLoopbackApiUrl(url)) return;
+  await beforeLocalApiFetch();
+}
+
 async function resolveAuthToken(forceRefresh = false): Promise<string | null> {
   if (authTokenGetter) {
     const token = await authTokenGetter(forceRefresh);
@@ -505,6 +519,14 @@ export async function authenticatedFetch(
   input: string | URL | Request,
   init?: RequestInit,
 ): Promise<Response> {
+  const requestUrl =
+    typeof input === "string"
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url;
+  await prepareLocalApiIfNeeded(requestUrl);
+
   async function doFetch(forceRefresh: boolean): Promise<Response> {
     const headers = new Headers(init?.headers);
     const hasBody = init?.body != null && init.body !== "";
@@ -547,6 +569,7 @@ async function fetchWithAuth(
   },
 ): Promise<{ response: Response; data: unknown }> {
   const base = (options?.baseUrl ?? getApiBase()).replace(/\/$/, "");
+  await prepareLocalApiIfNeeded(base);
   const hasBody = init?.body != null && init.body !== "";
   const headers = new Headers(init?.headers);
 
@@ -1871,7 +1894,6 @@ export async function ensurePlaygroundApiKey() {
 export async function getAuthMe() {
   return api<{
     role: "user" | "admin";
-    accessStatus?: "pending" | "approved" | "denied";
     plan?: "free" | "pro";
     planLimitsEnabled?: boolean;
   }>("/api/auth/me");

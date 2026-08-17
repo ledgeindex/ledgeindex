@@ -33,14 +33,14 @@ function labelFor(status: SidecarStatus): string {
 function detailFor(health: SidecarHealth): string {
   switch (health.status) {
     case "ready":
-      return "Local desktop server is running.";
+      return "Running in a worker thread on loopback — UI and MCP use the URL below.";
     case "extracting":
     case "starting":
       return "Desktop server is starting. First boot can take a bit while packages load.";
     case "error":
       return "Desktop server failed to start or stopped. Try restarting it.";
     default:
-      return "Desktop server is not reachable yet.";
+      return "Local API is off. Click Start or wait for launch.";
   }
 }
 
@@ -68,6 +68,7 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
   const [health, setHealth] = useState<SidecarHealth>(DEFAULT_HEALTH);
   const [open, setOpen] = useState(false);
   const [restarting, setRestarting] = useState(false);
+  const [starting, setStarting] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -132,6 +133,17 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
     }
   }, [desktop, restarting]);
 
+  const onStart = useCallback(async () => {
+    if (!desktop?.startSidecar || starting) return;
+    setStarting(true);
+    try {
+      const next = await desktop.startSidecar();
+      setHealth(next);
+    } finally {
+      setStarting(false);
+    }
+  }, [desktop, starting]);
+
   if (!desktop?.getSidecarHealth) return null;
 
   const tone =
@@ -143,8 +155,15 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
           ? "error"
           : "muted";
 
-  const label = restarting ? "Restarting" : labelFor(health.status);
-  const badgeTone = restarting ? "starting" : tone;
+  const label = restarting || starting ? "Starting" : labelFor(health.status);
+  const badgeTone = restarting || starting ? "starting" : tone;
+  const canStart =
+    health.status === "idle" || health.status === "error";
+  const busy =
+    restarting ||
+    starting ||
+    health.status === "starting" ||
+    health.status === "extracting";
 
   return (
     <div className="relative [-webkit-app-region:no-drag]" ref={rootRef}>
@@ -177,7 +196,7 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
             "rounded-xl border border-border bg-card-solid shadow-lg backdrop-blur-md",
           )}
           role="dialog"
-          aria-label="Desktop server status"
+          aria-label="Local API status"
         >
           <div className="space-y-3 p-3.5">
             <div className="flex items-start justify-between gap-2">
@@ -185,7 +204,7 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
                 <div className="flex items-center gap-2">
                   <StatusDot tone={badgeTone} />
                   <p className="m-0 text-[0.78rem] font-semibold text-foreground">
-                    Desktop server
+                    Local API
                   </p>
                 </div>
                 <p className="m-0 mt-0.5 pl-[1.05rem] text-[0.72rem] leading-snug text-muted">
@@ -193,22 +212,33 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">
-                <button
-                  type="button"
-                  className={cn(
-                    "cursor-pointer rounded-lg border-0 bg-foreground px-2.5 py-1.5",
-                    "text-[0.7rem] font-semibold text-background",
-                    "disabled:cursor-not-allowed disabled:opacity-55",
-                  )}
-                  disabled={
-                    restarting ||
-                    health.status === "starting" ||
-                    health.status === "extracting"
-                  }
-                  onClick={() => void onRestart()}
-                >
-                  {restarting ? "Restarting…" : "Restart"}
-                </button>
+                {canStart && desktop.startSidecar ? (
+                  <button
+                    type="button"
+                    className={cn(
+                      "cursor-pointer rounded-lg border-0 bg-foreground px-2.5 py-1.5",
+                      "text-[0.7rem] font-semibold text-background",
+                      "disabled:cursor-not-allowed disabled:opacity-55",
+                    )}
+                    disabled={busy}
+                    onClick={() => void onStart()}
+                  >
+                    {starting ? "Starting…" : "Start"}
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={cn(
+                      "cursor-pointer rounded-lg border-0 bg-foreground px-2.5 py-1.5",
+                      "text-[0.7rem] font-semibold text-background",
+                      "disabled:cursor-not-allowed disabled:opacity-55",
+                    )}
+                    disabled={busy}
+                    onClick={() => void onRestart()}
+                  >
+                    {restarting ? "Restarting…" : "Restart"}
+                  </button>
+                )}
                 <button
                   type="button"
                   className={cn(
@@ -233,15 +263,15 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
                 <dd className="m-0 font-mono text-foreground">{health.port}</dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="m-0 shrink-0 text-muted">Origin</dt>
+                <dt className="m-0 shrink-0 text-muted">Loopback URL</dt>
                 <dd className="m-0 truncate font-mono text-foreground" title={health.origin}>
                   {health.origin}
                 </dd>
               </div>
               <div className="flex items-baseline justify-between gap-3">
-                <dt className="m-0 text-muted">Host</dt>
+                <dt className="m-0 text-muted">Runtime</dt>
                 <dd className="m-0 font-medium text-foreground">
-                  @ledgeindex/desktop-server
+                  Worker thread
                 </dd>
               </div>
             </dl>

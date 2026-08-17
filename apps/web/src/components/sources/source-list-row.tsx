@@ -268,13 +268,7 @@ export function SourceListRow({
       <SourceFavicon source={activeSource} className="size-7" />
 
       <div className="min-w-0 flex-1 overflow-hidden">
-        <div
-          className="min-w-0"
-          onClick={(event) => {
-            if (canEditName) event.stopPropagation();
-          }}
-          onKeyDown={(event) => event.stopPropagation()}
-        >
+        <div className="min-w-0">
           <SourceNameEditor
             sourceId={activeSource.id}
             name={activeSource.name}
@@ -282,17 +276,11 @@ export function SourceListRow({
             onUpdated={(nextName) =>
               onNameUpdated?.(activeSource.id, nextName)
             }
-            className="max-w-full truncate [&_button]:max-w-full [&_button]:px-0 [&_button]:py-0 [&_button]:hover:border-transparent [&_button]:hover:bg-transparent [&_span]:text-[0.8125rem] [&_span]:leading-4"
+            className="max-w-full truncate [&_h2]:text-[0.8125rem] [&_h2]:leading-4"
           />
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-1 overflow-hidden">
-          <div
-            className="min-w-0 shrink truncate"
-            onClick={(event) => {
-              if (canEditSlug) event.stopPropagation();
-            }}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
+          <div className="min-w-0 shrink truncate">
             <SourceSlugEditor
               sourceId={activeSource.id}
               slug={activeSource.slug}
@@ -300,15 +288,11 @@ export function SourceListRow({
               onUpdated={(nextSlug) =>
                 onSlugUpdated?.(activeSource.id, nextSlug)
               }
-              className="max-w-full [&_button]:px-0 [&_button]:py-0 [&_button]:hover:border-transparent [&_button]:hover:bg-transparent"
+              className="max-w-full"
             />
           </div>
           {startUrls.length > 0 ? (
-            <div
-              className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden"
-              onClick={(event) => event.stopPropagation()}
-              onKeyDown={(event) => event.stopPropagation()}
-            >
+            <div className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden">
               <span className="shrink-0 font-mono text-[0.5625rem] text-muted/50">
                 ·
               </span>

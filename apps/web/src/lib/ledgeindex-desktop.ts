@@ -60,6 +60,10 @@ export type LedgeIndexDesktopApi = {
   ) => () => void;
   getSidecarHealth?: () => Promise<SidecarHealth>;
   restartSidecar?: () => Promise<SidecarHealth>;
+  /** Enable local server preference and start the sidecar. */
+  startSidecar?: () => Promise<SidecarHealth>;
+  /** Start in-process local API before loopback HTTP (lazy). */
+  ensureLocalApi?: () => Promise<void>;
   getApiOrigin?: () => Promise<string>;
   getProviderKeyStatus?: () => Promise<DesktopProviderKeyStatus>;
   saveProviderKeys?: (

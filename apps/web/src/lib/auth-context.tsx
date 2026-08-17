@@ -33,7 +33,6 @@ import {
 import {
   ensureUserProfile,
   getUserProfile,
-  type AccessStatus,
   type UserProfile,
   type UserRole,
 } from "@/lib/user-profile";
@@ -94,10 +93,10 @@ async function ensurePlaygroundKeyOnce(
         }
       }
 
-      // 403 = account still waiting on early-access approval; nothing to provision yet.
+      // 403 = blocked account; other auth errors are transient.
       if (
         error instanceof KnowledgeIndexApiError &&
-        (error.status === 0 || error.status === 401 || error.status === 403)
+        (error.status === 0 || error.status === 401)
       ) {
         return;
       }
@@ -121,11 +120,8 @@ type AuthContextValue = {
   loading: boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
-  accessStatus: AccessStatus;
   /** Mirrors API `LEDGEINDEX_APPLY_PLAN_LIMITS` — single env on the server. */
   planLimitsEnabled: boolean;
-  /** False while an account waits for (or was refused) early-access approval. */
-  hasAppAccess: boolean;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
   getAuthToken: () => Promise<string | null>;
@@ -308,10 +304,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   const isAdmin = profile?.role === "admin" || serverRole === "admin";
-  // Mirrors the server: admins always pass; everyone else needs explicit approval.
-  const accessStatus: AccessStatus = isAdmin
-    ? "approved"
-    : (profile?.accessStatus ?? "pending");
 
   return (
     <AuthContext.Provider
@@ -321,9 +313,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         loading,
         isAuthenticated: Boolean(user),
         isAdmin,
-        accessStatus,
         planLimitsEnabled,
-        hasAppAccess: accessStatus === "approved",
         signInWithGoogle: handleSignInWithGoogle,
         signOut: handleSignOut,
         getAuthToken: () => getAuthToken(),
