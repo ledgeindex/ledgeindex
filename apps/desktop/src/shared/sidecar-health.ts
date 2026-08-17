@@ -9,4 +9,6 @@ export type SidecarHealth = {
   /** 0–100 while extracting; null when unknown / N/A */
   setupProgress?: number | null
   setupMessage?: string | null
+  /** Last worker start failure (packaged builds). */
+  lastError?: string | null
 }

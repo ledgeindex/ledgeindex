@@ -18,6 +18,7 @@ export type SidecarHealth = {
   /** 0–100 while extracting; null when unknown / N/A */
   setupProgress?: number | null;
   setupMessage?: string | null;
+  lastError?: string | null;
 };
 
 export type DesktopProviderId = "openai" | "google" | "deepseek";

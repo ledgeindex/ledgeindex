@@ -1,4 +1,5 @@
 import { createConnection } from 'node:net'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { app, net } from 'electron'
@@ -15,6 +16,10 @@ import {
   getExtractMessage,
   getExtractProgress
 } from './runtime-bundle'
+import {
+  resolvePackagedFirebaseAuthPath,
+  resolvePackagedServerModulePath as resolvePackagedServerEntry,
+} from './packaged-runtime-paths'
 
 type WorkerMessage =
   | { type: 'ready' }
@@ -24,20 +29,14 @@ let apiWorker: Worker | null = null
 let listening = false
 let status: SidecarStatus = 'idle'
 let startPromise: Promise<void> | null = null
+let lastWorkerError: string | null = null
 
 function resolveWorkerScriptPath(): string {
   return join(__dirname, 'ledgeindex-api-worker.js')
 }
 
 function resolvePackagedServerModulePath(runtimeRoot: string): string {
-  return join(
-    runtimeRoot,
-    'node_modules',
-    '@ledgeindex',
-    'server',
-    'dist',
-    'index.js'
-  )
+  return resolvePackagedServerEntry(runtimeRoot)
 }
 
 async function isReachable(url: string, timeoutMs = 2000): Promise<boolean> {
@@ -132,17 +131,35 @@ async function waitForWorkerReady(worker: Worker, timeoutMs = 180_000): Promise<
 
 async function spawnApiWorker(): Promise<void> {
   let serverModulePath: string | undefined
+  let firebaseAuthModulePath: string | undefined
+  let runtimeRoot: string | undefined
   if (app.isPackaged) {
     status = 'extracting'
-    const runtimeRoot = await ensureProdDesktopServerExtracted()
+    runtimeRoot = await ensureProdDesktopServerExtracted()
     serverModulePath = resolvePackagedServerModulePath(runtimeRoot)
+    firebaseAuthModulePath = resolvePackagedFirebaseAuthPath(runtimeRoot)
+    if (!existsSync(serverModulePath)) {
+      throw new Error(`Packaged server entry missing: ${serverModulePath}`)
+    }
+    if (!existsSync(firebaseAuthModulePath)) {
+      throw new Error(`Packaged auth middleware missing: ${firebaseAuthModulePath}`)
+    }
+  }
+
+  const env = snapshotLedgeindexRuntimeEnv()
+  if (runtimeRoot) {
+    const nodeModules = join(runtimeRoot, 'node_modules')
+    env.NODE_PATH = env.NODE_PATH
+      ? `${nodeModules}${process.platform === 'win32' ? ';' : ':'}${env.NODE_PATH}`
+      : nodeModules
   }
 
   status = 'starting'
   const worker = new Worker(resolveWorkerScriptPath(), {
     workerData: {
-      env: snapshotLedgeindexRuntimeEnv(),
+      env,
       serverModulePath,
+      firebaseAuthModulePath,
       port: DESKTOP_SERVER_PORT,
       host: '127.0.0.1',
       dataDir: ledgeindexDataDir(),
@@ -164,6 +181,7 @@ async function spawnApiWorker(): Promise<void> {
   await waitForWorkerReady(worker)
   listening = true
   status = 'ready'
+  lastWorkerError = null
   console.log(
     `[desktop] @ledgeindex/server ready in worker thread at ${resolveApiOrigin()}`
   )
@@ -215,6 +233,8 @@ export async function ensureInProcessServerListening(): Promise<{
     } catch (error) {
       status = 'error'
       listening = false
+      lastWorkerError =
+        error instanceof Error ? error.message : String(error)
       if (apiWorker) {
         await apiWorker.terminate().catch(() => undefined)
         apiWorker = null
@@ -269,7 +289,8 @@ export async function getInProcessServerHealth(): Promise<SidecarHealth> {
     setupMessage:
       effective === 'extracting' || effective === 'starting'
         ? extractMessage
-        : null
+        : null,
+    lastError: effective === 'error' ? lastWorkerError : null
   }
 }
 

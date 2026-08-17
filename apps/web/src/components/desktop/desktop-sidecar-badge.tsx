@@ -38,7 +38,9 @@ function detailFor(health: SidecarHealth): string {
     case "starting":
       return "Desktop server is starting. First boot can take a bit while packages load.";
     case "error":
-      return "Desktop server failed to start or stopped. Try restarting it.";
+      return health.lastError
+        ? health.lastError
+        : "Desktop server failed to start or stopped. Try restarting it.";
     default:
       return "Local API is off. Click Start or wait for launch.";
   }
