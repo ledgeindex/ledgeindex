@@ -22,7 +22,7 @@ name: Desktop release
 # Desktop Google OAuth loopback (ActiveHue-style; packaged file:// auth):
 #   LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_ID
 #   LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_SECRET
-#   NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL   (hosted API for Public tab, non-localhost)
+#   NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL   (hosted API for Public tab, non-localhost — required for release builds)
 
 on:
   push:
