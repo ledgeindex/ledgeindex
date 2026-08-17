@@ -2,8 +2,14 @@ import { logInfo, logVerbose } from "../lib/logger.js";
 import { embedQuery } from "../vector/embedding.js";
 import { LEDGEINDEX_CHUNKS_INDEX } from "../vector/constants.js";
 import { ensureChunksIndex, getVectorStore } from "../vector/store.js";
-import type { MetadataCatalog, MetadataCatalogPage } from "./metadata-catalog.js";
-import { getMetadataCatalog, saveMetadataCatalog } from "./metadata-catalog-store.js";
+import type {
+  MetadataCatalog,
+  MetadataCatalogPage,
+} from "./metadata-catalog.js";
+import {
+  getMetadataCatalog,
+  saveMetadataCatalog,
+} from "./metadata-catalog-store.js";
 import {
   buildMetadataCatalog,
   buildPageCatalogFromMetadata,
@@ -18,7 +24,7 @@ const REBUILD_QUERY_TERMS = [
 ];
 
 async function fetchChunkMetadataForSource(
-  sourceId: string,
+  sourceId: string
 ): Promise<Record<string, unknown>[]> {
   await ensureChunksIndex();
   const store = getVectorStore();
@@ -45,7 +51,7 @@ async function fetchChunkMetadataForSource(
 
 /** Backfill page list for catalogs indexed before pages were stored. */
 export async function rebuildPageCatalogFromVector(
-  sourceId: string,
+  sourceId: string
 ): Promise<MetadataCatalogPage[]> {
   const metadata = await fetchChunkMetadataForSource(sourceId);
   const pages = buildPageCatalogFromMetadata(metadata);
@@ -60,7 +66,7 @@ export async function rebuildPageCatalogFromVector(
 }
 
 export async function rebuildFullCatalogFromVector(
-  sourceId: string,
+  sourceId: string
 ): Promise<MetadataCatalog | null> {
   const metadata = await fetchChunkMetadataForSource(sourceId);
   if (metadata.length === 0) return null;
@@ -78,7 +84,7 @@ export async function rebuildFullCatalogFromVector(
 }
 
 export async function ensureCatalogHasPages(
-  sourceId: string,
+  sourceId: string
 ): Promise<MetadataCatalog | null> {
   const catalog = await getMetadataCatalog(sourceId);
   if (catalog?.pages?.length) {
