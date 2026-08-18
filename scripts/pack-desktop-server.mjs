@@ -3,12 +3,12 @@
  * Build + stage @ledgeindex/desktop-server for electron-builder extraResources.
  *
  * Output:
- *   apps/desktop/build/desktop-server/   — staged tree (smoke + debug)
- *   apps/desktop/build/desktop-server.tar — single archive for electron-builder
- *     (installer ships the .tar; app extracts to userData on first launch)
+ *   apps/desktop/build/desktop-server/   — staged tree (mac ships this; smoke + debug)
+ *   apps/desktop/build/desktop-server.tar — Win/Linux only (NSIS; app extracts to userData)
+ *   apps/desktop/build/desktop-server.meta.json — file count for Win/Linux extract progress
  *
  * Spawned in prod as: ELECTRON_RUN_AS_NODE=1 <electron> dist/start.js
- * with cwd = userData/desktop-server (extracted from the archive)
+ * with cwd = Resources/desktop-server (mac) or userData/desktop-server (win/linux)
  *
  * Copies a production dependency tree by resolving each package's dependencies
  * from that package's directory (Node's real module algorithm via createRequire),
@@ -34,19 +34,11 @@ import { tmpdir } from "node:os";
 import { builtinModules, createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { signDarwinMachOInDir } from "./sign-darwin-macho.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const hostDir = join(root, "hosts", "desktop-server");
 const dest = join(root, "apps", "desktop", "build", "desktop-server");
-const macEntitlements = join(
-  root,
-  "apps",
-  "desktop",
-  "resources",
-  "entitlements.mac.plist",
-);
 
 /**
  * LedgeIndex-only module roots for rare fallbacks when createRequire fails.
@@ -1001,22 +993,7 @@ async function main() {
   log("staged", relative(root, dest));
   await smokeStagedServer();
 
-  // Apple notarization unpacks desktop-server.tar and rejects unsigned Mach-O.
-  // Sign .node/.dylib here (before tar) when a Developer ID is available.
-  const requireMacNativeSign =
-    process.platform === "darwin" &&
-    Boolean(
-      process.env.CSC_LINK?.trim() ||
-        process.env.APPLE_ID?.trim() ||
-        process.env.LEDGEINDEX_REQUIRE_MAC_NATIVE_SIGN === "1",
-    );
-  signDarwinMachOInDir(dest, {
-    entitlementsPath: macEntitlements,
-    required: requireMacNativeSign,
-    log: (msg) => log(`codesign: ${msg}`),
-  });
-
-  // Count files for first-launch extract progress UI.
+  // Count files for first-launch extract progress UI (Windows/Linux tar path).
   function countFiles(dir) {
     let n = 0;
     for (const ent of readdirSync(dir, { withFileTypes: true })) {
@@ -1034,10 +1011,15 @@ async function main() {
   );
   log(`meta ${relative(root, metaPath)} (fileCount=${fileCount})`);
 
-  // One archive for the installer: NSIS + Defender choke on ~50k node_modules files.
-  // Uncompressed tar — electron-builder/NSIS already compresses the payload; gzip
-  // here only slows pack + first-launch extract for little gain.
-  // Electron extracts this on first launch into userData (see sidecars.ts).
+  // macOS ships the exploded stage dir (electron-builder signs natives).
+  // Windows/Linux ship a single tar (NSIS + Defender choke on ~50k files).
+  if (process.platform === "darwin") {
+    log(
+      "skip desktop-server.tar on macOS — electron-builder ships build/desktop-server/",
+    );
+    return;
+  }
+
   const archivePath = join(dirname(dest), "desktop-server.tar");
   if (existsSync(archivePath)) {
     rmSync(archivePath, { force: true });

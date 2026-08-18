@@ -15,17 +15,11 @@ files:
   - '!{.eslintcache,eslint.config.mjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{.env,.env.*,.npmrc,pnpm-lock.yaml}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
-# Packaged sidecar: ship ONE archive (not ~50k node_modules files).
-# NSIS + Windows Defender install time scales with file count; a single .tar
-# keeps the installer fast. Electron extracts to userData on first launch
-# (see src/main/sidecars.ts / runtime-bundle.ts).
-# Mac notarization: pack-desktop-server.mjs codesigns .node/.dylib before tar
-# (notarytool inspects nested archives; electron-builder cannot deep-sign tar).
+# Sidecar packaging differs by OS (see win/linux/mac.extraResources):
+# - Windows/Linux: one desktop-server.tar (NSIS/Defender choke on ~50k files).
+# - macOS: exploded build/desktop-server/ so electron-builder can codesign
+#   .node/.dylib for notarization (it cannot deep-sign inside a tar).
 extraResources:
-  - from: build/desktop-server.tar
-    to: desktop-server.tar
-  - from: build/desktop-server.meta.json
-    to: desktop-server.meta.json
   # Tray + runtime icons at resources/ root (process.resourcesPath/icon.png).
   # buildResources alone only feeds electron-builder installers — it does not copy these.
   - from: resources/icon.png
@@ -37,6 +31,11 @@ asarUnpack:
 win:
   executableName: LedgeIndex
   icon: resources/icon.ico
+  extraResources:
+    - from: build/desktop-server.tar
+      to: desktop-server.tar
+    - from: build/desktop-server.meta.json
+      to: desktop-server.meta.json
 nsis:
   artifactName: LedgeIndex-${version}-setup.${ext}
   shortcutName: ${productName}
@@ -56,6 +55,10 @@ mac:
   # APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
   notarize: true
   artifactName: LedgeIndex-${version}-mac-${arch}.${ext}
+  # Exploded tree — electron-builder signs natives during app codesign.
+  extraResources:
+    - from: build/desktop-server
+      to: desktop-server
   target:
     - target: dmg
       arch:
@@ -76,6 +79,11 @@ linux:
     - deb
   maintainer: ledgeindex.com
   category: Utility
+  extraResources:
+    - from: build/desktop-server.tar
+      to: desktop-server.tar
+    - from: build/desktop-server.meta.json
+      to: desktop-server.meta.json
 appImage:
   artifactName: LedgeIndex-${version}.${ext}
 npmRebuild: false

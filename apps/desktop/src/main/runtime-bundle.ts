@@ -6,6 +6,7 @@ import { app } from 'electron'
 const ARCHIVE_NAME = 'desktop-server.tar'
 const META_NAME = 'desktop-server.meta.json'
 const VERSION_STAMP = '.ledgeindex-sidecar-version'
+const BUNDLED_DIR_NAME = 'desktop-server'
 
 let setupProgress: number | null = null
 let setupMessage: string | null = null
@@ -24,6 +25,10 @@ function resolveSidecarArchivePath(): string {
 
 function resolveSidecarMetaPath(): string {
   return join(process.resourcesPath, META_NAME)
+}
+
+function resolveBundledDesktopServerDir(): string {
+  return join(process.resourcesPath, BUNDLED_DIR_NAME)
 }
 
 function readExpectedFileCount(): number | null {
@@ -98,8 +103,21 @@ function extractTarWithProgress(
   })
 }
 
-/** Packaged: extract desktop-server.tar into userData for @ledgeindex/* imports. */
+/**
+ * Packaged runtime root for @ledgeindex/* imports.
+ * - macOS: exploded `Resources/desktop-server` (signed by electron-builder).
+ * - Windows/Linux: extract `desktop-server.tar` into userData on first launch.
+ */
 export async function ensureProdDesktopServerExtracted(): Promise<string> {
+  const bundledDir = resolveBundledDesktopServerDir()
+  if (existsSync(join(bundledDir, 'dist', 'start.js'))) {
+    console.log('[desktop] using bundled desktop-server at', bundledDir)
+    setupProgress = null
+    setupMessage = null
+    assertProdDesktopServerReady(bundledDir)
+    return bundledDir
+  }
+
   const runtimeDir = resolveProdDesktopServerDir()
   const archive = resolveSidecarArchivePath()
   const stampPath = join(runtimeDir, VERSION_STAMP)
@@ -123,17 +141,10 @@ export async function ensureProdDesktopServerExtracted(): Promise<string> {
     return runtimeDir
   }
 
-  const legacyDir = join(process.resourcesPath, 'desktop-server')
-  if (!existsSync(archive) && existsSync(join(legacyDir, 'dist', 'start.js'))) {
-    console.log('[desktop] using legacy exploded desktop-server at', legacyDir)
-    setupProgress = null
-    setupMessage = null
-    return legacyDir
-  }
-
   if (!existsSync(archive)) {
     throw new Error(
-      `Missing ${ARCHIVE_NAME} at ${archive}. Rebuild with pack-desktop-server.mjs.`
+      `Missing ${ARCHIVE_NAME} at ${archive} (and no bundled ${BUNDLED_DIR_NAME}/). ` +
+        `Rebuild with pack-desktop-server.mjs.`
     )
   }
 

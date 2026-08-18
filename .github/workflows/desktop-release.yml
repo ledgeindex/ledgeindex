@@ -9,8 +9,8 @@ name: Desktop release
 #
 # Matrix: Windows + macOS. Sidecar native deps are packed per runner OS (correct).
 # Mac: signed + notarized when CSC_LINK / Apple notarize secrets are set.
-# Native .node/.dylib inside desktop-server.tar are codesigned during the pack
-# step (CSC_LINK) — notarytool rejects unsigned binaries nested in that archive.
+# Mac ships exploded desktop-server/ so electron-builder can codesign natives;
+# Windows ships desktop-server.tar (extract on first launch).
 #
 # Required GitHub Actions secrets (client Firebase config — same names as apps/web/.env.example):
 #   NEXT_PUBLIC_FIREBASE_API_KEY
@@ -84,11 +84,6 @@ jobs:
         run: node scripts/pack-desktop-server.mjs
         env:
           PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
-          # Mac: sign Mach-O natives inside the staged tree *before* tar so
-          # notarytool accepts desktop-server.tar nested under Resources.
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-          APPLE_ID: ${{ secrets.APPLE_ID }}
 
       - name: Build desktop
         run: npm run build -w @ledgeindex/desktop
