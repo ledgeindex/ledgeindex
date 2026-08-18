@@ -5,6 +5,7 @@ export const researchLensIds = [
   "docs_identity",
   "capabilities",
   "pricing",
+  "business_model",
   "integrations",
   "trust",
   "gtm",
@@ -98,6 +99,75 @@ export const pricingLensSchema = z.object({
   ),
   enterpriseOrCustom: z.string().optional(),
   trialOrFreeTier: z.string().optional(),
+});
+
+/**
+ * Full business-model picture: what is sold, how customers are acquired and
+ * onboarded, and how value is monetized. NOT a price-table dump (`pricing`)
+ * and NOT buyer JTBD/problems (`business_usage`). Overlaps lightly with `gtm`
+ * (CTAs) but focuses on the operating model, not just marketing buttons.
+ */
+export const businessModelLensSchema = z.object({
+  /** Dominant commercial shape, e.g. SaaS subscription, usage-based, freemium, marketplace, services, open-core. */
+  primaryModel: z.string(),
+  /**
+   * The main thing they are known for / the core value customers hire them for —
+   * not a feature list, the flagship promise (e.g. "accurate docs Q&A that cites sources").
+   */
+  knownFor: z.string(),
+  /** 3–6 sentences covering offering + acquisition + onboarding + monetization. */
+  summary: z.string(),
+  /** What product / service / capability is actually sold to customers. */
+  whatIsSold: z.object({
+    /** Plain-language product or service sold (agents, API, platform seats, …). */
+    offering: z.string(),
+    /** The primary customer value / outcome they sell (deflection, faster onboarding, accurate answers, …). */
+    valueProposition: z.string().optional(),
+    /** Delivery shape if stated: hosted SaaS, API, embedded widget, MCP, professional services, … */
+    delivery: z.string().optional(),
+    /** Who the customer / buyer is, if stated. */
+    customer: z.string().optional(),
+    citation: citationSchema.optional(),
+  }),
+  /** How they attract and convert customers (not a full marketing plan — only what pages show). */
+  customerAcquisition: z.object({
+    /** Dominant motion: self-serve, sales-led, PLG, content/inbound, partner, … */
+    motion: z.string(),
+    /** Concrete acquisition / conversion channels named on pages (demo, trial, content try, partners, …). */
+    channels: z.array(z.string()).optional(),
+    citation: citationSchema.optional(),
+  }),
+  /** How a new customer gets from interest → live / first value. */
+  onboarding: z.object({
+    /** Steps or path described on site (connect sources, try with content, book demo, go live in N days, …). */
+    path: z.string(),
+    /** Time-to-value claims if stated. */
+    timeToValue: z.string().optional(),
+    citation: citationSchema.optional(),
+  }),
+  revenueStreams: z.array(
+    z.object({
+      name: z.string(),
+      description: z.string(),
+      /**
+       * main = core how they make money
+       * top = important secondary stream
+       * supporting = niche / add-on
+       */
+      priority: researchPrioritySchema,
+      /** Who pays (buyer role or customer type), if stated */
+      whoPays: z.string().optional(),
+      /** What is metered or packaged (seats, queries, tokens, projects, …) */
+      valueMetric: z.string().optional(),
+      citation: citationSchema,
+    }),
+  ),
+  /** How commercial packaging is presented (tiers, custom, marketplace fees, …) */
+  packaging: z.string().optional(),
+  freeOrTrial: z.string().optional(),
+  enterprisePath: z.string().optional(),
+  notes: z.string().optional(),
+  citations: z.array(citationSchema).optional(),
 });
 
 export const integrationsLensSchema = z.object({
@@ -316,6 +386,7 @@ export type IdentityLensOutput = z.infer<typeof identityLensSchema>;
 export type DocsIdentityLensOutput = z.infer<typeof docsIdentityLensSchema>;
 export type CapabilitiesLensOutput = z.infer<typeof capabilitiesLensSchema>;
 export type PricingLensOutput = z.infer<typeof pricingLensSchema>;
+export type BusinessModelLensOutput = z.infer<typeof businessModelLensSchema>;
 export type IntegrationsLensOutput = z.infer<typeof integrationsLensSchema>;
 export type TrustLensOutput = z.infer<typeof trustLensSchema>;
 export type GtmLensOutput = z.infer<typeof gtmLensSchema>;
@@ -336,6 +407,7 @@ export type LensOutputById = {
   docs_identity: DocsIdentityLensOutput;
   capabilities: CapabilitiesLensOutput;
   pricing: PricingLensOutput;
+  business_model: BusinessModelLensOutput;
   integrations: IntegrationsLensOutput;
   trust: TrustLensOutput;
   gtm: GtmLensOutput;
@@ -418,6 +490,27 @@ Order the array: all main first, then top, then supporting. Merge duplicates.`,
       "Select pricing, plans, and billing pages. ALWAYS include the site root/home URL (/) when it appears in the catalog — many sites show plans or 'contact sales' only on the homepage. Include product pages only if they contain plan tables or explicit prices. Prefer 1–6 pages; never return an empty selection if the homepage is in the list.",
     synthInstructions: `${BASE_SYNTH_RULES} Extract plans with price text exactly as shown; do not invent numbers.`,
     schema: pricingLensSchema,
+  },
+  business_model: {
+    id: "business_model",
+    label: "Business model",
+    pickMessage:
+      "Select pages that explain the FULL business model — not only pricing: (1) what product/service is sold (home, product, platform, solutions, deploy), (2) how customers are acquired (demo, trial, try-with-content, signup, contact, partners, customers/case studies as proof of motion), (3) how they onboard / get to first value (get started, try, create workspace, connect sources, go-live claims), (4) how they monetize (pricing, plans, billing, enterprise). ALWAYS include homepage (/) when present. Prefer 5–12 pages. SKIP pure API reference and deep install docs unless they describe commercial packaging or onboarding path. Bias to pages that answer: what is sold, who buys, how they get customers, how onboarding works, and how money is made.",
+    synthInstructions: `${BASE_SYNTH_RULES}
+Your job is the FULL BUSINESS MODEL: flagship value + offering + customer acquisition + onboarding + monetization.
+This is NOT a price-table dump (pricing lens), NOT buyer JTBD/problems (business_usage), and NOT only CTA buttons (gtm) — cover the operating model.
+
+Fill ALL of these:
+1. primaryModel (required): dominant shape, e.g. "B2B SaaS + usage", "freemium + enterprise", "marketplace", "services".
+2. knownFor (required): ONE clear sentence — the main thing they are known for / the flagship value customers hire them for. Not a feature dump. Prefer their strongest marketed promise (e.g. "accurate technical Q&A grounded in your docs with citations").
+3. summary (required): 3–6 sentences covering what is sold, how customers are acquired, how they onboard, and how revenue works.
+4. whatIsSold (required): offering (what product/service), optional valueProposition (outcome sold), optional delivery (hosted SaaS, API, widget, MCP, services…), optional customer (who buys), citation when possible.
+5. customerAcquisition (required): motion (self-serve / sales-led / PLG / inbound / partner…), optional channels array (demo, free trial, content try, content marketing, partners…), citation when possible.
+6. onboarding (required): path from interest → live/first value as pages describe it; optional timeToValue; citation when possible.
+7. revenueStreams: ranked with priority "main"|"top"|"supporting" on every item. Prefer 1–3 main. Include whoPays / valueMetric when stated.
+8. packaging, freeOrTrial, enterprisePath when pages support them.
+9. Do not invent prices. If public pricing is absent, say so in notes but still fill knownFor / offering / acquisition / onboarding from marketing pages.`,
+    schema: businessModelLensSchema,
   },
   integrations: {
     id: "integrations",

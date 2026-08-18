@@ -24,6 +24,7 @@ import { registerAutoUpdate, scheduleStartupUpdateCheck } from './auto-update'
 import {
   getAppPreferences,
   setAppPreferences,
+  syncLoginItemFromPreferences,
   type AppPreferences
 } from './app-preferences'
 import { createAppTray, destroyAppTray } from './tray'
@@ -144,6 +145,7 @@ function createWindow(): void {
 
 app.whenReady().then(async () => {
   electronApp.setAppUserModelId('com.ledgeindex.desktop')
+  syncLoginItemFromPreferences()
   installDevApplicationMenu(() => mainWindow)
 
   app.on('browser-window-created', (_, window) => {

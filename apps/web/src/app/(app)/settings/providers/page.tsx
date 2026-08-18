@@ -11,6 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 
 type AppPreferences = {
+  openAtLogin: boolean;
   startInTray: boolean;
   closeToTray: boolean;
 };
@@ -96,18 +97,37 @@ function DesktopTrayPreferences({
   return (
     <div className="space-y-3 rounded-xl border border-border bg-card-solid p-4 shadow-card">
       <div>
-        <h2 className="text-sm font-semibold text-foreground">System tray</h2>
+        <h2 className="text-sm font-semibold text-foreground">Desktop</h2>
         <p className="mt-1 text-xs text-muted">
-          Keep LedgeIndex running in the tray when the window is closed.
+          Launch with your computer and keep LedgeIndex in the system tray.
         </p>
       </div>
       {!prefsApiReady ? (
         <p className="text-sm text-muted">
-          Fully quit and restart the desktop app to enable tray settings
+          Fully quit and restart the desktop app to enable these settings
           (preload update).
         </p>
       ) : (
         <>
+          <label className="flex cursor-pointer items-start justify-between gap-4">
+            <span className="min-w-0">
+              <span className="block text-sm font-medium text-foreground">
+                Autostart app
+              </span>
+              <span className="mt-0.5 block text-xs text-muted">
+                Launch LedgeIndex when your computer starts.
+              </span>
+            </span>
+            <input
+              type="checkbox"
+              className="mt-1 size-4"
+              checked={prefs?.openAtLogin ?? false}
+              disabled={saving || prefs == null}
+              onChange={(event) =>
+                void toggle("openAtLogin", event.target.checked)
+              }
+            />
+          </label>
           <label className="flex cursor-pointer items-start justify-between gap-4">
             <span className="min-w-0">
               <span className="block text-sm font-medium text-foreground">

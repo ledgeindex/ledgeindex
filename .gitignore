@@ -63,3 +63,7 @@ top-typescript-docs.*.json
 # Exclude-pattern proposer outputs (local scratch; results live in top-typescript-docs / catalog)
 docs-exclude-*.json
 docs-exclude-*.patterns.json
+
+# Repomix pack output (config stays tracked)
+repomix-output.*
+repomix-*.xml

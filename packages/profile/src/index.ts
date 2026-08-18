@@ -36,4 +36,5 @@ export {
   type IdentityLensOutput,
   type DocsIdentityLensOutput,
   type PricingLensOutput,
+  type BusinessModelLensOutput,
 } from "./research/research-lenses.js";

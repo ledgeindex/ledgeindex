@@ -41,12 +41,22 @@ const ledgeindexDesktop = {
     ipcRenderer.invoke('settings:getProviderKeyStatus'),
   saveProviderKeys: (keys: ProviderKeyInput): Promise<ProviderKeyStatus> =>
     ipcRenderer.invoke('settings:saveProviderKeys', keys),
-  getAppPreferences: (): Promise<{ startInTray: boolean; closeToTray: boolean }> =>
-    ipcRenderer.invoke('settings:getAppPreferences'),
+  getAppPreferences: (): Promise<{
+    openAtLogin: boolean
+    startInTray: boolean
+    closeToTray: boolean
+  }> => ipcRenderer.invoke('settings:getAppPreferences'),
   setAppPreferences: (
-    patch: Partial<{ startInTray: boolean; closeToTray: boolean }>
-  ): Promise<{ startInTray: boolean; closeToTray: boolean }> =>
-    ipcRenderer.invoke('settings:setAppPreferences', patch),
+    patch: Partial<{
+      openAtLogin: boolean
+      startInTray: boolean
+      closeToTray: boolean
+    }>
+  ): Promise<{
+    openAtLogin: boolean
+    startInTray: boolean
+    closeToTray: boolean
+  }> => ipcRenderer.invoke('settings:setAppPreferences', patch),
   getAppVersion: (): Promise<string> => ipcRenderer.invoke('update:getVersion'),
   /** System-browser Google OAuth → ID token for Firebase signInWithCredential. */
   oauthGoogleSignIn: (): Promise<string> => ipcRenderer.invoke('oauth:google-signin'),

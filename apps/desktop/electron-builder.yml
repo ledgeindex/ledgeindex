@@ -46,10 +46,13 @@ nsis:
 mac:
   icon: resources/icon.icns
   category: public.app-category.productivity
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: resources/entitlements.mac.plist
   entitlementsInherit: resources/entitlements.mac.plist
-  # Unsigned CI builds are fine for early downloads (right-click → Open).
-  # Set CSC_LINK / Apple ID secrets later for notarization.
-  notarize: false
+  # Requires GitHub Actions secrets: CSC_LINK, CSC_KEY_PASSWORD,
+  # APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+  notarize: true
   artifactName: LedgeIndex-${version}-mac-${arch}.${ext}
   target:
     - target: dmg

@@ -8,7 +8,7 @@ name: Desktop release
 # So we package with --publish never, then attach artifacts to $GITHUB_REF_NAME via gh.
 #
 # Matrix: Windows + macOS. Sidecar native deps are packed per runner OS (correct).
-# Mac builds are unsigned until Apple signing secrets are added (Gatekeeper: right-click Open).
+# Mac: signed + notarized when CSC_LINK / Apple notarize secrets are set.
 #
 # Required GitHub Actions secrets (client Firebase config — same names as apps/web/.env.example):
 #   NEXT_PUBLIC_FIREBASE_API_KEY
@@ -23,6 +23,12 @@ name: Desktop release
 #   LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_ID
 #   LEDGEINDEX_GOOGLE_DESKTOP_CLIENT_SECRET
 #   NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL   (hosted API for Public tab, non-localhost — required for release builds)
+# Mac code signing + notarization (macos-latest job):
+#   CSC_LINK                         (base64 of Developer ID Application .p12)
+#   CSC_KEY_PASSWORD                 (.p12 export password)
+#   APPLE_ID                         (Apple ID email)
+#   APPLE_APP_SPECIFIC_PASSWORD      (appleid.apple.com app-specific password)
+#   APPLE_TEAM_ID                    (10-char Team ID)
 
 on:
   push:
@@ -96,6 +102,13 @@ jobs:
       - name: Package installer
         working-directory: apps/desktop
         shell: bash
+        env:
+          # Mac: Developer ID sign + notarize (ignored on Windows).
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx electron-builder --config electron-builder.yml ${{ matrix.electron_builder_args }} --publish never
 
       - name: Publish GitHub Release
@@ -144,7 +157,7 @@ jobs:
             NOTES="$(printf '%s\n\n%s\n%s' \
               "LedgeIndex desktop ${VERSION}" \
               'Windows: `LedgeIndex-*-setup.exe`' \
-              'macOS: `LedgeIndex-*-mac-*.dmg` (Apple Silicon). Unsigned until notarization — right-click the app → Open the first time.')"
+              'macOS: `LedgeIndex-*-mac-*.dmg` (Apple Silicon, signed + notarized).')"
             gh release create "$TAG" \
               --repo ledgeindex/ledgeindex \
               --title "LedgeIndex Desktop ${VERSION}" \

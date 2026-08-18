@@ -1,0 +1,45 @@
+{
+  "$schema": "https://repomix.com/schemas/latest/schema.json",
+  "include": [
+    "apps/**/*.{ts,tsx,js,mjs,cjs}",
+    "packages/**/*.{ts,tsx,js,mjs,cjs}",
+    "hosts/**/*.{ts,tsx,js,mjs,cjs}",
+    "scripts/**/*.{ts,js,mjs}"
+  ],
+  "ignore": {
+    "customPatterns": [
+      "**/node_modules/**",
+      "**/.next/**",
+      "**/out/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/.turbo/**",
+      "**/.data/**",
+      "**/.cache/**",
+      "**/coverage/**",
+      "**/results/**",
+      "**/*.db",
+      "**/*.db-shm",
+      "**/*.db-wal",
+      "**/public/**",
+      "**/resources/**",
+      "**/*.md",
+      "**/*.mdx",
+      "**/*.json",
+      "**/*.yaml",
+      "**/*.yml",
+      "**/*.webp",
+      "**/*.png",
+      "**/*.jpg",
+      "**/*.icns"
+    ]
+  },
+  "output": {
+    "filePath": "repomix-output.xml",
+    "style": "xml",
+    "removeComments": true,
+    "showLineNumbers": false,
+    "fileSummary": true,
+    "directoryStructure": true
+  }
+}

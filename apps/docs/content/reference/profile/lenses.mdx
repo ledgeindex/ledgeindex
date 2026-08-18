@@ -59,6 +59,7 @@ const lens = getResearchLens("capabilities");
 |----|-------|----------------|
 | `identity` | Positioning & ICP | Category, one-liner, buyers, segments |
 | `pricing` | Pricing | Plans, price text, trial / enterprise signals |
+| `business_model` | Business model | Offering, acquisition, onboarding, monetization |
 | `capabilities` | Product & features | Ranked capabilities (`main` / `top` / `supporting`) |
 | `integrations` | Integrations | Third-party tools, connectors, channels |
 | `trust` | Trust & security | Compliance, security, privacy claims |
@@ -168,6 +169,53 @@ After `profileSite`, each lens merges into `profile.<lensId>`. Shapes below are 
   ],
   "enterpriseOrCustom": "Contact sales for SSO, VPC, and SLA.",
   "trialOrFreeTier": "Starter tier is free; Team includes 14-day trial."
+}
+```
+
+### `business_model`
+
+```json
+{
+  "primaryModel": "B2B SaaS subscription with usage-based overages",
+  "knownFor": "Accurate technical Q&A grounded in your docs with citations and content-gap flags",
+  "summary": "Acme sells a hosted docs-AI platform. Customers are acquired via free evaluation and sales demos, onboard by connecting sources, and pay via self-serve tiers plus enterprise contracts metered by indexed pages.",
+  "whatIsSold": {
+    "offering": "Hosted AI assistants over technical documentation",
+    "valueProposition": "Deflect support and help developers self-serve without hallucinations",
+    "delivery": "SaaS + embeddable chat / MCP",
+    "customer": "Devtools and documentation teams",
+    "citation": { "url": "https://acme.example/" }
+  },
+  "customerAcquisition": {
+    "motion": "Product-led entry with sales-assisted close",
+    "channels": ["Try with my content", "Book a demo", "Customer case studies"],
+    "citation": { "url": "https://acme.example/" }
+  },
+  "onboarding": {
+    "path": "Connect docs sources → evaluate answers → go live on site / support / MCP",
+    "timeToValue": "Go live in less than 7 days",
+    "citation": { "url": "https://acme.example/" }
+  },
+  "revenueStreams": [
+    {
+      "name": "Self-serve SaaS plans",
+      "description": "Monthly/annual subscription for Team and higher tiers.",
+      "priority": "main",
+      "whoPays": "Product / engineering teams",
+      "valueMetric": "Indexed pages + sources",
+      "citation": { "url": "https://acme.example/pricing" }
+    },
+    {
+      "name": "Enterprise contracts",
+      "description": "Custom quotes for SSO, VPC, and SLA.",
+      "priority": "top",
+      "whoPays": "Enterprise IT / security",
+      "citation": { "url": "https://acme.example/pricing" }
+    }
+  ],
+  "packaging": "Public tiers plus contact-sales enterprise.",
+  "freeOrTrial": "Free Starter; 14-day Team trial.",
+  "enterprisePath": "Contact sales for SSO, VPC, SLA."
 }
 ```
 

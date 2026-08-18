@@ -71,12 +71,21 @@ export type LedgeIndexDesktopApi = {
     keys: DesktopProviderKeyInput,
   ) => Promise<DesktopProviderKeyStatus>;
   getAppPreferences?: () => Promise<{
+    openAtLogin: boolean;
     startInTray: boolean;
     closeToTray: boolean;
   }>;
   setAppPreferences?: (
-    patch: Partial<{ startInTray: boolean; closeToTray: boolean }>,
-  ) => Promise<{ startInTray: boolean; closeToTray: boolean }>;
+    patch: Partial<{
+      openAtLogin: boolean;
+      startInTray: boolean;
+      closeToTray: boolean;
+    }>,
+  ) => Promise<{
+    openAtLogin: boolean;
+    startInTray: boolean;
+    closeToTray: boolean;
+  }>;
   getAppVersion?: () => Promise<string>;
   /** Packaged desktop: Google OAuth loopback → Firebase ID token. */
   oauthGoogleSignIn?: () => Promise<string>;

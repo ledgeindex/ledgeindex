@@ -10,7 +10,10 @@ export type SiteProfileLensId =
   | "main_use_cases"
   | "package_primitives_usage"
   | "package_usage_examples"
-  | "business_usage";
+  | "business_usage"
+  | "business_model"
+  | "pricing"
+  | "gtm";
 
 export type SiteProfileLensOption = {
   id: SiteProfileLensId;
@@ -76,6 +79,21 @@ const LENS_BY_ID: Record<SiteProfileLensId, SiteProfileLensOption> = {
     label: "Business usage",
     description: "Problems teams solve with it",
   },
+  business_model: {
+    id: "business_model",
+    label: "Business model",
+    description: "Offering, acquisition, onboarding, monetization",
+  },
+  pricing: {
+    id: "pricing",
+    label: "Pricing",
+    description: "Plans, price text, trial signals",
+  },
+  gtm: {
+    id: "gtm",
+    label: "Go-to-market",
+    description: "Self-serve vs sales, CTAs, demo/trial",
+  },
 };
 
 export const SITE_PROFILE_LENS_GROUPS: SiteProfileLensGroup[] = [
@@ -101,8 +119,8 @@ export const SITE_PROFILE_LENS_GROUPS: SiteProfileLensGroup[] = [
   {
     id: "business",
     label: "Business",
-    description: "Outcomes and buyer framing",
-    lensIds: ["business_usage"],
+    description: "Outcomes, monetization, and how they sell",
+    lensIds: ["business_usage", "business_model", "pricing", "gtm"],
   },
 ];
 
@@ -127,6 +145,9 @@ export const FULL_SITE_PROFILE_LENS_IDS: SiteProfileLensId[] = [
   "package_primitives_usage",
   "package_usage_examples",
   "business_usage",
+  "business_model",
+  "pricing",
+  "gtm",
 ];
 
 export const PACKAGE_SITE_PROFILE_LENS_IDS: SiteProfileLensId[] = [
