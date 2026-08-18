@@ -34,11 +34,19 @@ import { tmpdir } from "node:os";
 import { builtinModules, createRequire } from "node:module";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
+import { signDarwinMachOInDir } from "./sign-darwin-macho.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
 const hostDir = join(root, "hosts", "desktop-server");
 const dest = join(root, "apps", "desktop", "build", "desktop-server");
+const macEntitlements = join(
+  root,
+  "apps",
+  "desktop",
+  "resources",
+  "entitlements.mac.plist",
+);
 
 /**
  * LedgeIndex-only module roots for rare fallbacks when createRequire fails.
@@ -992,6 +1000,21 @@ async function main() {
 
   log("staged", relative(root, dest));
   await smokeStagedServer();
+
+  // Apple notarization unpacks desktop-server.tar and rejects unsigned Mach-O.
+  // Sign .node/.dylib here (before tar) when a Developer ID is available.
+  const requireMacNativeSign =
+    process.platform === "darwin" &&
+    Boolean(
+      process.env.CSC_LINK?.trim() ||
+        process.env.APPLE_ID?.trim() ||
+        process.env.LEDGEINDEX_REQUIRE_MAC_NATIVE_SIGN === "1",
+    );
+  signDarwinMachOInDir(dest, {
+    entitlementsPath: macEntitlements,
+    required: requireMacNativeSign,
+    log: (msg) => log(`codesign: ${msg}`),
+  });
 
   // Count files for first-launch extract progress UI.
   function countFiles(dir) {

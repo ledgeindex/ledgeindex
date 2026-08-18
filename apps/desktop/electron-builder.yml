@@ -18,7 +18,9 @@ files:
 # Packaged sidecar: ship ONE archive (not ~50k node_modules files).
 # NSIS + Windows Defender install time scales with file count; a single .tar
 # keeps the installer fast. Electron extracts to userData on first launch
-# (see src/main/sidecars.ts).
+# (see src/main/sidecars.ts / runtime-bundle.ts).
+# Mac notarization: pack-desktop-server.mjs codesigns .node/.dylib before tar
+# (notarytool inspects nested archives; electron-builder cannot deep-sign tar).
 extraResources:
   - from: build/desktop-server.tar
     to: desktop-server.tar
