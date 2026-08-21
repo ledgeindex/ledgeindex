@@ -1,25 +1,17 @@
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
-export function resolvePackagedServerModulePath(runtimeRoot: string): string {
-  return join(
-    runtimeRoot,
-    'node_modules',
-    '@ledgeindex',
-    'server',
-    'dist',
-    'index.js',
-  )
+/**
+ * The packaged server is a single bundled file (scripts/bundle-desktop-server.mjs).
+ * It exports both the server factory and the auth middleware, so the worker
+ * loads one module instead of resolving a node_modules tree.
+ */
+export const PACKAGED_BUNDLE_REL = 'server.cjs'
+
+export function resolvePackagedBundlePath(runtimeRoot: string): string {
+  return join(runtimeRoot, PACKAGED_BUNDLE_REL)
 }
 
-export function resolvePackagedFirebaseAuthPath(runtimeRoot: string): string {
-  return join(
-    runtimeRoot,
-    'node_modules',
-    '@ledgeindex',
-    'docs',
-    'dist',
-    'runtime',
-    'middleware',
-    'firebase-auth.js',
-  )
+export function isPackagedRuntimeReady(runtimeRoot: string): boolean {
+  return existsSync(resolvePackagedBundlePath(runtimeRoot))
 }

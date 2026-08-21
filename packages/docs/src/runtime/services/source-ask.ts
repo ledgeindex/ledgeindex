@@ -77,6 +77,12 @@ export type AskSourceOptions = {
   relevanceThreshold?: number | null;
   /** Include below-threshold rerank hits when strict pruning finds nothing. */
   includeWeakEvidence?: boolean;
+  /** Abort in-flight agent stream / generate. */
+  abortSignal?: AbortSignal;
+};
+
+export type AskSourceStreamHandlers = {
+  onToken: (text: string) => void | Promise<void>;
 };
 
 function formatRetrieveOnlyAnswer(
@@ -304,6 +310,7 @@ async function askSourceInner(
   const response = await agent.generate(message, {
     requestContext,
     maxSteps: 1,
+    ...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
   });
 
   const meta = readRetrievalMeta(requestContext);
@@ -332,11 +339,7 @@ async function askSourceInner(
   });
 }
 
-export async function askSource(
-  sourceId: string,
-  message: string,
-  options?: AskSourceOptions,
-): Promise<SourceAskResult> {
+function resolveAskRuntimeOptions(options?: AskSourceOptions): AskSourceOptions {
   const sourceScope = options?.sourceScope === "global" ? "global" : "personal";
   const sourceHosting =
     options?.sourceHosting === "local" || options?.sourceHosting === "cloud"
@@ -351,27 +354,160 @@ export async function askSource(
       ? options.rerankBackend
       : undefined;
 
+  return {
+    ...options,
+    sourceScope,
+    sourceHosting,
+    ...(rerankBackend ? { rerankBackend } : {}),
+  };
+}
+
+function runAskWithRetrievalContext<T>(
+  options: AskSourceOptions | undefined,
+  run: (resolved: AskSourceOptions) => Promise<T>,
+): Promise<T> {
+  const resolved = resolveAskRuntimeOptions(options);
+  const sourceScope = resolved.sourceScope === "global" ? "global" : "personal";
+  const sourceHosting =
+    resolved.sourceHosting === "local" || resolved.sourceHosting === "cloud"
+      ? resolved.sourceHosting
+      : sourceScope === "global"
+        ? "cloud"
+        : "local";
+
   return runWithRetrievalContext(
     {
-      backend: rerankBackend,
+      backend: resolved.rerankBackend,
       sourceScope,
       sourceHosting,
-      ...(options?.retrievalStrictness
-        ? { retrievalStrictness: options.retrievalStrictness }
+      ...(resolved.retrievalStrictness
+        ? { retrievalStrictness: resolved.retrievalStrictness }
         : {}),
-      ...(options?.relevanceThreshold !== undefined
-        ? { relevanceThreshold: options.relevanceThreshold }
+      ...(resolved.relevanceThreshold !== undefined
+        ? { relevanceThreshold: resolved.relevanceThreshold }
         : {}),
-      ...(typeof options?.includeWeakEvidence === "boolean"
-        ? { includeWeakEvidence: options.includeWeakEvidence }
+      ...(typeof resolved.includeWeakEvidence === "boolean"
+        ? { includeWeakEvidence: resolved.includeWeakEvidence }
         : {}),
     },
-    () =>
-      askSourceInner(sourceId, message, {
-        ...options,
-        sourceScope,
-        sourceHosting,
-        ...(rerankBackend ? { rerankBackend } : {}),
-      }),
+    () => run(resolved),
+  );
+}
+
+async function askSourceStreamInner(
+  sourceId: string,
+  message: string,
+  options: AskSourceOptions | undefined,
+  handlers: AskSourceStreamHandlers,
+): Promise<SourceAskResult> {
+  const rerankBackend = options?.rerankBackend;
+  const model = options?.model;
+  const forceRetrieveOnly = options?.mode === "retrieve-only";
+
+  if (forceRetrieveOnly || !canRunAskAgent(model)) {
+    const result = await askSourceInner(sourceId, message, {
+      ...options,
+      mode: forceRetrieveOnly ? "retrieve-only" : options?.mode,
+    });
+    if (result.answer) {
+      await handlers.onToken(result.answer);
+    }
+    return result;
+  }
+
+  const requestContext = new RequestContext();
+  requestContext.set("source_id", sourceId);
+  if (rerankBackend) {
+    requestContext.set("rerank_backend", rerankBackend);
+  }
+  if (options?.retrievalStrictness && isRetrievalStrictness(options.retrievalStrictness)) {
+    requestContext.set("retrieval_strictness", options.retrievalStrictness);
+  }
+  if (
+    typeof options?.relevanceThreshold === "number" ||
+    options?.relevanceThreshold === null
+  ) {
+    requestContext.set("relevance_threshold", options.relevanceThreshold);
+  }
+  if (typeof options?.includeWeakEvidence === "boolean") {
+    requestContext.set("include_weak_evidence", options.includeWeakEvidence);
+  }
+  if (model?.backend) {
+    requestContext.set("model_backend", model.backend);
+  }
+  if (model?.modelId) {
+    requestContext.set("model_id", model.modelId);
+  }
+  if (model?.baseUrl) {
+    requestContext.set("model_base_url", model.baseUrl);
+  }
+  if (model?.googleModelId) {
+    requestContext.set("google_model_id", model.googleModelId);
+  }
+
+  const agent = getMastra().getAgent("docsAgent");
+  const stream = await agent.stream(message, {
+    requestContext,
+    maxSteps: 1,
+    ...(options?.abortSignal ? { abortSignal: options.abortSignal } : {}),
+  });
+
+  let streamed = "";
+  for await (const chunk of stream.textStream) {
+    if (!chunk) continue;
+    streamed += chunk;
+    await handlers.onToken(chunk);
+  }
+
+  const finalText = (await stream.text).trim();
+  const meta = readRetrievalMeta(requestContext);
+  const chunks = toAskHits(meta?.chunks ?? []);
+  const insufficient = meta?.insufficient ?? chunks.length === 0;
+  const answer =
+    finalText ||
+    streamed.trim() ||
+    formatRetrieveOnlyAnswer(message, chunks, insufficient);
+
+  // If the model returned text only via the promise (no stream chunks), emit once.
+  if (!streamed.trim() && answer) {
+    await handlers.onToken(answer);
+  }
+
+  logVerbose("Source ask agent stream finished", "SourceAsk", {
+    sourceId,
+    chunkCount: chunks.length,
+    insufficient,
+    rerankBackend: rerankBackend ?? null,
+    modelBackend: model?.backend ?? null,
+  });
+
+  return buildAskResult({
+    mode: "agent",
+    answer,
+    chunks,
+    insufficient,
+    ...(rerankBackend ? { rerankBackend } : {}),
+  });
+}
+
+export async function askSource(
+  sourceId: string,
+  message: string,
+  options?: AskSourceOptions,
+): Promise<SourceAskResult> {
+  return runAskWithRetrievalContext(options, (resolved) =>
+    askSourceInner(sourceId, message, resolved),
+  );
+}
+
+/** Stream answer tokens while retrieval + docsAgent run; resolves with citations. */
+export async function askSourceStream(
+  sourceId: string,
+  message: string,
+  options: AskSourceOptions | undefined,
+  handlers: AskSourceStreamHandlers,
+): Promise<SourceAskResult> {
+  return runAskWithRetrievalContext(options, (resolved) =>
+    askSourceStreamInner(sourceId, message, resolved, handlers),
   );
 }

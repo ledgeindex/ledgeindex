@@ -6,6 +6,7 @@ import {
   Layers,
   LayoutDashboard,
   MessageSquare,
+  Puzzle,
   Plug,
   Plus,
   RefreshCw,
@@ -60,6 +61,12 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
     label: "MCP",
     href: "/mcp/connect",
     icon: Plug,
+  },
+  {
+    id: "integrations",
+    label: "Widget",
+    href: "/integrations",
+    icon: Puzzle,
   },
   {
     id: "api-keys",

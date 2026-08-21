@@ -210,7 +210,7 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
                   </p>
                 </div>
                 <p className="m-0 mt-0.5 pl-[1.05rem] text-[0.72rem] leading-snug text-muted">
-                  {detailFor(health)}
+                  {health.setupMessage || detailFor(health)}
                 </p>
               </div>
               <div className="flex shrink-0 items-center gap-1.5">

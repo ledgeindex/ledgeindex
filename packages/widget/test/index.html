@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LedgeIndex widget test</title>
+    <style>
+      body {
+        margin: 0;
+        font-family: system-ui, sans-serif;
+        background: #f6f2ea;
+        color: #1c1917;
+        min-height: 100vh;
+        padding: 2rem;
+      }
+      main {
+        max-width: 42rem;
+      }
+      code {
+        background: #fff;
+        padding: 0.15em 0.4em;
+        border-radius: 4px;
+        word-break: break-all;
+      }
+      .hint {
+        margin-top: 1rem;
+        padding: 0.75rem 1rem;
+        border-radius: 8px;
+        background: #fff;
+        border: 1px solid #ddd;
+        font-size: 0.875rem;
+        line-height: 1.45;
+      }
+      .err {
+        border-color: #ef4444;
+        background: #fef2f2;
+      }
+    </style>
+  </head>
+  <body>
+    <main id="main">
+      <h1>Widget test page</h1>
+      <p id="status">Loading…</p>
+    </main>
+
+    <script>
+      if (location.protocol === "file:") {
+        document.getElementById("main").innerHTML = `
+          <h1>Wrong way to open this</h1>
+          <p class="hint err">
+            Do not double-click the HTML file (<code>file://</code>).
+            <br /><br />
+            Run:
+            <br />
+            <code>cd ledgeindex && npm run test:serve -w @ledgeindex/widget</code>
+            <br /><br />
+            Then open:
+            <br />
+            <a href="http://localhost:3456/test/">http://localhost:3456/test/</a>
+          </p>
+        `;
+      } else {
+        const GCS_BUNDLE =
+          "https://storage.googleapis.com/ledgeindex-widget/ledgeindex-widget.bundle.js";
+        const LOCAL_BUNDLE = "../dist/ledgeindex-widget.bundle.js";
+        const DEFAULT_WEBSITE_ID = "wgt_wUa-siZTlEZRHNQP";
+
+        const params = new URLSearchParams(location.search);
+        const websiteId =
+          params.get("websiteId") || params.get("id") || DEFAULT_WEBSITE_ID;
+        const apiBase = params.get("api") || "http://localhost:3010";
+        const srcParam = params.get("src")?.trim() || "";
+
+        // On localhost test server → local dist by default (always works).
+        // Use ?src=gcs after npm run upload:widget to hit the CDN.
+        let scriptSrc = LOCAL_BUNDLE;
+        if (srcParam === "gcs" || srcParam === "cdn") {
+          scriptSrc = GCS_BUNDLE;
+        } else if (
+          srcParam.startsWith("http://") ||
+          srcParam.startsWith("https://")
+        ) {
+          scriptSrc = srcParam;
+        } else if (srcParam === "local" || !srcParam) {
+          scriptSrc = LOCAL_BUNDLE;
+        }
+
+        document.getElementById("status").innerHTML = `
+          Chat launcher should appear <strong>bottom-right</strong>.
+          <br />Origin: <code>${location.origin}</code>
+          <br />websiteId: <code>${websiteId}</code>
+          <br />api: <code>${apiBase}</code>
+          <br />script: <code>${scriptSrc}</code>
+        `;
+
+        const s = document.createElement("script");
+        s.async = true;
+        s.src = scriptSrc;
+        s.dataset.websiteId = websiteId;
+        s.dataset.apiBaseUrl = apiBase;
+        s.dataset.projectName = params.get("name") || "Ask AI";
+        s.dataset.projectColor = params.get("color") || "#6b5a3e";
+        s.onerror = () => {
+          document.getElementById("status").insertAdjacentHTML(
+            "beforeend",
+            `<p class="hint err">Script failed to load. Run <code>npm run build -w @ledgeindex/widget</code> then refresh.</p>`,
+          );
+        };
+        document.body.appendChild(s);
+      }
+    </script>
+  </body>
+</html>

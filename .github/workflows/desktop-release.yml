@@ -7,10 +7,11 @@ name: Desktop release
 # electron-builder defaults to tag v${version}; our tags are desktop-v*.
 # So we package with --publish never, then attach artifacts to $GITHUB_REF_NAME via gh.
 #
-# Matrix: Windows + macOS. Sidecar native deps are packed per runner OS (correct).
-# Mac: signed + notarized when CSC_LINK / Apple notarize secrets are set.
-# Mac ships exploded desktop-server/ so electron-builder can codesign natives;
-# Windows ships desktop-server.tar (extract on first launch).
+# Matrix: Windows + macOS. Runtime natives are packed per runner OS.
+# Mac: electron-builder signs + notarizes when CSC_LINK / Apple secrets are set.
+# Both platforms ship the same build/desktop-server tree (bundled server.cjs plus
+# unbundlable natives), copied into Resources by afterPack because extraResources
+# FileSets strip node_modules.
 #
 # Required GitHub Actions secrets (client Firebase config — same names as apps/web/.env.example):
 #   NEXT_PUBLIC_FIREBASE_API_KEY
@@ -112,6 +113,52 @@ jobs:
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: npx electron-builder --config electron-builder.yml ${{ matrix.electron_builder_args }} --publish never
+
+      # afterPack is the only thing putting the runtime into the app, so verify
+      # it landed. Also guards against the bundle regressing into a full
+      # node_modules tree, which is what made signing take over an hour.
+      - name: Verify packaged runtime
+        working-directory: apps/desktop
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$RUNNER_OS" == "macOS" ]]; then
+            RES="$(echo dist/mac-arm64/*.app)/Contents/Resources"
+          else
+            RES="dist/win-unpacked/resources"
+          fi
+          ROOT="$RES/desktop-server"
+
+          # Every production dependency of apps/desktop lands in app.asar. Vite
+          # bundles main + renderer, so only what main require()s belongs there
+          # (~23 MB). A renderer or workspace package moved back into
+          # `dependencies` drags its whole tree in, and past ~2 GB makensis can
+          # no longer mmap the payload and the Windows installer stops building.
+          ASAR_MB="$(du -m "$RES/app.asar" | cut -f1)"
+          echo "app.asar: ${ASAR_MB} MB"
+          if [[ "$ASAR_MB" -gt 200 ]]; then
+            echo "app.asar grew to ${ASAR_MB} MB — a dependency tree slipped back in."
+            exit 1
+          fi
+
+          if [[ ! -f "$ROOT/server.cjs" ]]; then
+            echo "Missing bundled server at $ROOT/server.cjs"
+            ls -la "$ROOT" || true
+            exit 1
+          fi
+
+          if [[ -d "$ROOT/node_modules/@ledgeindex" ]]; then
+            echo "@ledgeindex packages must be bundled, not shipped as modules:"
+            ls -la "$ROOT/node_modules/@ledgeindex"
+            exit 1
+          fi
+
+          FILES="$(find "$ROOT" -type f | wc -l | tr -d ' ')"
+          echo "runtime ok: server.cjs present, $FILES files"
+          if [[ "$FILES" -gt 20000 ]]; then
+            echo "Runtime file count regressed to $FILES — expected a few thousand."
+            exit 1
+          fi
 
       - name: Publish GitHub Release
         if: ${{ !(github.event_name == 'workflow_dispatch' && inputs.dry_run) }}

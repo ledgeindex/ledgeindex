@@ -99,7 +99,16 @@ export default defineConfig(({ mode }) => {
   return {
     main: {
       define: defineEnv,
-      plugins: [externalizeDepsPlugin()],
+      // The worker imports @ledgeindex/server + docs only when running unpackaged
+      // (packaged builds load the bundled server.cjs). They are devDependencies so
+      // electron-builder keeps them out of app.asar, so name them explicitly here —
+      // externalizeDepsPlugin only externalizes `dependencies` by default and would
+      // otherwise try to bundle the whole server into the worker chunk.
+      plugins: [
+        externalizeDepsPlugin({
+          include: ['@ledgeindex/server', '@ledgeindex/docs']
+        })
+      ],
       build: {
         rollupOptions: {
           input: {

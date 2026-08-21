@@ -20,6 +20,7 @@ import { crawlFilterRoutes } from "./routes/crawl-filter.js";
 import { sourceSetRoutes } from "./routes/source-sets.js";
 import { billingRoutes } from "./routes/billing.js";
 import { repoProfileRoutes } from "./routes/repo-profile.js";
+import { widgetRoutes } from "./routes/widget.js";
 
 /**
  * Docs profile: ingest, sources, chat, MCP routes (Mastra mounts at server level).
@@ -39,6 +40,7 @@ export async function registerDocsProfile(fastify: FastifyInstance): Promise<voi
   await fastify.register(preflightRoutes);
   await fastify.register(apiKeyRoutes);
   await fastify.register(chatRoutes);
+  await fastify.register(widgetRoutes);
   await fastify.register(crawlFilterRoutes);
   await fastify.register(sourceSetRoutes);
   await fastify.register(billingRoutes);

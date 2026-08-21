@@ -1,0 +1,28 @@
+{
+  "name": "@ledgeindex/widget",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Embeddable LedgeIndex docs chat widget (CDN script + Shadow DOM)",
+  "type": "module",
+  "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "upload": "node ../../scripts/upload-widget-gcs.mjs",
+    "build:upload": "npm run build && node ../../scripts/upload-widget-gcs.mjs",
+    "test:serve": "npm run build && npx --yes serve -l 3456 .",
+    "typecheck": "tsc --noEmit",
+    "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@speed-highlight/core": "^1.2.24",
+    "marked": "^15.0.12"
+  },
+  "devDependencies": {
+    "typescript": "^7.0.2",
+    "vite": "^7.0.0"
+  }
+}

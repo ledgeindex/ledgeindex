@@ -12,6 +12,7 @@ export default {
     type: "separator",
     title: "Self-host",
   },
+  "setup-widget": "Set up website widget",
   "setup-web": "Set up web",
   "setup-docker": "Set up Docker",
   "setup-desktop": "Set up desktop",

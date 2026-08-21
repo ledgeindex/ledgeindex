@@ -23,7 +23,10 @@ function isPublicPath(url: string): boolean {
     // system prompts and model invocation and must stay behind auth.
     path.startsWith("/mastra/mcp/") ||
     path === "/mcp" ||
-    path.startsWith("/mcp/")
+    path.startsWith("/mcp/") ||
+    // Public website widget (domain-checked in route; no live_ key)
+    path === "/api/widget/chat" ||
+    (path.startsWith("/api/widget/") && path.endsWith("/config"))
   );
 }
 

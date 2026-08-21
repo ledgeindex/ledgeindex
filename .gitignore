@@ -6,8 +6,10 @@ node_modules/
 .next/
 out/
 
-# Builds
+# Builds (dist-* covers local electron-builder dirs like dist-v3 / dist-verify)
 dist/
+dist-*/
+*.asar
 build/
 *.tsbuildinfo
 

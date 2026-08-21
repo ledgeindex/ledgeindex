@@ -1,6 +1,8 @@
 node_modules
 dist
+dist-*
 out
+*.asar
 .DS_Store
 .eslintcache
 *.log*

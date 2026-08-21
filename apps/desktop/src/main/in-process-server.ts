@@ -1,5 +1,4 @@
 import { createConnection } from 'node:net'
-import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { app, net } from 'electron'
@@ -11,15 +10,8 @@ import {
   resolveApiOrigin,
   snapshotLedgeindexRuntimeEnv
 } from './ledgeindex-runtime-env'
-import {
-  ensureProdDesktopServerExtracted,
-  getExtractMessage,
-  getExtractProgress
-} from './runtime-bundle'
-import {
-  resolvePackagedFirebaseAuthPath,
-  resolvePackagedServerModulePath as resolvePackagedServerEntry,
-} from './packaged-runtime-paths'
+import { resolvePackagedRuntimeDir } from './runtime-bundle'
+import { resolvePackagedBundlePath } from './packaged-runtime-paths'
 
 type WorkerMessage =
   | { type: 'ready' }
@@ -33,10 +25,6 @@ let lastWorkerError: string | null = null
 
 function resolveWorkerScriptPath(): string {
   return join(__dirname, 'ledgeindex-api-worker.js')
-}
-
-function resolvePackagedServerModulePath(runtimeRoot: string): string {
-  return resolvePackagedServerEntry(runtimeRoot)
 }
 
 async function isReachable(url: string, timeoutMs = 2000): Promise<boolean> {
@@ -130,36 +118,17 @@ async function waitForWorkerReady(worker: Worker, timeoutMs = 180_000): Promise<
 }
 
 async function spawnApiWorker(): Promise<void> {
-  let serverModulePath: string | undefined
-  let firebaseAuthModulePath: string | undefined
-  let runtimeRoot: string | undefined
-  if (app.isPackaged) {
-    status = 'extracting'
-    runtimeRoot = await ensureProdDesktopServerExtracted()
-    serverModulePath = resolvePackagedServerModulePath(runtimeRoot)
-    firebaseAuthModulePath = resolvePackagedFirebaseAuthPath(runtimeRoot)
-    if (!existsSync(serverModulePath)) {
-      throw new Error(`Packaged server entry missing: ${serverModulePath}`)
-    }
-    if (!existsSync(firebaseAuthModulePath)) {
-      throw new Error(`Packaged auth middleware missing: ${firebaseAuthModulePath}`)
-    }
-  }
-
-  const env = snapshotLedgeindexRuntimeEnv()
-  if (runtimeRoot) {
-    const nodeModules = join(runtimeRoot, 'node_modules')
-    env.NODE_PATH = env.NODE_PATH
-      ? `${nodeModules}${process.platform === 'win32' ? ';' : ':'}${env.NODE_PATH}`
-      : nodeModules
-  }
+  // Packaged: one bundled file. Its externals resolve from the sibling
+  // node_modules, so no NODE_PATH juggling. Dev: workspace packages by name.
+  const runtimeBundlePath = app.isPackaged
+    ? resolvePackagedBundlePath(resolvePackagedRuntimeDir())
+    : undefined
 
   status = 'starting'
   const worker = new Worker(resolveWorkerScriptPath(), {
     workerData: {
-      env,
-      serverModulePath,
-      firebaseAuthModulePath,
+      env: snapshotLedgeindexRuntimeEnv(),
+      runtimeBundlePath,
       port: DESKTOP_SERVER_PORT,
       host: '127.0.0.1',
       dataDir: ledgeindexDataDir(),
@@ -207,13 +176,16 @@ export async function ensureInProcessServerListening(): Promise<{
     return { spawned: true, origin }
   }
 
+  status = 'starting'
+  lastWorkerError = null
+
   startPromise = (async () => {
     try {
       if (await isPortListening(DESKTOP_SERVER_PORT)) {
         if (await probeServerReady()) {
           listening = true
           status = 'ready'
-          console.log(`[desktop] reusing existing listener on ${origin}`)
+          console.log(`[desktop] local API already listening on ${origin}`)
           return
         }
         console.warn(
@@ -260,21 +232,21 @@ export function setRuntimeStatus(next: SidecarStatus): void {
 export async function getInProcessServerHealth(): Promise<SidecarHealth> {
   const origin = resolveApiOrigin()
   const managedStatus = status
-  const extractProgress = getExtractProgress()
-  const extractMessage = getExtractMessage()
-  const reachable =
-    Boolean(apiWorker) && listening ? await probeServerReady() : false
+  const reachable = await probeServerReady()
 
   let effective: SidecarStatus
   if (reachable) {
     effective = 'ready'
+    listening = true
     if (status !== 'ready') status = 'ready'
-  } else if (managedStatus === 'extracting') {
-    effective = 'extracting'
   } else if (managedStatus === 'starting') {
     effective = 'starting'
   } else if (managedStatus === 'error') {
     effective = 'error'
+  } else if (managedStatus === 'ready') {
+    effective = apiWorker ? 'error' : 'idle'
+    if (!apiWorker) status = 'idle'
+    listening = false
   } else {
     effective = 'idle'
   }
@@ -285,11 +257,8 @@ export async function getInProcessServerHealth(): Promise<SidecarHealth> {
     reachable,
     origin,
     port: DESKTOP_SERVER_PORT,
-    setupProgress: effective === 'extracting' ? extractProgress : null,
-    setupMessage:
-      effective === 'extracting' || effective === 'starting'
-        ? extractMessage
-        : null,
+    setupProgress: null,
+    setupMessage: effective === 'starting' ? 'Starting local API…' : null,
     lastError: effective === 'error' ? lastWorkerError : null
   }
 }

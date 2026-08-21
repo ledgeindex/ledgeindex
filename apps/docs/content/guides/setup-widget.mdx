@@ -1,0 +1,123 @@
+# Set up the website widget
+
+Embed **Ask AI** on *your* website. Visitors chat on your domain; answers come from a LedgeIndex source you indexed. No secret `live_` API keys in the browser.
+
+Product overview: **[Website widget](/docs/website-widget)**.
+
+## The idea in one diagram
+
+```text
+Your site (https://docs.yoursite.com)     LedgeIndex cloud
+┌─────────────────────────────┐         ┌──────────────────────────┐
+│ <script data-website-id=…>  │  chat   │ api.ledgeindex.com       │
+│ Ask AI launcher             │ ──────► │ allowlist check          │
+│                             │         │ → your bound cloud source│
+└─────────────────────────────┘         └──────────────────────────┘
+         ▲
+         │ you configure this origin in Integrations
+         │ (https://docs.yoursite.com)
+```
+
+**You** decide which website origins may call the widget. Someone who copies your public `websiteId` but hosts the script on a domain you did not allow gets `Origin not allowed`.
+
+## Production (LedgeIndex cloud) — usual path
+
+This is what you want for a real docs or product site.
+
+1. **Index docs into Cloud** (not only on your laptop) — [Index documentation](/guides/setup-docs) via the web app with Cloud hosting, or your cloud crawl flow.
+2. Sign in → open **Integrations** (`/integrations`).
+3. Switch the source toggle to **Cloud**.
+4. Pick the cloud source the widget should answer from.
+5. Under **Your website origins**, add each site **one at a time** (type origin → Add). Examples:
+
+   - `https://docs.yoursite.com`
+   - `https://www.yoursite.com`
+
+   Use scheme + host (+ port if non-default). Path is ignored — `https://docs.yoursite.com/guides/foo` still becomes `https://docs.yoursite.com`.
+
+   You can add or remove origins later on the widget card and click **Save origins**.
+6. Create the widget → **Copy snippet**.
+7. Paste the snippet on your site (before `</body>`, Next `<Script>`, Webflow head, etc.).
+
+The snippet’s `data-api-base-url` should be your cloud API (e.g. `https://api.ledgeindex.com`). The dashboard fills that when you create under Cloud.
+
+Visitors never sign in to LedgeIndex. Only pages on allowlisted origins can chat.
+
+## What “origin” means
+
+| You type | Matches pages like |
+|----------|-------------------|
+| `https://docs.yoursite.com` | `https://docs.yoursite.com/…` |
+| `https://yoursite.com` | `https://yoursite.com/…` (not `www` unless listed too) |
+| `http://localhost:3000` | Local Next/dev server while testing |
+
+It is **not** the start URL you crawled. It is where the **script tag lives**.
+
+## Local testing (optional)
+
+Use **Local** only while developing against `http://localhost:3010`:
+
+1. Integrations → **Local** → bind a local source.
+2. Allow `http://localhost:3000` (or `http://localhost:3456` for the package test page).
+3. Snippet uses `data-api-base-url="http://localhost:3010"`.
+
+A public production site cannot reach your laptop. Ship with **Cloud** + your real HTTPS origins.
+
+Package test page (monorepo):
+
+```bash
+npm run test:serve -w @ledgeindex/widget
+# http://localhost:3456/test/?websiteId=wgt_…
+```
+
+## Script attributes
+
+```html
+<script
+  async
+  src="https://storage.googleapis.com/ledgeindex-widget/ledgeindex-widget.bundle.js"
+  data-website-id="wgt_YOUR_ID"
+  data-api-base-url="https://api.ledgeindex.com"
+  data-project-name="Ask AI"
+  data-project-color="#6b5a3e"
+></script>
+```
+
+| Attribute | Purpose |
+|-----------|---------|
+| `data-website-id` | Public id from Integrations |
+| `data-api-base-url` | Cloud or local API that serves `/api/widget/chat` |
+| `data-project-name` | Header / launcher (default Ask AI) |
+| `data-project-color` | Accent |
+| `data-project-logo` | Optional logo URL |
+| `data-example-questions` | Pipe-separated starters |
+
+## Security (short)
+
+| Do | Don’t |
+|----|--------|
+| Allowlist **your** site origins | Put `live_…` keys in frontend code |
+| Use a **cloud** source for production | Expect Local indexes to serve public traffic |
+| Treat `websiteId` as public | Assume an unlisted origin can chat |
+
+**Embed abuse:** another website hosting your script is blocked — browsers send the real `Origin`, which must match your allowlist.
+
+**Scripted abuse:** someone can still call the API with a forged `Origin`. We harden that with layered limits (per IP, per widget / minute, per widget / day). That makes cost attacks expensive; it is not a cryptographic lock. Disable a widget in Integrations if you see abuse.
+
+Tunable env (API): `WIDGET_RATE_IP_PER_MIN` (default 20), `WIDGET_RATE_SITE_PER_MIN` (60), `WIDGET_RATE_SITE_PER_DAY` (2000), `WIDGET_RATE_SITE_ORIGIN_PER_MIN` (40).
+
+## Troubleshooting
+
+| Issue | Fix |
+|-------|-----|
+| `Origin not allowed` | Add the exact origin (scheme + host + port) in Integrations and save |
+| Widget works on localhost, not prod | Prod origin missing from allowlist, or still on Local / `localhost` API |
+| Empty answers | Bound source not indexed, or Cloud widget pointed at wrong API |
+| Cloud create fails | Widget routes must be live on `api.ledgeindex.com` (deployed docs profile) |
+
+## Related
+
+- [Website widget](/docs/website-widget) — product overview
+- [Index documentation](/guides/setup-docs) — crawl the corpus first
+- [Set up web](/guides/setup-web) — local UI + API
+- [Set up MCP](/guides/setup-mcp) — IDE agents (different surface)

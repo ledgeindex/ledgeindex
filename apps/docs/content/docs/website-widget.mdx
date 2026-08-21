@@ -1,0 +1,83 @@
+# Website widget
+
+The main way to put LedgeIndex on a customer-facing site: a floating **Ask AI** chat that answers from your indexed docs, with citations. One script tag. No secret API keys in the browser.
+
+Visitors open the launcher, ask a question, and get a streamed answer grounded in pages you already crawled.
+
+## Why this path
+
+Most product teams want docs chat on *their* domain — not a separate app, not MCP inside an IDE. The widget is that surface.
+
+| Concern | How it works |
+|---------|----------------|
+| Auth | Public `websiteId` + **allowed origins** (domain allowlist) |
+| Secrets | Never put `live_…` keys in page JavaScript |
+| Answers | Bound to one indexed LedgeIndex source (cloud for production) |
+| Install | CDN `<script>` + `data-*` attributes |
+
+## Quick install
+
+1. Index a docs site ([guide](/guides/setup-docs)).
+2. In the web app, open **Integrations** → create a widget (source + allowed origins).
+3. Paste the snippet before `</body>`:
+
+```html
+<script
+  async
+  src="https://storage.googleapis.com/ledgeindex-widget/ledgeindex-widget.bundle.js"
+  data-website-id="wgt_YOUR_ID"
+  data-api-base-url="https://api.ledgeindex.com"
+  data-project-name="Ask AI"
+  data-project-color="#6b5a3e"
+></script>
+```
+
+Copy the snippet from Integrations when you can — it fills ids and brand for you.
+
+Full walkthrough (origins, local testing, troubleshooting): **[Set up website widget](/guides/setup-widget)**.
+
+## How a request is gated
+
+```text
+Visitor page (allowed origin)
+  → widget bundle
+  → POST /api/widget/chat  (websiteId + Origin)
+  → allowlist check
+  → ask bound source (stream + citations)
+```
+
+Wrong origin → rejected. Deleted / disabled integration → not found.
+
+**Embeds on other sites:** blocked (browser sends the real Origin).
+
+**Direct API spam with a forged Origin:** slowed by layered IP + per-widget minute/day budgets (not a crypto lock). Disable the widget if needed.
+
+## Local vs cloud
+
+| Mode | Use when |
+|------|----------|
+| **Local** source + `data-api-base-url="http://localhost:3010"` | Developing on your machine |
+| **Cloud** source + production API URL | Real public docs / product site |
+
+A public website cannot reach your laptop’s local index. Use Cloud for anything visitors hit.
+
+## Script attributes
+
+| Attribute | Purpose |
+|-----------|---------|
+| `data-website-id` | Public id from Integrations (`wgt_…`) |
+| `data-api-base-url` | API that serves widget chat |
+| `data-project-name` | Header + launcher label (default **Ask AI**) |
+| `data-project-color` | Accent color |
+| `data-project-logo` | Optional header image |
+| `data-example-questions` | Pipe-separated starter questions |
+
+## Related
+
+| Goal | Page |
+|------|------|
+| Step-by-step setup | [Set up website widget](/guides/setup-widget) |
+| Crawl the corpus first | [Index documentation](/guides/setup-docs) |
+| Run web UI + API locally | [Set up web](/guides/setup-web) · [Web & desktop](/docs/apps) |
+| Agents in Cursor / Claude | [MCP](/guides/setup-mcp) · [Sources, chat & MCP](/docs/docs-profile) |
+| In-process scripts (no embed) | [SDK](/docs/sdk) · [CLI](/docs/cli) |

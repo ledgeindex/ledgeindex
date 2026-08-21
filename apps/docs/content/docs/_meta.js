@@ -4,6 +4,7 @@ export default {
     type: "separator",
     title: "Start here",
   },
+  "website-widget": "Website widget",
   sdk: "SDK",
   cli: "CLI",
   "---run": {

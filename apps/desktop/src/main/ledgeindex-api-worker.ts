@@ -6,12 +6,15 @@ import { pathToFileURL } from 'node:url'
 import { parentPort, workerData } from 'node:worker_threads'
 import type { FastifyInstance } from 'fastify'
 
+type DesktopRuntime = {
+  createLedgeIndexServer: typeof import('@ledgeindex/server').createLedgeIndexServer
+  firebaseAuthMiddleware: Parameters<FastifyInstance['register']>[0]
+}
+
 type ApiWorkerData = {
   env: Record<string, string>
-  /** Packaged: absolute path to @ledgeindex/server dist entry */
-  serverModulePath?: string
-  /** Packaged: absolute path to firebase-auth middleware */
-  firebaseAuthModulePath?: string
+  /** Packaged: absolute path to the bundled server (server.cjs) */
+  runtimeBundlePath?: string
   port: number
   host: string
   dataDir: string
@@ -24,38 +27,40 @@ function applyEnv(env: Record<string, string>): void {
   }
 }
 
-async function importDefault(modulePath: string): Promise<{ default: unknown }> {
-  return import(pathToFileURL(modulePath).href) as Promise<{ default: unknown }>
-}
-
-async function registerDesktopAuth(
-  appInstance: FastifyInstance,
-  firebaseAuthModulePath?: string,
-): Promise<void> {
-  const firebaseAuthMiddleware = (
-    firebaseAuthModulePath
-      ? await importDefault(firebaseAuthModulePath)
-      : await import('@ledgeindex/docs/runtime/middleware/firebase-auth.js')
-  ).default as Parameters<FastifyInstance['register']>[0]
-  await appInstance.register(firebaseAuthMiddleware)
+/**
+ * Packaged builds load one bundle that exports the whole surface. In dev the
+ * workspace packages are resolvable directly, so import them by name.
+ */
+async function loadRuntime(bundlePath?: string): Promise<DesktopRuntime> {
+  if (bundlePath) {
+    return (await import(pathToFileURL(bundlePath).href)) as DesktopRuntime
+  }
+  const [server, auth] = await Promise.all([
+    import('@ledgeindex/server'),
+    import('@ledgeindex/docs/runtime/middleware/firebase-auth.js'),
+  ])
+  return {
+    createLedgeIndexServer: server.createLedgeIndexServer,
+    firebaseAuthMiddleware: auth.default as Parameters<FastifyInstance['register']>[0],
+  }
 }
 
 async function run(): Promise<void> {
   const data = workerData as ApiWorkerData
   applyEnv(data.env)
 
-  const serverModule = data.serverModulePath
-    ? await importDefault(data.serverModulePath)
-    : await import('@ledgeindex/server')
+  const { createLedgeIndexServer, firebaseAuthMiddleware } = await loadRuntime(
+    data.runtimeBundlePath,
+  )
 
-  const { createLedgeIndexServer } = serverModule as typeof import('@ledgeindex/server')
   const server = await createLedgeIndexServer({
     profiles: data.profiles,
     port: data.port,
     host: data.host,
     dataDir: data.dataDir,
-    beforeProfiles: async (app) =>
-      registerDesktopAuth(app, data.firebaseAuthModulePath),
+    beforeProfiles: async (app) => {
+      await app.register(firebaseAuthMiddleware)
+    },
   })
 
   await server.listen()

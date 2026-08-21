@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto";
 import { Log, LogLevel } from "@apify/log";
-import { CheerioCrawler, Configuration } from "crawlee";
+// Import the cheerio subpackage, not the crawlee meta-package: the latter
+// re-exports every crawler, which drags in JSDOM/Playwright/Puppeteer.
+import { CheerioCrawler, Configuration } from "@crawlee/cheerio";
 import type { WebCrawlSourceConfig } from "../schemas/source-config.js";
 import {
   extractMarkdownLinks,
