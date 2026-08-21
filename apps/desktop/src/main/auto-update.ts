@@ -1,5 +1,5 @@
 import { app, BrowserWindow, ipcMain, type WebContents } from 'electron'
-import { autoUpdater } from 'electron-updater'
+import { autoUpdater, NsisUpdater } from 'electron-updater'
 import { is } from '@electron-toolkit/utils'
 
 export type UpdateFeedConfig = {
@@ -92,10 +92,11 @@ export function registerAutoUpdate(getMainWindow: () => BrowserWindow | null): v
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
   // Windows builds are unsigned (no Authenticode cert). 0.2.10 was accidentally
-  // signed with the Apple Developer ID via CSC_LINK on the Windows runner;
-  // leaving verification on would block every later unsigned update.
-  if (process.platform === 'win32') {
-    autoUpdater.verifyUpdateCodeSignature = false
+  // signed with the Apple Developer ID via CSC_LINK on the Windows runner.
+  // verifyUpdateCodeSignature lives on NsisUpdater and is a function, not a flag:
+  // returning null means "signature ok".
+  if (autoUpdater instanceof NsisUpdater) {
+    autoUpdater.verifyUpdateCodeSignature = async () => null
   }
 
   // Packaged builds read publish config from electron-builder; setFeedURL still ok.
