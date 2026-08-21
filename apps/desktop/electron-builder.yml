@@ -39,6 +39,10 @@ asarUnpack:
 win:
   executableName: LedgeIndex
   icon: resources/icon.ico
+  # No Authenticode cert. Do not let a leaked CSC_LINK (Apple Developer ID)
+  # sign the NSIS installer — electron-updater then treats the Apple CN as
+  # the publisher and rejects the next build.
+  signAndEditExecutable: false
 nsis:
   artifactName: LedgeIndex-${version}-setup.${ext}
   shortcutName: ${productName}

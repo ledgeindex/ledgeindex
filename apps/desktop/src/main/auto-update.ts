@@ -91,6 +91,12 @@ function applyFeed(config?: UpdateFeedConfig): void {
 export function registerAutoUpdate(getMainWindow: () => BrowserWindow | null): void {
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = true
+  // Windows builds are unsigned (no Authenticode cert). 0.2.10 was accidentally
+  // signed with the Apple Developer ID via CSC_LINK on the Windows runner;
+  // leaving verification on would block every later unsigned update.
+  if (process.platform === 'win32') {
+    autoUpdater.verifyUpdateCodeSignature = false
+  }
 
   // Packaged builds read publish config from electron-builder; setFeedURL still ok.
   applyFeed()
