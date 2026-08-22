@@ -178,13 +178,15 @@ export function validateCrawlAiFeatures(
 ): string | null {
   const wantsFilter = flagBool(flags, "filter");
   const wantsEnrich = flagBool(flags, "enrich");
-  if (!wantsFilter && !wantsEnrich) {
+  const wantsDiscoverNav = flagBool(flags, "discover-nav");
+  if (!wantsFilter && !wantsEnrich && !wantsDiscoverNav) {
     return null;
   }
 
   const features = [
     wantsFilter ? "AI URL filter (--filter)" : null,
     wantsEnrich ? "example enrichment (--enrich)" : null,
+    wantsDiscoverNav ? "header nav discovery (--discover-nav)" : null,
   ]
     .filter(Boolean)
     .join(" and ");

@@ -30,6 +30,7 @@ const result = await runWebCrawl({ url: "https://docs.example.com" });
 | `name` | from preflight site name | Source display name |
 | `maxPages` | `1000` | Cap discovered pages |
 | `autoFilter` | `false` | Opt-in LLM URL cleanup (requires model key) |
+| `discoverHeaderNav` | `false` | After preflight, scan the site header for sibling docs sections (guides, reference, …) and add them as extra start URLs — [details](#header-nav-path-discovery-discoverheadernav) |
 | `enrichExamples` | `false` | Opt-in example extraction — see [below](#enrich-examples-enrichexamples) |
 | `crawlConfig` | — | Merge patterns, selectors, `renderJs`, etc. into crawl config |
 | `scope` | `"personal"` | `"personal"` or `"global"` |
@@ -78,13 +79,48 @@ That example index powers **`queryExamples` / `findExamples`** and the **example
 
 Low-level primitive: [Enrich](/reference/core/enrich). Example retrieval after index: [Query](/reference/core/query) (`queryExamples`, `findExamples`).
 
+## Header nav path discovery (`discoverHeaderNav`)
+
+**Off by default.**
+
+After preflight, opens the start URL in a headless browser (Stagehand) and looks for a **horizontal top docs navbar** with peer section tabs — e.g. **Docs · Guides · Reference** on [ledgeindex.com/docs](https://ledgeindex.com/docs). Any sibling section roots found are merged into `startUrls` before the crawl runs.
+
+| Surface | Enable |
+|---------|--------|
+| Web / desktop UI | **Discovery** toolbar → **Header nav paths** (runs automatically when you paste a start URL) |
+| SDK / CLI | `discoverHeaderNav: true` or `--discover-nav` |
+| CI script | `node scripts/index-docs.mjs <url> --discover-nav` |
+| HTTP client | `runWebCrawl({ discoverHeaderNav: true })` — calls `POST /api/discover-header-nav` on the server |
+
+**When to use:** multi-section doc sites where each top-level area has its own URL tree (guides vs reference vs API). **When to skip (default):** single-tree docs (sidebar-only), one start URL is enough, or you want the fastest/cheapest preflight.
+
+| | |
+|---|---|
+| Requires | Chat model key (google / openai / deepseek); Stagehand on the server or in the SDK process |
+| On failure | Crawl continues with the primary start URL only (logged in `onProgress`, not fatal) |
+| Provider | Uses `provider` / `LEDGEINDEX_CRAWL_PROVIDER` / **Settings → Use for crawl tasks** (desktop) |
+
+```ts
+await li.crawl({
+  url: "https://ledgeindex.com/docs",
+  discoverHeaderNav: true,
+  onProgress: ({ phase, detail, headerNavPaths }) => {
+    if (headerNavPaths?.length) {
+      console.log("extra sections:", headerNavPaths.map((p) => p.label).join(", "));
+    }
+  },
+});
+```
+
+HTTP API: `GET` / `POST` `/api/discover-header-nav` — see [Sources API](/reference/api/sources#preflight--crawl-helpers). Client: `discoverHeaderNavPaths(url)`.
+
 ## Progress phases
 
 `onProgress` receives `CrawlProgressUpdate`:
 
 | `phase` | Meaning |
 |---------|---------|
-| `preflight` | Checking start URL |
+| `preflight` | Checking start URL; optional header nav scan when `discoverHeaderNav` is on |
 | `crawl` | Discovering / validating pages |
 | `filter` | LLM URL cleanup |
 | `index` | Extract, chunk, embed, store |

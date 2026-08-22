@@ -2,7 +2,7 @@ import type { Processor, ProcessInputArgs } from "@mastra/core/processors";
 import type { MastraDBMessage } from "@mastra/core/agent";
 import { getMetadataCatalog } from "../../retrieval/metadata-catalog-store.js";
 import { ensureCatalogHasPages } from "../../retrieval/page-catalog-rebuild.js";
-import { resolveCatalogUrlFilter, resolveDomainHintsUrlPrefix, pickNarrowerUrlPrefix } from "../../retrieval/rank-catalog-pages.js";
+import { resolveCatalogUrlFilter } from "../../retrieval/rank-catalog-pages.js";
 import { buildRerankQuery } from "@ledgeindex/core/query/query-intent.js";
 import {
   formatCatalogForAgent,
@@ -169,22 +169,6 @@ function pushRetrievePhaseSteps(
     ms: timings.expandMs,
     detail: multi,
   });
-}
-
-function mergePathFilterWithDomainHints(
-  pathFilter: { crawlRoot?: string; urlPrefix?: string } | undefined,
-  domainHintsUrlPrefix: string | undefined,
-): { crawlRoot?: string; urlPrefix?: string } | undefined {
-  if (!domainHintsUrlPrefix) return pathFilter;
-  const narrowed = pickNarrowerUrlPrefix(
-    pathFilter?.urlPrefix,
-    domainHintsUrlPrefix,
-  );
-  if (!pathFilter && !narrowed) return undefined;
-  return {
-    ...(pathFilter?.crawlRoot ? { crawlRoot: pathFilter.crawlRoot } : {}),
-    ...(narrowed ? { urlPrefix: narrowed } : {}),
-  };
 }
 
 function buildRetrievalMeta(input: {
@@ -535,7 +519,6 @@ export class RAGQueryProcessor implements Processor {
     const {
       queries,
       topicScope,
-      domainHints,
       method: rewriteMethod,
       rewriteModelId,
     } = await rewriteQueries({
@@ -551,19 +534,6 @@ export class RAGQueryProcessor implements Processor {
       detail: rewriteModelId,
     });
 
-    const domainHintsList = [
-      ...new Set(
-        (domainHints ?? []).map((hint) => hint.trim()).filter(Boolean),
-      ),
-    ];
-    const domainHintsUrlPrefix =
-      scopedCatalog?.pages?.length && domainHintsList.length > 0
-        ? resolveDomainHintsUrlPrefix(domainHintsList, scopedCatalog.pages)
-        : undefined;
-    const retrievalPathFilter = mergePathFilterWithDomainHints(
-      pathFilter,
-      domainHintsUrlPrefix,
-    );
     const rerankQuery = buildRerankQuery({ originalQuestion: question });
 
     const catalogUrlCandidate = scopedCatalog?.pages?.length
@@ -585,7 +555,7 @@ export class RAGQueryProcessor implements Processor {
       question,
       sourceId,
       catalogUrlFilter,
-      filter: retrievalPathFilter,
+      filter: pathFilter,
       relevanceThreshold: retrievalSettings.relevanceThreshold,
     });
     pushRetrievePhaseSteps(timingSteps, retrieval, {
@@ -624,7 +594,7 @@ export class RAGQueryProcessor implements Processor {
         question,
         sourceId,
         catalogUrlFilter,
-        filter: retrievalPathFilter,
+        filter: pathFilter,
         relevanceThreshold: retrievalSettings.relaxedThreshold,
       });
       pushRetrievePhaseSteps(timingSteps, retrieval, {
@@ -653,7 +623,7 @@ export class RAGQueryProcessor implements Processor {
         question,
         sourceId,
         catalogUrlFilter,
-        filter: retrievalPathFilter,
+        filter: pathFilter,
         relevanceThreshold: retrievalSettings.relevanceThreshold,
         allowWeakEvidence: true,
       });

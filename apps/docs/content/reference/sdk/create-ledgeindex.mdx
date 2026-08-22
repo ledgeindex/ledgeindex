@@ -18,9 +18,9 @@ Call once per process (or reuse the returned handle). Initializes Mastra, storag
 |--------|---------|---------|
 | `dataDir` | `~/.ledgeindex/data` | Sources, LibSQL vectors, workflow state |
 | `localUserId` | `ledgeindex-sdk-local` | Owner id for personal sources |
-| `keys.openai` | env `OPENAI_API_KEY` | OpenAI — required for `ask` / `autoFilter` / `enrichExamples` |
-| `keys.google` | env `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini — required for `ask` / `autoFilter` / `enrichExamples`; also pgvector embeddings |
-| `keys.deepseek` | env `DEEPSEEK_API_KEY` | DeepSeek — required for `ask` / `autoFilter` / `enrichExamples` |
+| `keys.openai` | env `OPENAI_API_KEY` | OpenAI — required for `ask` / `autoFilter` / `discoverHeaderNav` / `enrichExamples` |
+| `keys.google` | env `GOOGLE_GENERATIVE_AI_API_KEY` | Gemini — required for `ask` / `autoFilter` / `discoverHeaderNav` / `enrichExamples`; also pgvector embeddings |
+| `keys.deepseek` | env `DEEPSEEK_API_KEY` | DeepSeek — required for `ask` / `autoFilter` / `discoverHeaderNav` / `enrichExamples` |
 | `keys.cohere` | env `COHERE_API_KEY` | Cohere rerank on `ask` |
 | `provider` | auto (google → deepseek → openai) | Force chat/crawl LLM provider |
 | `vectorBackend` | `libsql` | `libsql` (FastEmbed) or `pgvector` (Gemini) |

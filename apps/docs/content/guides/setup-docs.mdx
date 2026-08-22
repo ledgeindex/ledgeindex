@@ -11,6 +11,7 @@ Crawl a **public docs site** (Mintlify, Docusaurus, Astro Starlight, plain HTML,
 | **Crawl + index** | No (local FastEmbed) | ~1–10 min depending on `maxPages` |
 | **Ask / retrieve** | Yes for a full **answer**; no for retrieval-only | ~100 ms retrieval + LLM for chat |
 | **`--filter` / `autoFilter`** | Yes (LLM URL cleanup) | Extra pass after crawl |
+| **`--discover-nav` / `discoverHeaderNav`** | Yes (Stagehand header nav scan) | ~10–30s after preflight |
 | **`--enrich` / `enrichExamples`** | Yes (example extraction) | One LLM pass per page |
 
 Indexes are **persistent** under `LEDGEINDEX_DATA_DIR` (default `~/.ledgeindex/data` for SDK/CLI). Index once; query many times.
@@ -21,10 +22,11 @@ From the monorepo (or your app with `@ledgeindex/sdk` built). No running API req
 
 ```bash
 node scripts/index-docs.mjs https://docs.stagehand.dev/ stagehand-docs
+node scripts/index-docs.mjs https://ledgeindex.com/docs ledgeindex-docs --discover-nav
 node scripts/query-repo.mjs stagehand-docs "how do I use act()"
 ```
 
-Optional flags: `--max-pages N`, `--filter` (LLM URL cleanup), `--enrich` (example chunks for planner workflows).
+Optional flags: `--max-pages N`, `--discover-nav` (header nav sibling sections), `--filter` (LLM URL cleanup), `--enrich` (example chunks for planner workflows).
 
 ### SDK in code
 
@@ -41,6 +43,9 @@ const result = await li.crawl({
   maxPages: 200,
   onProgress: (u) => console.log(u.phase, u.detail),
 });
+
+// Multi-section sites — add guides/reference from header nav before crawl:
+// await li.crawl({ url: "https://ledgeindex.com/docs", discoverHeaderNav: true });
 
 const { answer, citations } = await li.ask(
   result.sourceId,
@@ -183,5 +188,5 @@ Re-crawl the same URL to refresh content; vectors for that source are replaced o
 - [Set up SDK](/guides/setup-sdk) — `createLedgeIndex`, `crawl`, `ask`, `askAcross`
 - [askAcross](/reference/sdk/ask-across)
 - [Set up CLI](/guides/setup-cli) — `ledgeindex crawl`, `ledgeindex ask`
-- [SDK crawl](/reference/sdk/crawl) — `autoFilter`, `enrichExamples`, `crawlConfig`
+- [SDK crawl](/reference/sdk/crawl) — `autoFilter`, `discoverHeaderNav`, `enrichExamples`, `crawlConfig`
 - [SDK ask](/reference/sdk/ask)

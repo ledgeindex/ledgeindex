@@ -8,6 +8,12 @@ import {
   type DesktopProviderId,
   type DesktopProviderKeyStatus,
 } from "@/lib/ledgeindex-desktop";
+import { listHeaderNavProviders } from "@/lib/ledgeindex-api";
+import {
+  readCrawlProvider,
+  writeCrawlProvider,
+  type CrawlProviderId,
+} from "@/lib/crawl-provider";
 import { cn } from "@/lib/utils";
 
 type AppPreferences = {
@@ -48,6 +54,125 @@ function emptyDraft(): Record<DesktopProviderId, string> {
 
 function emptyStatus(): DesktopProviderKeyStatus {
   return { openai: false, google: false, deepseek: false };
+}
+
+function providerLabel(id: CrawlProviderId): string {
+  return PROVIDERS.find((provider) => provider.id === id)?.label ?? id;
+}
+
+function CrawlProviderButtons({
+  available,
+  value,
+  disabled,
+  onChange,
+}: {
+  available: CrawlProviderId[];
+  value: CrawlProviderId | null;
+  disabled?: boolean;
+  onChange: (id: CrawlProviderId) => void;
+}): React.JSX.Element {
+  if (available.length === 0) {
+    return (
+      <p className="text-xs text-muted">
+        Save at least one key, then pick which one crawl tasks should use.
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-wrap gap-2">
+      {available.map((id) => (
+        <button
+          key={id}
+          type="button"
+          disabled={disabled}
+          onClick={() => onChange(id)}
+          className={cn(
+            "rounded-full border px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50",
+            value === id
+              ? "border-foreground bg-foreground text-background"
+              : "border-border bg-card-solid text-muted hover:text-foreground",
+          )}
+        >
+          {providerLabel(id)}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function SelfHostedCrawlProviderSettings(): React.JSX.Element {
+  const [available, setAvailable] = useState<CrawlProviderId[]>([]);
+  const [value, setValue] = useState<CrawlProviderId | null>(null);
+  const [ready, setReady] = useState(false);
+  const [choosable, setChoosable] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    void listHeaderNavProviders()
+      .then((catalog) => {
+        if (cancelled) return;
+        setChoosable(catalog.choosable);
+        if (!catalog.choosable) {
+          setAvailable([]);
+          setReady(true);
+          return;
+        }
+        const keyed = catalog.providers
+          .filter((provider) => provider.available)
+          .map((provider) => provider.id);
+        setAvailable(keyed);
+        const saved = readCrawlProvider();
+        const next =
+          saved && keyed.includes(saved) ? saved : catalog.default;
+        setValue(next);
+        if (next) writeCrawlProvider(next);
+        setReady(true);
+      })
+      .catch(() => {
+        if (!cancelled) setReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  return (
+    <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+      <div>
+        <h1 className="text-xl font-semibold text-foreground">Settings</h1>
+        <p className="mt-1 text-sm text-muted">
+          {choosable
+            ? "Pick which configured model key crawl tasks should use on this server."
+            : "Model keys and tray options are only available in the LedgeIndex desktop app. Hosted crawls use Google."}
+        </p>
+      </div>
+      {choosable ? (
+        <div className="space-y-3 rounded-xl border border-border bg-card-solid p-4 shadow-card">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">
+              Crawl tasks
+            </h2>
+            <p className="mt-1 text-xs text-muted">
+              Header nav discovery, URL filter, and similar crawl helpers.
+            </p>
+          </div>
+          {ready ? (
+            <CrawlProviderButtons
+              available={available}
+              value={value}
+              onChange={(id) => {
+                setValue(id);
+                writeCrawlProvider(id);
+              }}
+            />
+          ) : (
+            <p className="text-sm text-muted">Loading…</p>
+          )}
+        </div>
+      ) : null}
+    </div>
+  );
 }
 
 function DesktopTrayPreferences({
@@ -188,6 +313,9 @@ export default function DesktopProviderKeysPage(): React.JSX.Element {
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [crawlProvider, setCrawlProvider] =
+    useState<CrawlProviderId | null>(null);
+  const [savingCrawlProvider, setSavingCrawlProvider] = useState(false);
 
   useEffect(() => {
     if (!desktop?.getProviderKeyStatus) {
@@ -206,22 +334,34 @@ export default function DesktopProviderKeysPage(): React.JSX.Element {
     };
   }, [desktop]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const local = readCrawlProvider();
+    if (local) setCrawlProvider(local);
+    void desktop?.getCrawlProvider?.().then((next) => {
+      if (!cancelled && next) {
+        setCrawlProvider(next);
+        writeCrawlProvider(next);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [desktop]);
+
   if (!desktop) {
-    return (
-      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-2 px-4 py-8 sm:px-6">
-        <h1 className="text-xl font-semibold text-foreground">Settings</h1>
-        <p className="text-sm text-muted">
-          Model keys and tray options are only available in the LedgeIndex
-          desktop app.
-        </p>
-      </div>
-    );
+    return <SelfHostedCrawlProviderSettings />;
   }
 
   if (!desktop.getProviderKeyStatus || !desktop.saveProviderKeys) {
     return (
-      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-2 px-4 py-8 sm:px-6">
-        <h1 className="text-xl font-semibold text-foreground">Settings</h1>
+      <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
+        <div>
+          <h1 className="text-xl font-semibold text-foreground">Settings</h1>
+          <p className="mt-1 text-sm text-muted">
+            Provider keys for this machine.
+          </p>
+        </div>
         <p className="text-sm text-muted">
           This desktop build is missing provider-key support. Fully quit and
           restart the app so preload updates load.
@@ -240,6 +380,17 @@ export default function DesktopProviderKeysPage(): React.JSX.Element {
       setStatus(next);
       setDraft(emptyDraft());
       setMessage("Saved. Local API restarted with the new keys.");
+      const stillValid = crawlProvider ? next[crawlProvider] : false;
+      if (!stillValid) {
+        const fallback = PROVIDERS.find((provider) => next[provider.id])?.id;
+        if (fallback) {
+          setCrawlProvider(fallback);
+          writeCrawlProvider(fallback);
+        } else {
+          setCrawlProvider(null);
+          writeCrawlProvider(null);
+        }
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -263,6 +414,29 @@ export default function DesktopProviderKeysPage(): React.JSX.Element {
   async function onRemove(id: DesktopProviderId) {
     await persist({ [id]: "" });
   }
+
+  async function persistCrawlProvider(id: CrawlProviderId) {
+    setCrawlProvider(id);
+    writeCrawlProvider(id);
+    if (!desktop?.setCrawlProvider) return;
+    setSavingCrawlProvider(true);
+    setError(null);
+    try {
+      const next = await desktop.setCrawlProvider(id);
+      if (next) {
+        setCrawlProvider(next);
+        writeCrawlProvider(next);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSavingCrawlProvider(false);
+    }
+  }
+
+  const keyedProviders = PROVIDERS.filter(
+    (provider) => status[provider.id],
+  ).map((provider) => provider.id);
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-1 flex-col gap-6 px-4 py-8 sm:px-6">
@@ -337,6 +511,28 @@ export default function DesktopProviderKeysPage(): React.JSX.Element {
               <p className="text-xs text-muted">{provider.hint}</p>
             </label>
           ))}
+
+          <div className="space-y-2 border-t border-border/60 pt-4">
+            <div>
+              <p className="text-sm font-medium text-foreground">
+                Use for crawl tasks
+              </p>
+              <p className="mt-0.5 text-xs text-muted">
+                Header nav discovery, URL filter, and similar crawl helpers
+                use this key.
+              </p>
+            </div>
+            <CrawlProviderButtons
+              available={keyedProviders}
+              value={
+                crawlProvider && status[crawlProvider]
+                  ? crawlProvider
+                  : keyedProviders[0] ?? null
+              }
+              disabled={saving || savingCrawlProvider}
+              onChange={(id) => void persistCrawlProvider(id)}
+            />
+          </div>
 
           {error ? (
             <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">

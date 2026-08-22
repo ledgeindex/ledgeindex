@@ -294,7 +294,6 @@ async function runCase(input) {
     rewrite: {
       queries: result.rewrite.queries,
       topicScope: result.rewrite.topicScope,
-      domainHints: result.rewrite.domainHints,
       method: result.rewrite.method,
     },
     mode: "full-pipeline",

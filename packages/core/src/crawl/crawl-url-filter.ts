@@ -6,6 +6,10 @@ import {
   resolveChatModelConfig,
 } from "../llm/chat-model-config.js";
 import {
+  crawlModelIdForProvider,
+  resolveConfiguredCrawlProvider,
+} from "../llm/crawl-provider.js";
+import {
   resolveEnrichModelFromSelection,
   type LedgeIndexLlmModel,
 } from "../llm/models.js";
@@ -111,7 +115,12 @@ function resolveFilterModel(input: {
     return { model: fromSelection, modelId };
   }
 
-  const modelId = input.modelId?.trim() || GEMINI_3_5_FLASH_LITE_CATALOG_ID;
+  const configured = resolveConfiguredCrawlProvider();
+  const modelId =
+    input.modelId?.trim() ||
+    (configured
+      ? crawlModelIdForProvider(configured)
+      : GEMINI_3_5_FLASH_LITE_CATALOG_ID);
   return { model: resolveChatModelConfig(modelId), modelId };
 }
 

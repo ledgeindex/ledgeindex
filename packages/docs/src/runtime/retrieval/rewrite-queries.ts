@@ -11,8 +11,6 @@ const rewriteOutputSchema = z.object({
   topicScope: z.enum(["single", "multi"]),
   /** Natural-language search queries (embedding + BM25 use the same text). */
   queries: z.array(z.string().min(3).max(120)).min(1).max(3),
-  /** Catalog section hints — metadata narrowing when mapped, not BM25 text. */
-  domainHints: z.array(z.string().min(2).max(40)).max(5).optional(),
 });
 
 export type RewriteTopicScope = "single" | "multi";
@@ -24,7 +22,6 @@ export type RewriteResult = {
   /** Generated NL variants; the retrieve path always also includes the user question. */
   queries: string[];
   topicScope: RewriteTopicScope;
-  domainHints?: string[];
   method: "llm" | "fallback";
   rewriteModelId: string;
 };
@@ -34,7 +31,6 @@ function fallbackRewrite(question: string, rewriteModelId: string): RewriteResul
   return {
     queries: cleaned ? [cleaned] : [question.trim().slice(0, 120)],
     topicScope: "single",
-    domainHints: [],
     method: "fallback",
     rewriteModelId,
   };
@@ -69,7 +65,6 @@ Output:
    - Do NOT output keyword lists, coreGoal splits, or code dumps.
    - Do NOT repeat the user's exact wording if a catalog phrase is clearer.
    - For vague questions ("what are the primitives"), name the product concepts from the catalog.
-3. domainHints — optional catalog section labels (guides, reference, API) for metadata narrowing only.
 
 The retrieve pipeline always runs the user's original question as well; your queries are additional variants fused with RRF.`,
     model,
@@ -90,7 +85,6 @@ The retrieve pipeline always runs the user's original question as well; your que
       return {
         queries,
         topicScope: object.topicScope === "multi" ? "multi" : "single",
-        domainHints: object.domainHints?.map((h) => h.trim()).filter(Boolean),
         method: "llm",
         rewriteModelId,
       };

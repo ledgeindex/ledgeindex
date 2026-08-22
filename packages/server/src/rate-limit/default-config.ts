@@ -56,6 +56,8 @@ export const LEDGEINDEX_API_RATE_LIMIT: RateLimitConfig = {
       label: "Preflight + crawl filter / probe helpers",
       routes: [
         { method: "POST", path: "/api/preflight" },
+        { method: "POST", path: "/api/discover-header-nav" },
+        { method: "GET", path: "/api/discover-header-nav" },
         { method: "POST", path: "/api/crawl/url-filter" },
         { method: "POST", path: "/api/crawl/url-removals" },
         { method: "POST", path: "/api/crawl/sitemap-pages" },

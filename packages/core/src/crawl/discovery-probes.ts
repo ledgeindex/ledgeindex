@@ -1,5 +1,8 @@
 import { discoverSitemapUrls, parentScopePathForLandingSeed } from "./sitemap.js";
 import { getStartUrlScopes, isWithinStartUrlScope } from "./url-matcher.js";
+import type { HeaderNavPath } from "./header-nav-paths.js";
+
+export type { HeaderNavPath } from "./header-nav-paths.js";
 
 const ROBOTS_SITEMAP_RE = /^sitemap:\s*(\S+)/gim;
 const SITEMAP_LOC_RE = /<loc>\s*[^<\s]+\s*<\/loc>/i;
@@ -27,6 +30,8 @@ export type SitemapDiscoverySignal = DiscoverySignal & {
 export type DiscoverySignals = {
   robots: RobotsDiscoverySignal;
   sitemap: SitemapDiscoverySignal;
+  /** Sibling docs roots from the site header, when present. */
+  navPaths?: HeaderNavPath[];
 };
 
 async function fetchText(

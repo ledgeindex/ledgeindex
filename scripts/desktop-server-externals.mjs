@@ -34,6 +34,7 @@ export const BUNDLE_EXTERNALS = [
   // Optional browser automation; never bundled, resolved only when used
   "playwright",
   "playwright-core",
+  "@browserbasehq/stagehand",
   // Optional native canvas behind jsdom
   "canvas",
   // jsdom spawns ./xhr-sync-worker.js as a child process and reads
@@ -41,6 +42,14 @@ export const BUNDLE_EXTERNALS = [
   // bundled. It must NOT be aliased either: @crawlee/jsdom pins a nested
   // jsdom 26 for ResourceLoader while the hoisted copy is 29.
   "jsdom",
+  // CheerioCrawler's HTTP stack (got-scraping) is ESM-only. Bundling it into
+  // our CJS server.cjs breaks Node's http/https interop, and the first
+  // link-crawl request throws "Cannot read properties of undefined (reading
+  // 'bind')". Works in dev because packages load as ESM. Keep crawlee on
+  // disk so its CJS entry can dynamic-import got-scraping as ESM.
+  "@crawlee/*",
+  "got-scraping",
+  "got",
 ];
 
 /**
@@ -52,6 +61,9 @@ export const BUNDLE_EXTERNALS = [
  * Wildcards are dropped: the dependency walk reaches concrete platform packages
  * (e.g. @img/sharp-darwin-arm64) through their parents' optionalDependencies.
  */
-export const RUNTIME_TREE_SEEDS = BUNDLE_EXTERNALS.filter(
-  (name) => !name.includes("*"),
-);
+export const RUNTIME_TREE_SEEDS = [
+  ...BUNDLE_EXTERNALS.filter((name) => !name.includes("*")),
+  // Wildcard @crawlee/* is dropped above; this is the package we import.
+  "@crawlee/cheerio",
+  "@browserbasehq/stagehand",
+];

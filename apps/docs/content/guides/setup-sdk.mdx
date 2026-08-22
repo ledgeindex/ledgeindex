@@ -8,7 +8,7 @@ Not sure this is the right path? See [Getting started](/guides) for CLI vs web v
 
 - Node.js **22.13+**
 - **Crawl + index:** no model key required (local FastEmbed + LibSQL by default)
-- **Ask**, **`autoFilter: true`**, **`enrichExamples: true`**, or **`profile`:** a model key
+- **Ask**, **`autoFilter: true`**, **`discoverHeaderNav: true`**, **`enrichExamples: true`**, or **`profile`:** a model key
 - Optional: `COHERE_API_KEY` for Cohere rerank (otherwise local BGE rerank)
 
 ## Install
@@ -73,6 +73,7 @@ Full web crawl → URL filter → ingest pipeline. Same flow as the CLI and web 
 | `name` | from preflight | Source display name |
 | `maxPages` | 1000 | Cap discovered pages |
 | `autoFilter` | `false` | Opt-in LLM URL cleanup (requires model key) |
+| `discoverHeaderNav` | `false` | Scan header nav for sibling docs sections and add them as start URLs — [details](/reference/sdk/crawl#header-nav-path-discovery-discoverheadernav) |
 | `enrichExamples` | `false` | Opt-in example extraction during ingest — [what it does](/reference/sdk/crawl#enrich-examples-enrichexamples) |
 | `crawlConfig` | — | Override include/exclude patterns, selectors, `renderJs`, … |
 | `scope` | `personal` | `personal` or `global` |

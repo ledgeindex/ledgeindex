@@ -18,8 +18,8 @@ import {
   restartDesktopSidecar,
   stopDesktopSidecars
 } from './sidecars'
-import { getProviderKeyStatus, saveProviderKeys } from './provider-settings'
-import type { ProviderKeyInput } from '../shared/providers'
+import { getProviderKeyStatus, saveProviderKeys, getCrawlProvider, setCrawlProvider } from './provider-settings'
+import type { ProviderId, ProviderKeyInput } from '../shared/providers'
 import { registerAutoUpdate, scheduleStartupUpdateCheck } from './auto-update'
 import {
   getAppPreferences,
@@ -61,7 +61,7 @@ function createWindow(): void {
     frame: false,
     autoHideMenuBar: true,
     backgroundColor: '#F7F5F2',
-    ...(process.platform === 'linux' ? { icon } : {}),
+    icon,
     webPreferences: {
       preload: preloadPath,
       sandbox: false,
@@ -202,6 +202,19 @@ app.whenReady().then(async () => {
     }
     return status
   })
+  ipcMain.handle('settings:getCrawlProvider', () => getCrawlProvider())
+  ipcMain.handle(
+    'settings:setCrawlProvider',
+    async (_event, id: ProviderId | null) => {
+      const next = setCrawlProvider(id)
+      try {
+        await restartDesktopSidecar()
+      } catch (error) {
+        console.error('[desktop] restart after crawl provider change failed', error)
+      }
+      return next
+    }
+  )
 
   ipcMain.handle('settings:getAppPreferences', () => getAppPreferences())
   ipcMain.handle(

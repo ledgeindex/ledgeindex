@@ -33,6 +33,8 @@ export type LedgeIndexDesktopApi = {
   getApiOrigin: () => Promise<string>
   getProviderKeyStatus: () => Promise<ProviderKeyStatus>
   saveProviderKeys: (keys: ProviderKeyInput) => Promise<ProviderKeyStatus>
+  getCrawlProvider: () => Promise<ProviderId | null>
+  setCrawlProvider: (id: ProviderId | null) => Promise<ProviderId | null>
   getAppPreferences: () => Promise<{
     openAtLogin: boolean
     startInTray: boolean

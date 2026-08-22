@@ -48,6 +48,9 @@ function shortUrlLabel(url: string): string {
 
 function filterLabel(attempt: RetrievalMeta["searchAttempts"][number]): string {
   const parts = ["sourceId"];
+  if (attempt.filter?.urlPrefix) {
+    parts.push(`path=${shortUrlLabel(attempt.filter.urlPrefix)}`);
+  }
   if (attempt.filter?.url) {
     parts.push(`url=${shortUrlLabel(attempt.filter.url)}`);
   }
@@ -58,6 +61,21 @@ function filterLabel(attempt: RetrievalMeta["searchAttempts"][number]): string {
     parts.push(`section=${attempt.filter.section}`);
   }
   return parts.join(" + ");
+}
+
+function rerankMissReason(
+  attempt: RetrievalMeta["searchAttempts"][number],
+  threshold: number,
+): "below-threshold" | "path-filtered" {
+  const rerank = attempt.rerankTopScores ?? [];
+  if (
+    rerank.length > 0 &&
+    rerank[0] >= threshold &&
+    attempt.filter?.urlPrefix
+  ) {
+    return "path-filtered";
+  }
+  return "below-threshold";
 }
 
 function attemptKindLabel(
@@ -73,14 +91,21 @@ function attemptKindLabel(
   return null;
 }
 
-function hitScoresLabel(attempt: RetrievalMeta["searchAttempts"][number]): string {
+function hitScoresLabel(
+  attempt: RetrievalMeta["searchAttempts"][number],
+  threshold: number,
+): string {
   const scores = attempt.directHitScores ?? [];
   const rerank = attempt.rerankTopScores ?? [];
   const display = scores.length > 0 ? scores : rerank;
   if (display.length === 0) return "";
 
   const prefix =
-    scores.length > 0 ? "hit scores" : "best rerank (below thr)";
+    scores.length > 0
+      ? "hit scores"
+      : rerankMissReason(attempt, threshold) === "path-filtered"
+        ? "best rerank (path filtered)"
+        : "best rerank (below thr)";
   const formatted = display.map(formatScore).join(", ");
   const max = display[0];
   const top3 = display.slice(0, 3);
@@ -92,6 +117,7 @@ function hitScoresLabel(attempt: RetrievalMeta["searchAttempts"][number]): strin
 
 function attemptScoreSummary(
   attempt: RetrievalMeta["searchAttempts"][number],
+  threshold: number,
 ): { max: number; avgTop3: number; belowThreshold: boolean } | null {
   const scores = attempt.directHitScores ?? [];
   if (scores.length > 0) {
@@ -109,7 +135,7 @@ function attemptScoreSummary(
   return {
     max: rerank[0],
     avgTop3: top3.reduce((sum, score) => sum + score, 0) / top3.length,
-    belowThreshold: true,
+    belowThreshold: rerankMissReason(attempt, threshold) === "below-threshold",
   };
 }
 
@@ -457,8 +483,8 @@ function AttemptRow({
   const failed = attempt.insufficient ?? directHits === 0;
   const label = total === 1 ? "Q" : `Q${index + 1}`;
   const pipeline = pipelineLabel(attempt);
-  const hitScores = hitScoresLabel(attempt);
-  const scoreSummary = attemptScoreSummary(attempt);
+  const hitScores = hitScoresLabel(attempt, threshold);
+  const scoreSummary = attemptScoreSummary(attempt, threshold);
   const filter = filterLabel(attempt);
   const kind = attemptKindLabel(attempt);
   const queryCoverage = assessHitCoverageLevel({

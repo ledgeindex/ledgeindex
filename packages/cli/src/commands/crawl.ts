@@ -18,7 +18,7 @@ export async function runCrawlCommand(args: ParsedArgs): Promise<number> {
   const url = commandArg(args, 0) ?? flagString(args.flags, "url");
   if (!url) {
     console.error(
-      "Usage: ledgeindex crawl <url> [--name <name>] [--max-pages N] [--filter] [--enrich] [--provider google|openai|deepseek] [--json]",
+      "Usage: ledgeindex crawl <url> [--name <name>] [--max-pages N] [--filter] [--enrich] [--discover-nav] [--provider google|openai|deepseek] [--json]",
     );
     return 2;
   }
@@ -51,6 +51,7 @@ export async function runCrawlCommand(args: ParsedArgs): Promise<number> {
       maxPages: flagNumber(args.flags, "max-pages"),
       autoFilter: flagBool(args.flags, "filter"),
       enrichExamples: flagBool(args.flags, "enrich"),
+      discoverHeaderNav: flagBool(args.flags, "discover-nav"),
       scope: flagString(args.flags, "scope") === "global" ? "global" : "personal",
       onProgress: (update) => renderer.update(update),
     });

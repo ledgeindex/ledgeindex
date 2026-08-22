@@ -8,6 +8,10 @@ import {
   filterCrawlUrls,
   KnowledgeIndexApiError,
 } from "@/lib/ledgeindex-api";
+import {
+  crawlModelIdForProvider,
+  readCrawlProvider,
+} from "@/lib/crawl-provider";
 
 export type CrawlUrlFilterItem = {
   url: string;
@@ -97,6 +101,7 @@ export function CrawlUrlFilterAssistant({
         .map((item, index) => (selectedUrls.includes(item.url) ? index : -1))
         .filter((index) => index >= 0);
 
+      const crawlProvider = readCrawlProvider();
       const result = await filterCrawlUrls({
         message: prompt,
         urls: urls.map((item, index) => ({
@@ -106,6 +111,9 @@ export function CrawlUrlFilterAssistant({
         })),
         selectedIndexes,
         history,
+        ...(crawlProvider
+          ? { modelId: crawlModelIdForProvider(crawlProvider) }
+          : {}),
       });
 
       const nextSelected = result.selectedIndexes

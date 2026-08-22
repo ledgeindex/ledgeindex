@@ -39,10 +39,10 @@ asarUnpack:
 win:
   executableName: LedgeIndex
   icon: resources/icon.ico
-  # No Authenticode cert. Do not let a leaked CSC_LINK (Apple Developer ID)
-  # sign the NSIS installer — electron-updater then treats the Apple CN as
-  # the publisher and rejects the next build.
-  signAndEditExecutable: false
+  # Unsigned on purpose: no Authenticode cert. Signing is skipped when CSC_LINK
+  # is unset (CI only injects it on macOS). Keep this true so rcedit still
+  # stamps version info and icon.ico onto LedgeIndex.exe — false left the
+  # default Electron icon in the taskbar.
 nsis:
   artifactName: LedgeIndex-${version}-setup.${ext}
   shortcutName: ${productName}

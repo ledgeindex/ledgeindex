@@ -127,6 +127,11 @@ export type LedgeIndexCrawlOptions = {
    * Set `true` to run AI filter (requires google, openai, or deepseek key).
    */
   autoFilter?: boolean;
+  /**
+   * After preflight, scan the site header for sibling docs sections (guides, reference, …)
+   * and add them as extra start URLs. Uses Stagehand + a chat model key (same as web UI).
+   */
+  discoverHeaderNav?: boolean;
   /** Example enrichment during ingest. Default `false`. Requires a chat model key. */
   enrichExamples?: boolean;
   scope?: "personal" | "global";

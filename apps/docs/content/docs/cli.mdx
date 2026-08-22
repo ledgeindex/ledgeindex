@@ -26,7 +26,7 @@ Full install and keys: [Set up CLI](/guides/setup-cli).
 
 | Command | Model key? | What it does |
 |---------|------------|--------------|
-| `ledgeindex crawl <url>` | No (optional `--filter` / `--enrich`) | Crawl + index into `~/.ledgeindex/data` |
+| `ledgeindex crawl <url>` | No (optional `--filter` / `--discover-nav` / `--enrich`) | Crawl + index into `~/.ledgeindex/data` |
 | `ledgeindex ask <source> "…"` | Yes | RAG question over one indexed source |
 | `ledgeindex ask --sources a,b "…"` | Yes | Ask across pinned sources ([askAcross](/reference/sdk/ask-across)) |
 | `ledgeindex ask --all --set <slug> "…"` | Yes | Read every source in a saved set |

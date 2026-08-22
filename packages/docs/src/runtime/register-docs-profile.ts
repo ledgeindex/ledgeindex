@@ -14,6 +14,7 @@ import { indexingRoutes } from "./routes/indexing.js";
 import { ingestRoutes } from "./routes/ingest.js";
 import { refreshRoutes } from "./routes/refresh.js";
 import { preflightRoutes } from "./routes/preflight.js";
+import { discoverHeaderNavRoutes } from "./routes/discover-header-nav.js";
 import { apiKeyRoutes } from "./routes/api-keys.js";
 import { chatRoutes } from "./routes/chat.js";
 import { crawlFilterRoutes } from "./routes/crawl-filter.js";
@@ -38,6 +39,7 @@ export async function registerDocsProfile(fastify: FastifyInstance): Promise<voi
   await fastify.register(ingestRoutes);
   await fastify.register(refreshRoutes);
   await fastify.register(preflightRoutes);
+  await fastify.register(discoverHeaderNavRoutes);
   await fastify.register(apiKeyRoutes);
   await fastify.register(chatRoutes);
   await fastify.register(widgetRoutes);

@@ -699,6 +699,7 @@ export type DiscoverySignal = {
 export type DiscoverySignals = {
   robots: DiscoverySignal;
   sitemap: DiscoverySignal;
+  navPaths?: Array<{ url: string; label: string }>;
 };
 
 export type PreflightResult = {
@@ -713,6 +714,52 @@ export type PreflightResult = {
   discovery: DiscoverySignals;
   metadata: SourceMetadata;
 };
+
+export type HeaderNavPath = {
+  url: string;
+  label: string;
+};
+
+export type HeaderNavDiscoveryResult = {
+  seed: HeaderNavPath;
+  paths: HeaderNavPath[];
+  isTopNavbar: boolean;
+  reason: string;
+};
+
+export type HeaderNavProviderId = "google" | "openai" | "deepseek";
+
+export type HeaderNavProviderCatalog = {
+  choosable: boolean;
+  default: HeaderNavProviderId;
+  providers: Array<{
+    id: HeaderNavProviderId;
+    label: string;
+    available: boolean;
+  }>;
+};
+
+export async function listHeaderNavProviders(signal?: AbortSignal) {
+  return api<HeaderNavProviderCatalog>("/api/discover-header-nav", {
+    method: "GET",
+    signal,
+  });
+}
+
+export async function discoverHeaderNavPaths(
+  url: string,
+  signal?: AbortSignal,
+  provider?: HeaderNavProviderId,
+) {
+  return api<HeaderNavDiscoveryResult>("/api/discover-header-nav", {
+    method: "POST",
+    body: JSON.stringify({
+      url: normalizeStartUrl(url),
+      ...(provider ? { provider } : {}),
+    }),
+    signal,
+  });
+}
 
 export async function preflightSite(
   url: string,

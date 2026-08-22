@@ -17,6 +17,7 @@ const ENV_BY_PROVIDER: Record<ProviderId, string[]> = {
 
 type SettingsFile = {
   keysEnc?: Partial<Record<ProviderId, string>>
+  crawlProvider?: ProviderId
 }
 
 function settingsPath(): string {
@@ -83,6 +84,20 @@ export function getProviderKeyStatus(): ProviderKeyStatus {
   return status
 }
 
+export function getCrawlProvider(): ProviderId | null {
+  const stored = readSettings().crawlProvider
+  if (!stored || !PROVIDER_IDS.includes(stored)) return null
+  return getProviderKey(stored) ? stored : null
+}
+
+export function setCrawlProvider(id: ProviderId | null): ProviderId | null {
+  const current = readSettings()
+  const next =
+    id && PROVIDER_IDS.includes(id) && getProviderKey(id) ? id : null
+  writeSettings({ ...current, crawlProvider: next ?? undefined })
+  return getCrawlProvider()
+}
+
 /** Save keys. Empty string clears; omit / whitespace-only keeps existing. */
 export function saveProviderKeys(input: ProviderKeyInput): ProviderKeyStatus {
   const current = readSettings()
@@ -117,6 +132,9 @@ export function buildProviderEnv(): NodeJS.ProcessEnv {
     env.GOOGLE_API_KEY = google
   }
   if (deepseek) env.DEEPSEEK_API_KEY = deepseek
+
+  const crawlProvider = getCrawlProvider()
+  if (crawlProvider) env.LEDGEINDEX_CRAWL_PROVIDER = crawlProvider
 
   return env
 }

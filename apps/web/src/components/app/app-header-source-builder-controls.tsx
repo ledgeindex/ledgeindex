@@ -53,11 +53,7 @@ export function AppHeaderSourceBuilderControls() {
           <span className="sm:hidden">←</span>
           <span className="hidden sm:inline">← Builder</span>
         </Link>
-        <div className="min-w-0">
-          <p className="hidden text-[0.5625rem] font-semibold uppercase tracking-wide text-muted sm:block">
-            Source builder
-            {dirty ? " · unsaved" : ""}
-          </p>
+        <div className="flex min-w-0 items-baseline gap-2">
           <input
             value={name}
             onChange={(event) => onRename(event.target.value)}
@@ -65,6 +61,11 @@ export function AppHeaderSourceBuilderControls() {
             placeholder="Source name"
             aria-label="Source name"
           />
+          {dirty ? (
+            <span className="hidden shrink-0 text-[0.5625rem] text-muted sm:inline">
+              unsaved
+            </span>
+          ) : null}
         </div>
       </div>
 

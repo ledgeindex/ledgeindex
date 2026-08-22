@@ -32,6 +32,8 @@ export type RetrievalSearchFilter = {
   url?: string;
   category?: string;
   section?: string;
+  crawlRoot?: string;
+  urlPrefix?: string;
 };
 
 export type RetrievalSearchAttempt = {

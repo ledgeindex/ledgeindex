@@ -18,6 +18,7 @@ function parseArgs(argv) {
   let maxPages;
   let autoFilter = false;
   let enrichExamples = false;
+  let discoverHeaderNav = false;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -33,26 +34,37 @@ function parseArgs(argv) {
       enrichExamples = true;
       continue;
     }
+    if (arg === "--discover-nav") {
+      discoverHeaderNav = true;
+      continue;
+    }
     if (!url) url = arg;
     else if (!name) name = arg;
   }
 
-  return { url, name, maxPages, autoFilter, enrichExamples };
+  return { url, name, maxPages, autoFilter, enrichExamples, discoverHeaderNav };
 }
 
-const { url, name, maxPages, autoFilter, enrichExamples } = parseArgs(
+const { url, name, maxPages, autoFilter, enrichExamples, discoverHeaderNav } = parseArgs(
   process.argv.slice(2),
 );
 
 if (!url) {
   console.error(
-    "Usage: node scripts/index-docs.mjs <docs-url> [name] [--max-pages N] [--filter] [--enrich]",
+    "Usage: node scripts/index-docs.mjs <docs-url> [name] [--max-pages N] [--filter] [--enrich] [--discover-nav]",
   );
   process.exit(2);
 }
 
 if (autoFilter && !hasChatKey()) {
   console.error("--filter needs a chat key (GOOGLE_GENERATIVE_AI_API_KEY, etc.)");
+  process.exit(2);
+}
+
+if (discoverHeaderNav && !hasChatKey()) {
+  console.error(
+    "--discover-nav needs a chat key (GOOGLE_GENERATIVE_AI_API_KEY, etc.)",
+  );
   process.exit(2);
 }
 
@@ -143,6 +155,7 @@ const result = await li.crawl({
   ...(resolvedMaxPages ? { maxPages: resolvedMaxPages } : {}),
   autoFilter,
   enrichExamples,
+  discoverHeaderNav,
   onProgress: logProgress,
 });
 

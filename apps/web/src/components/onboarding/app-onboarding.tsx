@@ -242,7 +242,7 @@ function AppOnboardingFlow({
                   className="h-11 flex-1 rounded-lg px-5 sm:flex-none sm:min-w-[9rem]"
                   onClick={() => finish("/sources/web-crawl?fresh=1")}
                 >
-                  New source
+                  Add source
                 </Button>
               </>
             ) : (

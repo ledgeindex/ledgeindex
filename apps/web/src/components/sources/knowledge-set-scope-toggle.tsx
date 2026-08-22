@@ -1,6 +1,7 @@
 "use client";
 
 import { Lock } from "lucide-react";
+import { useAuth } from "@/lib/auth-context";
 import { cn } from "@/lib/utils";
 
 export type KnowledgeSetScope = "personal" | "global";
@@ -21,6 +22,7 @@ export function KnowledgeSetScopeToggle({
   size?: "default" | "compact";
   publicLocked?: boolean;
 }) {
+  const { isAdmin } = useAuth();
   const compact = size === "compact";
 
   return (
@@ -89,7 +91,7 @@ export function KnowledgeSetScopeToggle({
               />
             ) : null}
             <span>{option.label}</span>
-            {"adminOnly" in option && option.adminOnly ? (
+            {"adminOnly" in option && option.adminOnly && isAdmin ? (
               <span
                 className={cn(
                   "rounded font-mono font-semibold tracking-[0.08em] uppercase",

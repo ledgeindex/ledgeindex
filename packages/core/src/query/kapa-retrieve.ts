@@ -1022,6 +1022,20 @@ export async function kapaRetrieve(input: {
     ),
   );
 
+  if (
+    pruned.length > 0 &&
+    directHits.length === 0 &&
+    input.filter?.urlPrefix?.trim()
+  ) {
+    logVerbose("Kapa retrieve: urlPrefix removed all threshold hits", "KapaRetrieve", {
+      sourceId: input.sourceId,
+      urlPrefix: input.filter.urlPrefix,
+      prunedCount: pruned.length,
+      topScore: pruned[0]?.score,
+      threshold,
+    });
+  }
+
   const escalation = input.escalationRerankQuery?.trim();
   if (
     directHits.length === 0 &&

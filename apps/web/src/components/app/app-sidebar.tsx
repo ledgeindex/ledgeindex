@@ -89,9 +89,11 @@ function AppSidebarInner({
               onClick={onNavigate}
               className={cn(
                 "flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors",
-                active
-                  ? "bg-accent/12 text-foreground"
-                  : "text-muted hover:bg-surface-raised hover:text-foreground",
+                item.emphasis
+                  ? "mb-2 border border-accent/30 bg-accent/10 text-foreground hover:border-accent/45 hover:bg-accent/16"
+                  : active
+                    ? "bg-accent/12 text-foreground"
+                    : "text-muted hover:bg-surface-raised hover:text-foreground",
               )}
             >
               <Icon className="size-4 shrink-0" />

@@ -52,6 +52,8 @@ Used during source setup before ingest starts.
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/preflight` | HEAD/start URL check — site name, favicon, metadata |
+| `GET` | `/api/discover-header-nav` | List crawl providers available for header nav discovery |
+| `POST` | `/api/discover-header-nav` | Stagehand scan for sibling docs sections in the site header (`{ url, provider? }`) |
 | `POST` | `/api/crawl/url-filter` | Pattern or LLM-based URL filtering |
 | `POST` | `/api/crawl/url-removals` | Propose URL indexes to remove (LLM) |
 | `POST` | `/api/crawl/sitemap-pages` | Discover URLs from sitemap |
@@ -72,6 +74,7 @@ Used during source setup before ingest starts.
 |---------------|-------|
 | `listSources`, `createSource`, `getSource`, … | See table above |
 | `preflightSite` | `POST /api/preflight` |
+| `discoverHeaderNavPaths`, `listHeaderNavProviders` | `GET` / `POST /api/discover-header-nav` |
 | `runCrawlPreview` | `POST /api/sources/:id/crawl-preview` |
 
 Full mapping: [Client — Sources & ingest](/reference/client/sources).

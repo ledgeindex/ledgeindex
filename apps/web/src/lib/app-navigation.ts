@@ -10,7 +10,7 @@ import {
   Plug,
   Plus,
   RefreshCw,
-  Sparkles,
+  Settings,
 } from "lucide-react";
 
 export type AppNavItem = {
@@ -19,6 +19,8 @@ export type AppNavItem = {
   href: string;
   icon: LucideIcon;
   adminOnly?: boolean;
+  /** Primary action — visually separated from the rest of the nav. */
+  emphasis?: boolean;
   /** Only show when hosted billing / plan limits are enabled on the API. */
   requiresPlanLimits?: boolean;
   /** Only show inside @ledgeindex/desktop (Electron). */
@@ -28,9 +30,10 @@ export type AppNavItem = {
 export const APP_NAV_ITEMS: AppNavItem[] = [
   {
     id: "new-crawl",
-    label: "New source",
+    label: "Add source",
     href: "/sources/web-crawl?fresh=1",
     icon: Plus,
+    emphasis: true,
   },
   {
     id: "explore-chat",
@@ -83,10 +86,9 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
   },
   {
     id: "provider-keys",
-    label: "Model Provider Keys",
+    label: "Settings",
     href: "/settings/providers",
-    icon: Sparkles,
-    desktopOnly: true,
+    icon: Settings,
   },
   {
     id: "admin-source-updater",

@@ -1,7 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { SidecarHealth } from '../shared/sidecar-health'
-import type { ProviderKeyInput, ProviderKeyStatus } from '../shared/providers'
+import type { ProviderId, ProviderKeyInput, ProviderKeyStatus } from '../shared/providers'
 
 console.log('[preload] @ledgeindex/desktop preload starting')
 
@@ -41,6 +41,10 @@ const ledgeindexDesktop = {
     ipcRenderer.invoke('settings:getProviderKeyStatus'),
   saveProviderKeys: (keys: ProviderKeyInput): Promise<ProviderKeyStatus> =>
     ipcRenderer.invoke('settings:saveProviderKeys', keys),
+  getCrawlProvider: (): Promise<ProviderId | null> =>
+    ipcRenderer.invoke('settings:getCrawlProvider'),
+  setCrawlProvider: (id: ProviderId | null): Promise<ProviderId | null> =>
+    ipcRenderer.invoke('settings:setCrawlProvider', id),
   getAppPreferences: (): Promise<{
     openAtLogin: boolean
     startInTray: boolean

@@ -54,7 +54,7 @@ export function AppHeaderDashboardControls() {
       ? "/sources/web-crawl?scope=global&fresh=1"
       : "/sources/web-crawl?fresh=1";
   const newCrawlLabel =
-    scope === "global" && isAdmin ? "New global set" : "New source";
+    scope === "global" && isAdmin ? "Add global set" : "Add source";
   const scopeAllowsCreate =
     scope === "personal" || (scope === "global" && isAdmin);
   const atSourceLimit =

@@ -32,6 +32,7 @@ Returns `{ sourceId, runId, name, url, pageCount, chunkCount }`.
 | `name` | from preflight | Source display name |
 | `maxPages` | `1000` | Cap discovered pages |
 | `autoFilter` | `false` | Opt-in LLM URL cleanup (requires model key on server) |
+| `discoverHeaderNav` | `false` | Scan header nav for sibling docs sections and add them as start URLs — [details](/reference/sdk/crawl#header-nav-path-discovery-discoverheadernav) |
 | `enrichExamples` | `false` | Opt-in example extraction — [details](/reference/sdk/crawl#enrich-examples-enrichexamples) |
 | `scope` | `"personal"` | `"personal"` or `"global"` |
 | `onProgress` | — | Phase progress callback |

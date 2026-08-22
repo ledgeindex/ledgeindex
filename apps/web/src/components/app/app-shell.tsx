@@ -7,11 +7,11 @@ import { createPortal } from "react-dom";
 import { AppHeaderDashboardControls } from "@/components/app/app-header-dashboard-controls";
 import { AppHeaderSourceChatControls } from "@/components/app/app-header-source-chat-controls";
 import { AppHeaderSourceBuilderControls } from "@/components/app/app-header-source-builder-controls";
+import { AppHeaderWebCrawlControls } from "@/components/app/app-header-web-crawl-controls";
 import { AppHeaderIndexedNotice } from "@/components/app/app-header-indexed-notice";
 import { AppSidebar } from "@/components/app/app-sidebar";
 import { DesktopHeaderTrailing } from "@/components/desktop/desktop-chrome";
 import { DesktopSidecarBadge } from "@/components/desktop/desktop-sidecar-badge";
-import { DesktopTitleBar } from "@/components/desktop/desktop-titlebar";
 import { ThemeToggle } from "@/components/theme-toggle-slot";
 import {
   MobileAppSidebarProvider,
@@ -77,7 +77,6 @@ function AppSidebarLayer({
 
       <AppSidebar
         className={cn(
-          // Above DesktopTitleBar (z-400) so the brand row isn't clipped under it.
           "fixed inset-y-0 left-0 z-[410] h-dvh w-[15.5rem] max-w-[85vw] transition-[transform,visibility,opacity] duration-300 [-webkit-app-region:no-drag]",
           isOpen
             ? "visible translate-x-0 opacity-100"
@@ -95,15 +94,18 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const desktop = useLedgeIndexDesktop();
   const isOpen = sidebar?.isOpen ?? false;
-  const showAppHeader = !pathname.startsWith("/sources/web-crawl");
+  const isWebCrawl = pathname.startsWith("/sources/web-crawl");
+  const isWebCrawlDesktop = isWebCrawl && Boolean(desktop);
+  const showAppHeader = !isWebCrawl || Boolean(desktop);
   const lockViewport =
-    pathname.startsWith("/sources/web-crawl") ||
+    isWebCrawl ||
     pathname === "/chat" ||
     pathname === "/admin/source-updater" ||
     /^\/sources\/[^/]+\/chat$/.test(pathname);
   const isSourceChat = /^\/sources\/[^/]+\/chat$/.test(pathname);
   const isSourceBuilderDetail = /^\/sources\/builder\/[^/]+$/.test(pathname);
-  const useCustomHeader = isSourceChat || isSourceBuilderDetail;
+  const useCustomHeader =
+    isSourceChat || isSourceBuilderDetail || isWebCrawlDesktop;
 
   const onHeaderDoubleClick = useCallback(() => {
     void desktop?.toggleMaximizeWindow();
@@ -111,7 +113,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex h-dvh max-h-dvh overflow-hidden bg-surface-alt">
-      {!showAppHeader && desktop ? <DesktopTitleBar /> : null}
       <AppSidebarLayer
         isOpen={isOpen}
         onClose={() => sidebar?.setOpen(false)}
@@ -120,7 +121,6 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
       <div
         className={cn(
           "relative z-0 flex h-full min-h-0 min-w-0 flex-1 flex-col overflow-hidden",
-          !showAppHeader && desktop && "pt-9",
           // While the drawer is open, kill header drag so Electron doesn't steal
           // clicks from the overlay sidebar (nav links).
           desktop && isOpen && "[&_header]:[-webkit-app-region:no-drag]",
@@ -154,6 +154,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
                 {isSourceBuilderDetail ? (
                   <AppHeaderSourceBuilderControls />
                 ) : null}
+                {isWebCrawlDesktop ? <AppHeaderWebCrawlControls /> : null}
               </div>
             ) : (
               <div

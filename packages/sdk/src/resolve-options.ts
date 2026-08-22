@@ -110,6 +110,7 @@ export function applyOptionsToProcessEnv(resolved: ResolvedLedgeIndexOptions) {
   if (resolved.keys.cohere) process.env.COHERE_API_KEY = resolved.keys.cohere;
 
   if (resolved.provider) {
+    process.env.LEDGEINDEX_CRAWL_PROVIDER = resolved.provider;
     process.env.LEDGEINDEX_PRUNER_BACKEND = providerPrunerBackend(
       resolved.provider,
     );

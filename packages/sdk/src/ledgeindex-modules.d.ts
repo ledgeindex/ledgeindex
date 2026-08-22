@@ -276,6 +276,28 @@ declare module "@ledgeindex/core/crawl/crawl-user-agent.js" {
   export const DEFAULT_CRAWL_USER_AGENT: string;
 }
 
+declare module "@ledgeindex/core/crawl/header-nav-paths.js" {
+  export type HeaderNavPath = { url: string; label: string };
+  export function mergeHeaderNavStartUrls(
+    primaryUrl: string,
+    siblingUrls: string[],
+  ): string[];
+}
+
+declare module "@ledgeindex/docs/runtime/crawler/discover-header-nav.js" {
+  export type HeaderNavProviderId = "google" | "openai" | "deepseek";
+  export type HeaderNavDiscoveryResult = {
+    seed: { url: string; label: string };
+    paths: Array<{ url: string; label: string }>;
+    isTopNavbar: boolean;
+    reason: string;
+  };
+  export function discoverHeaderNavPathsInternal(
+    rawUrl: string,
+    preferredProvider?: HeaderNavProviderId,
+  ): Promise<HeaderNavDiscoveryResult>;
+}
+
 declare module "@ledgeindex/docs/runtime/crawler/discover.js" {
   export type CrawlProgressState = {
     status: "running" | "done";

@@ -1,3 +1,4 @@
+import { mergeHeaderNavStartUrls } from "@ledgeindex/core/crawl/header-nav-paths.js";
 import { preflightStartUrl } from "@ledgeindex/core/crawl/preflight.js";
 import { proposeCrawlFilterRemovals } from "@ledgeindex/core/crawl/crawl-url-filter.js";
 import { DEFAULT_CRAWL_USER_AGENT } from "@ledgeindex/core/crawl/crawl-user-agent.js";
@@ -41,6 +42,7 @@ export function defaultWebCrawlConfig(startUrl: string): WebCrawlSourceConfig {
 export type CrawlProgressUpdate = {
   phase: "preflight" | "crawl" | "filter" | "index" | "done" | "error";
   detail: string;
+  headerNavPaths?: Array<{ url: string; label: string }>;
   crawlProgress?: {
     pagesDiscovered: number;
     maxPages: number;
@@ -231,6 +233,58 @@ async function resumeThroughIndex(
   return pollIngestUntilDone(runId, onProgress);
 }
 
+async function resolveCrawlStartUrls(
+  normalizedUrl: string,
+  options: RunWebCrawlOptions,
+): Promise<string[]> {
+  if (!options.discoverHeaderNav) {
+    return [normalizedUrl];
+  }
+
+  const resolved = getActiveOptions();
+  assertChatModelAvailable(resolved, "discoverHeaderNav");
+
+  emit(options.onProgress, {
+    phase: "preflight",
+    detail: "scanning header nav for sibling sections…",
+  });
+
+  try {
+    const { discoverHeaderNavPathsInternal } = await import(
+      "@ledgeindex/docs/runtime/crawler/discover-header-nav.js"
+    );
+    const result = await discoverHeaderNavPathsInternal(
+      normalizedUrl,
+      resolved.provider,
+    );
+    const merged = mergeHeaderNavStartUrls(
+      normalizedUrl,
+      result.paths.map((path) => path.url),
+    );
+    if (merged.length > 1) {
+      emit(options.onProgress, {
+        phase: "preflight",
+        detail: `header nav: +${merged.length - 1} section${merged.length - 1 === 1 ? "" : "s"} (${result.paths.map((path) => path.label).join(", ")})`,
+        headerNavPaths: result.paths,
+      });
+    } else {
+      emit(options.onProgress, {
+        phase: "preflight",
+        detail:
+          result.reason || "header nav: no extra sections beside start URL",
+      });
+    }
+    return merged;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    emit(options.onProgress, {
+      phase: "preflight",
+      detail: `header nav scan skipped: ${message}`,
+    });
+    return [normalizedUrl];
+  }
+}
+
 export async function runWebCrawl(
   options: RunWebCrawlOptions,
 ): Promise<RunWebCrawlResult> {
@@ -255,7 +309,9 @@ export async function runWebCrawl(
 
   const name = options.name?.trim() || preflight.siteName || normalizedUrl;
   const slug = options.slug?.trim() || preflight.siteSlug;
+  const startUrls = await resolveCrawlStartUrls(normalizedUrl, options);
   const config = defaultWebCrawlConfig(normalizedUrl);
+  config.startUrls = startUrls;
   if (options.maxPages != null) {
     config.maxPages = options.maxPages;
   }

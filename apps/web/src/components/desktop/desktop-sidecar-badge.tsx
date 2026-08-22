@@ -1,5 +1,6 @@
 "use client";
 
+import { Cog } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   useLedgeIndexDesktop,
@@ -187,7 +188,14 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
         aria-haspopup="dialog"
         onClick={() => setOpen((value) => !value)}
       >
-        <StatusDot tone={badgeTone} />
+        {busy ? (
+          <Cog
+            className="size-3.5 shrink-0 animate-spin text-muted-strong"
+            aria-hidden
+          />
+        ) : (
+          <StatusDot tone={badgeTone} />
+        )}
         <span className="whitespace-nowrap leading-none">{label}</span>
       </button>
 
@@ -204,7 +212,14 @@ export function DesktopSidecarBadge(): React.JSX.Element | null {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
-                  <StatusDot tone={badgeTone} />
+                  {busy ? (
+                    <Cog
+                      className="size-3.5 shrink-0 animate-spin text-muted-strong"
+                      aria-hidden
+                    />
+                  ) : (
+                    <StatusDot tone={badgeTone} />
+                  )}
                   <p className="m-0 text-[0.78rem] font-semibold text-foreground">
                     Local API
                   </p>

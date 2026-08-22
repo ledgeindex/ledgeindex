@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode, type MouseEvent as ReactMouseEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode, type MouseEvent as ReactMouseEvent } from "react";
 import { createPortal } from "react-dom";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Copy, Info, Plus, Trash2 } from "lucide-react";
@@ -10,6 +10,8 @@ import { IngestPipelineFlow } from "@/components/sources/ingest-pipeline-flow";
 import { CrawlUrlFilterAssistant } from "@/components/sources/crawl-url-filter-assistant";
 import { NewSourceFirstHint } from "@/components/sources/new-source-first-hint";
 import { MobileMenuButton } from "@/components/app/app-shell";
+import { setWebCrawlHeaderControls } from "@/contexts/web-crawl-header-context";
+import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
 import {
   KnowledgeSetScopeToggle,
   type KnowledgeSetScope,
@@ -64,6 +66,7 @@ import {
   KnowledgeIndexApiError,
   normalizeStartUrl,
   preflightSite,
+  discoverHeaderNavPaths,
   resumeIngestWorkflow,
   runParsePreview,
   startIngestWorkflow,
@@ -73,6 +76,7 @@ import {
   isPdfUrl,
   type CrawlRun,
   type DiscoverySignals,
+  type HeaderNavPath,
   type IngestPipelineSnapshot,
   type IndexSizeEstimate,
   type ParsePreviewPage,
@@ -94,6 +98,7 @@ import {
   pathSegmentLabelForUrl,
   sourcePathLabelForUrl,
 } from "@/lib/source-paths";
+import { readCrawlProvider, crawlModelIdForProvider } from "@/lib/crawl-provider";
 
 const BOT_USER_AGENT =
   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36";
@@ -645,6 +650,17 @@ export function WebCrawlSetup() {
   );
   const [enableSitemap, setEnableSitemap] = useState(true);
   const [sitemapOnly, setSitemapOnly] = useState(false);
+  const [discoverHeaderNav, setDiscoverHeaderNav] = useState(false);
+  const [headerNavStatus, setHeaderNavStatus] = useState<
+    "idle" | "loading" | "ready" | "error"
+  >("idle");
+  const [headerNavSeed, setHeaderNavSeed] = useState<HeaderNavPath | null>(
+    null,
+  );
+  const [headerNavPaths, setHeaderNavPaths] = useState<HeaderNavPath[]>([]);
+  const [headerNavReason, setHeaderNavReason] = useState<string | null>(null);
+  const headerNavAbortRef = useRef<AbortController | null>(null);
+  const isDesktopShell = Boolean(getLedgeIndexDesktop());
   const [sitemapUrlsText, setSitemapUrlsText] = useState("");
   const [maxPages, setMaxPages] = useState(DEFAULT_MAX_CRAWL_PAGES);
   const [renderJs, setRenderJs] = useState(false);
@@ -905,6 +921,99 @@ export function WebCrawlSetup() {
     filterPipelinePhase === "auto-exclude";
   const toolbarLocked = Boolean(busy);
   const didInitialPreflight = useRef(false);
+
+  const toggleHeaderNavPath = useCallback((url: string) => {
+    const normalized = normalizeStartUrl(url);
+    const primary = normalizeStartUrl(primaryStartUrl);
+    if (!normalized || normalized === primary) return;
+    setAdditionalStartUrls((current) => {
+      const exists = current.some(
+        (item) => normalizeStartUrl(item) === normalized,
+      );
+      if (exists) {
+        return current.filter(
+          (item) => normalizeStartUrl(item) !== normalized,
+        );
+      }
+      return [...current, normalized];
+    });
+  }, [primaryStartUrl]);
+
+  const runHeaderNavDiscovery = useCallback(async () => {
+    const url = normalizeStartUrl(primaryStartUrl.trim());
+    if (!url) {
+      setHeaderNavStatus("idle");
+      return;
+    }
+
+    headerNavAbortRef.current?.abort();
+    const controller = new AbortController();
+    headerNavAbortRef.current = controller;
+    setHeaderNavStatus("loading");
+    setHeaderNavReason(null);
+    setHeaderNavSeed({ url, label: headerNavLabel(url) });
+    setHeaderNavPaths([]);
+
+    try {
+      const result = await discoverHeaderNavPaths(
+        url,
+        controller.signal,
+        readCrawlProvider() ?? undefined,
+      );
+      if (controller.signal.aborted) return;
+      setHeaderNavSeed(result.seed);
+      setHeaderNavPaths(result.paths);
+      setHeaderNavReason(result.reason);
+      setHeaderNavStatus("ready");
+    } catch (error) {
+      if (
+        controller.signal.aborted ||
+        (error instanceof DOMException && error.name === "AbortError") ||
+        (error instanceof Error && error.name === "AbortError")
+      ) {
+        return;
+      }
+      if (
+        error instanceof KnowledgeIndexApiError &&
+        (error.status === 404 || error.status === 501 || error.status === 0)
+      ) {
+        setHeaderNavStatus("idle");
+        setHeaderNavPaths([]);
+        setHeaderNavReason(null);
+        return;
+      }
+      setHeaderNavStatus("ready");
+      setHeaderNavPaths([]);
+      setHeaderNavReason(
+        error instanceof KnowledgeIndexApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : null,
+      );
+    }
+  }, [primaryStartUrl]);
+
+  useEffect(() => {
+    if (!discoverHeaderNav) return;
+    const url = normalizeStartUrl(primaryStartUrl.trim());
+    if (!url || !isValidStartUrl(primaryStartUrl)) {
+      headerNavAbortRef.current?.abort();
+      setHeaderNavStatus("idle");
+      setHeaderNavReason(null);
+      setHeaderNavPaths([]);
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void runHeaderNavDiscovery();
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timer);
+      headerNavAbortRef.current?.abort();
+    };
+  }, [discoverHeaderNav, primaryStartUrl, runHeaderNavDiscovery]);
 
   useEffect(() => {
     autoDiscoverExcludesRef.current = autoDiscoverExcludes;
@@ -1955,6 +2064,7 @@ export function WebCrawlSetup() {
       });
 
       // One pass: compact index|path|title; AI returns only what to remove.
+      const crawlProvider = readCrawlProvider();
       const ai = await proposeCrawlFilterRemovals({
         startUrls: config.startUrls,
         urls: urls.map((item, index) => ({
@@ -1962,6 +2072,9 @@ export function WebCrawlSetup() {
           url: item.url,
           ...(item.title?.trim() ? { title: item.title.trim() } : {}),
         })),
+        ...(crawlProvider
+          ? { modelId: crawlModelIdForProvider(crawlProvider) }
+          : {}),
       });
 
       const removeSet = new Set(ai.removeIndexes);
@@ -2135,6 +2248,7 @@ export function WebCrawlSetup() {
   }
 
   async function handleCrawlPreview() {
+    if (discoverHeaderNav && headerNavStatus === "loading") return;
     if (config.startUrls.length === 0) {
       setError("Add at least one start URL before running crawl preview.");
       return;
@@ -2515,13 +2629,7 @@ export function WebCrawlSetup() {
         </div>
       ) : null}
 
-      <div className="relative z-30 shrink-0 border-b border-border/40 bg-background/90 px-3 py-2 backdrop-blur-sm sm:px-6 sm:py-2.5">
-        <div className="mx-auto w-full min-w-0 max-w-[90rem]">
-          <div className="relative flex min-w-0 items-center justify-center">
-            <div className="absolute left-0 top-1/2 z-10 -translate-y-1/2">
-              <MobileMenuButton />
-            </div>
-            <div className="flex min-w-0 max-w-full items-center justify-center overflow-x-auto px-11 [-ms-overflow-style:none] [scrollbar-width:none] sm:px-12 [&::-webkit-scrollbar]:hidden">
+      <CrawlSettingsToolbarHost desktop={isDesktopShell}>
             <div className="inline-flex min-w-0 items-center gap-px rounded-xl border border-border bg-surface-raised/80 p-0.5 shadow-card">
             <ConfigPill
               label="Scope"
@@ -2720,18 +2828,28 @@ export function WebCrawlSetup() {
               label="Discovery"
               icon={<DiscoveryIcon />}
               compactSummary={
-                enableSitemap
-                  ? sitemapOnly
-                    ? "Sitemap only"
-                    : "Sitemap + links"
-                  : "Links"
+                [
+                  enableSitemap
+                    ? sitemapOnly
+                      ? "Sitemap only"
+                      : "Sitemap + links"
+                    : "Links",
+                  discoverHeaderNav ? "nav" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
               }
               summary={
-                enableSitemap
-                  ? sitemapOnly
-                    ? "Sitemap only"
-                    : "Sitemap + link crawl"
-                  : "Links only"
+                [
+                  enableSitemap
+                    ? sitemapOnly
+                      ? "Sitemap only"
+                      : "Sitemap + link crawl"
+                    : "Links only",
+                  discoverHeaderNav ? "header nav" : null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ")
               }
               description="Sitemap adds known URLs. Link crawl follows in-scope HTML links from your start URL."
               disabled={toolbarLocked}
@@ -2784,6 +2902,112 @@ export function WebCrawlSetup() {
                   </div>
                 </div>
               ) : null}
+              <div className="mt-4 space-y-1 border-t border-border/60 pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">
+                      Header nav paths
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted">
+                      Suggest sibling docs sections from the site header
+                      (guides, reference, …)
+                    </p>
+                  </div>
+                  <Switch
+                    checked={discoverHeaderNav}
+                    onChange={(on) => {
+                      setDiscoverHeaderNav(on);
+                      if (!on) {
+                        headerNavAbortRef.current?.abort();
+                        const navUrls = new Set(
+                          headerNavPaths.map((path) =>
+                            normalizeStartUrl(path.url),
+                          ),
+                        );
+                        setAdditionalStartUrls((current) =>
+                          current.filter(
+                            (url) => !navUrls.has(normalizeStartUrl(url)),
+                          ),
+                        );
+                        setHeaderNavStatus("idle");
+                      }
+                    }}
+                    label="Discover header nav paths"
+                  />
+                </div>
+                {discoverHeaderNav ? (
+                  <div className="space-y-2 pt-2">
+                    {primaryStartUrl.trim() ? (
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <NavPathPill
+                          label={
+                            headerNavSeed?.label ||
+                            headerNavLabel(primaryStartUrl)
+                          }
+                          selected
+                          locked
+                          title={`${headerNavSeed?.url || primaryStartUrl} — start URL (always included)`}
+                        />
+                        {headerNavStatus === "loading" ? (
+                          <HeaderNavScanningPill />
+                        ) : null}
+                        {headerNavStatus === "ready"
+                          ? filterHeaderNavExtraPaths(
+                              headerNavPaths,
+                              primaryStartUrl,
+                            ).map((path) => {
+                              const url = normalizeStartUrl(path.url);
+                              const selected = additionalStartUrls.some(
+                                (item) => normalizeStartUrl(item) === url,
+                              );
+                              return (
+                                <NavPathPill
+                                  key={url}
+                                  label={path.label}
+                                  selected={selected}
+                                  title={
+                                    selected
+                                      ? `${url} — click to drop from this crawl`
+                                      : `${url} — click to crawl this section too`
+                                  }
+                                  onClick={
+                                    toolbarLocked
+                                      ? undefined
+                                      : () => toggleHeaderNavPath(path.url)
+                                  }
+                                />
+                              );
+                            })
+                          : null}
+                        {headerNavStatus === "ready" &&
+                        filterHeaderNavExtraPaths(
+                          headerNavPaths,
+                          primaryStartUrl,
+                        ).length === 0 ? (
+                          isHeaderNavFailureReason(headerNavReason) ? (
+                            <HeaderNavFailedPill reason={headerNavReason!} />
+                          ) : (
+                            <HeaderNavEmptyPill />
+                          )
+                        ) : null}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted">
+                        Add a start URL to scan the header.
+                      </p>
+                    )}
+                    {headerNavStatus === "ready" &&
+                    primaryStartUrl.trim() &&
+                    filterHeaderNavExtraPaths(headerNavPaths, primaryStartUrl)
+                      .length > 0 ? (
+                      <p className="text-xs text-muted">
+                        {headerNavReason ||
+                          "Click a section to crawl it alongside your start URL."}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </div>
               </div>
             </ConfigPill>
 
@@ -2869,11 +3093,7 @@ export function WebCrawlSetup() {
               />
             </div>
             </div>
-            </div>
-
-          </div>
-        </div>
-      </div>
+      </CrawlSettingsToolbarHost>
 
       {/* ─── Main content ─────────────────────────────────────── */}
       <div
@@ -2883,7 +3103,7 @@ export function WebCrawlSetup() {
         )}
       >
         {step === 1 ? (
-          <div className="flex min-h-0 flex-1 flex-col overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-4 lg:items-center lg:justify-center lg:overflow-hidden">
+          <div className="flex min-h-0 flex-1 flex-col items-center overflow-x-hidden overflow-y-auto overscroll-contain px-4 py-3 sm:px-6 sm:py-4">
             <StartUrlCard
             primaryStartUrl={primaryStartUrl}
             onPrimaryStartUrlChange={setPrimaryStartUrl}
@@ -2901,6 +3121,13 @@ export function WebCrawlSetup() {
             sourceMetadata={sourceMetadata}
             maxPages={maxPages}
             enableSitemap={enableSitemap}
+            discoverHeaderNav={discoverHeaderNav}
+            headerNavSeed={headerNavSeed}
+            headerNavPaths={headerNavPaths}
+            headerNavStatus={headerNavStatus}
+            headerNavReason={headerNavReason}
+            headerNavScanning={discoverHeaderNav && headerNavStatus === "loading"}
+            onToggleNavPath={toggleHeaderNavPath}
             onOpenSitemapSelect={() => setSitemapModalOpen(true)}
             onOpenRobotsTxt={() => setRobotsModalOpen(true)}
             onCheckSite={runPreflight}
@@ -3647,6 +3874,99 @@ function ToolbarDivider() {
   );
 }
 
+function headerNavLabel(url: string) {
+  try {
+    const parsed = new URL(normalizeStartUrl(url));
+    const parts = parsed.pathname.split("/").filter(Boolean);
+    const last = parts[parts.length - 1];
+    if (!last) return parsed.hostname.replace(/^www\./, "") || "Start";
+    return last
+      .split(/[-_]/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+      .join(" ");
+  } catch {
+    return url;
+  }
+}
+
+function filterHeaderNavExtraPaths(
+  paths: HeaderNavPath[],
+  primaryStartUrl: string,
+): HeaderNavPath[] {
+  const primary = normalizeStartUrl(primaryStartUrl.trim());
+  if (!primary) return [];
+  const seen = new Set<string>();
+  return paths.filter((path) => {
+    const url = normalizeStartUrl(path.url);
+    if (!url || url === primary || seen.has(url)) return false;
+    seen.add(url);
+    return true;
+  });
+}
+
+function HeaderNavScanningPill({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-accent/30 bg-accent/10 font-mono font-semibold tracking-[0.08em] text-accent uppercase",
+        compact
+          ? "px-2 py-0.5 text-[0.5rem]"
+          : "px-2.5 py-1 text-[0.5625rem]",
+      )}
+      aria-live="polite"
+    >
+      <Spinner className={compact ? "size-3" : "size-3.5"} />
+      Scanning header nav…
+    </span>
+  );
+}
+
+function HeaderNavEmptyPill({ compact = false }: { compact?: boolean }) {
+  return (
+    <span
+      title="Checked the site header — no extra docs sections besides your start URL"
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-border bg-surface-raised font-mono font-semibold tracking-[0.08em] text-muted/70 uppercase",
+        compact
+          ? "px-2 py-0.5 text-[0.5rem]"
+          : "px-2.5 py-1 text-[0.5625rem]",
+      )}
+    >
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-muted/35" />
+      No additional paths
+    </span>
+  );
+}
+
+function HeaderNavFailedPill({
+  reason,
+  compact = false,
+}: {
+  reason: string;
+  compact?: boolean;
+}) {
+  return (
+    <span
+      title={reason}
+      className={cn(
+        "inline-flex shrink-0 max-w-[14rem] items-center gap-1.5 truncate rounded-md border border-amber-500/30 bg-amber-500/10 font-mono font-semibold tracking-[0.08em] text-amber-800 uppercase dark:text-amber-300",
+        compact
+          ? "px-2 py-0.5 text-[0.5rem]"
+          : "px-2.5 py-1 text-[0.5625rem]",
+      )}
+    >
+      <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-amber-500" />
+      Nav scan failed
+    </span>
+  );
+}
+
+function isHeaderNavFailureReason(reason: string | null | undefined): boolean {
+  if (!reason) return false;
+  return /timed out|failed|error|not installed|missing|uncaught/i.test(reason);
+}
+
 function formatUrlLabel(url: string) {
   try {
     const parsed = new URL(url);
@@ -4016,6 +4336,13 @@ function StartUrlCard({
   sourceMetadata,
   maxPages,
   enableSitemap,
+  discoverHeaderNav = false,
+  headerNavSeed = null,
+  headerNavPaths = [],
+  headerNavStatus = "idle",
+  headerNavReason = null,
+  headerNavScanning = false,
+  onToggleNavPath,
   onOpenSitemapSelect,
   onOpenRobotsTxt,
   onCheckSite,
@@ -4049,6 +4376,13 @@ function StartUrlCard({
   sourceMetadata: SourceMetadata | null;
   maxPages: number;
   enableSitemap: boolean;
+  discoverHeaderNav?: boolean;
+  headerNavSeed?: HeaderNavPath | null;
+  headerNavPaths?: HeaderNavPath[];
+  headerNavStatus?: "idle" | "loading" | "ready" | "error";
+  headerNavReason?: string | null;
+  headerNavScanning?: boolean;
+  onToggleNavPath?: (url: string) => void;
   onOpenSitemapSelect?: () => void;
   onOpenRobotsTxt?: () => void;
   onCheckSite: (url?: string) => void;
@@ -4145,16 +4479,21 @@ function StartUrlCard({
     ? getDisplayDetectedSignals(sourceMetadata)
     : [];
   const showMetadataFooter = showSitePreview && sourceMetadata != null;
+  const headerNavExtraPaths = filterHeaderNavExtraPaths(
+    headerNavPaths,
+    primaryStartUrl,
+  );
   const showFooter =
     isCrawling ||
     isCrawlComplete ||
     showDiscoveryFooter ||
-    showMetadataFooter;
+    showMetadataFooter ||
+    discoverHeaderNav;
 
   return (
     <section
       className={cn(
-        "relative mx-auto flex w-full min-h-0 flex-col overflow-hidden rounded-xl border border-border bg-card-solid shadow-card transition-[max-width,box-shadow] duration-500 ease-out",
+        "relative mx-auto my-auto flex w-full min-h-0 shrink-0 flex-col overflow-hidden rounded-xl border border-border bg-card-solid shadow-card transition-[max-width,box-shadow] duration-500 ease-out",
         showSplitLayout
           ? "max-h-[calc(100dvh-6.5rem)] max-w-2xl"
           : "aspect-video max-h-[min(28rem,100%)] max-w-xl",
@@ -4246,7 +4585,16 @@ function StartUrlCard({
               <button
                 type="button"
                 onClick={onSubmit}
-                disabled={Boolean(busy) || crawlCardPhase !== "idle"}
+                disabled={
+                  Boolean(busy) ||
+                  crawlCardPhase !== "idle" ||
+                  headerNavScanning
+                }
+                title={
+                  headerNavScanning
+                    ? "Wait for header nav scan to finish"
+                    : undefined
+                }
                 className="inline-flex h-7 shrink-0 items-center rounded-md border border-foreground/15 bg-foreground px-2.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-background uppercase transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Crawl{crawlStartUrlCount > 1 ? ` ${crawlStartUrlCount}` : ""}
@@ -4490,6 +4838,49 @@ function StartUrlCard({
           </>
         ) : null}
         </div>
+        {discoverHeaderNav && hasUrl ? (
+          <div
+            className="flex min-w-0 flex-wrap items-center justify-end gap-1.5"
+            aria-live="polite"
+            aria-busy={headerNavStatus === "loading"}
+          >
+            {headerNavStatus === "loading" ? (
+              <HeaderNavScanningPill compact />
+            ) : headerNavStatus === "ready" ? (
+              headerNavExtraPaths.length > 0 ? (
+                headerNavExtraPaths.map((path) => {
+                  const url = normalizeStartUrl(path.url);
+                  const selected = additionalStartUrls.some(
+                    (item) => normalizeStartUrl(item) === url,
+                  );
+                  return (
+                    <NavPathPill
+                      key={url}
+                      label={path.label}
+                      selected={selected}
+                      title={
+                        selected
+                          ? `${url} — click to drop from this crawl`
+                          : `${url} — click to add this section`
+                      }
+                      onClick={
+                        preflightState === "loading" || Boolean(busy)
+                          ? undefined
+                          : () => onToggleNavPath?.(path.url)
+                      }
+                    />
+                  );
+                })
+              ) : (
+                isHeaderNavFailureReason(headerNavReason) ? (
+                  <HeaderNavFailedPill reason={headerNavReason!} compact />
+                ) : (
+                  <HeaderNavEmptyPill compact />
+                )
+              )
+            ) : null}
+          </div>
+        ) : null}
         {showMetadataFooter && sourceMetadata ? (
           <div className="flex min-w-0 flex-wrap items-center justify-end gap-1">
             <FooterInsightChip
@@ -4790,6 +5181,46 @@ function FooterInsightChip({
   );
 }
 
+function NavPathPill({
+  label,
+  selected,
+  title,
+  onClick,
+  locked = false,
+}: {
+  label: string;
+  selected: boolean;
+  title?: string;
+  onClick?: () => void;
+  locked?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      onClick={onClick}
+      disabled={!onClick || locked}
+      className={cn(
+        "inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] uppercase transition-colors",
+        selected
+          ? "border-emerald-500/35 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400"
+          : "border-border bg-card-solid text-muted",
+        onClick && !locked && "cursor-pointer hover:border-foreground/25 hover:text-foreground",
+        (!onClick || locked) && "cursor-default",
+      )}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          "size-1.5 shrink-0 rounded-full",
+          selected ? "bg-emerald-500" : "bg-muted/50",
+        )}
+      />
+      {label}
+    </button>
+  );
+}
+
 function DiscoverySignalPill({
   label,
   found,
@@ -4848,6 +5279,43 @@ function DiscoverySignalPill({
     <span title={title} className={className}>
       {content}
     </span>
+  );
+}
+
+function CrawlSettingsToolbarHost({
+  desktop,
+  children,
+}: {
+  desktop: boolean;
+  children: ReactNode;
+}) {
+  useLayoutEffect(() => {
+    if (!desktop) {
+      setWebCrawlHeaderControls(null);
+      return;
+    }
+    setWebCrawlHeaderControls(children);
+  }, [desktop, children]);
+
+  useLayoutEffect(() => {
+    return () => setWebCrawlHeaderControls(null);
+  }, []);
+
+  if (desktop) return null;
+
+  return (
+    <div className="relative z-30 shrink-0 border-b border-border/40 bg-background/90 px-3 py-2 backdrop-blur-sm sm:px-6 sm:py-2.5">
+      <div className="mx-auto w-full min-w-0 max-w-[90rem]">
+        <div className="relative flex min-w-0 items-center justify-center">
+          <div className="absolute left-0 top-1/2 z-10 -translate-y-1/2">
+            <MobileMenuButton />
+          </div>
+          <div className="flex min-w-0 max-w-full items-center justify-center overflow-x-auto px-11 [-ms-overflow-style:none] [scrollbar-width:none] sm:px-12 [&::-webkit-scrollbar]:hidden">
+            {children}
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -15,7 +15,7 @@ Configuration for `@ledgeindex/sdk` — options object, environment variables, a
 | `DEEPSEEK_API_KEY` | DeepSeek chat, crawl URL filter |
 | `COHERE_API_KEY` | Cohere rerank on `ask` |
 
-At least one chat model key is required **only for `ask`**, or when you pass `autoFilter: true` / `enrichExamples: true` on crawl. Plain crawl + index uses local FastEmbed and does not need OpenAI/Gemini/DeepSeek.
+At least one chat model key is required **only for `ask`**, or when you pass `autoFilter: true`, `discoverHeaderNav: true`, or `enrichExamples: true` on crawl. Plain crawl + index uses local FastEmbed and does not need OpenAI/Gemini/DeepSeek.
 
 ## Provider
 
@@ -25,6 +25,8 @@ At least one chat model key is required **only for `ask`**, or when you pass `au
 | `openai` | OpenAI |
 | `deepseek` | DeepSeek |
 | omitted | Auto: google → deepseek → openai (first key found) |
+
+`LEDGEINDEX_CRAWL_PROVIDER` (or `provider` on `createLedgeIndex`) also selects the model for **header nav discovery** (`discoverHeaderNav`) and crawl URL filter when those features are enabled.
 
 ## Data & identity
 

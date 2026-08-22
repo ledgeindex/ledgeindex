@@ -8,7 +8,7 @@ Not sure this is the right path? See [Getting started](/guides) for other option
 
 - Node.js **22.13+**
 - **Crawl + index:** no model key required (uses local FastEmbed + LibSQL by default)
-- **Ask**, **`--filter`**, **`--enrich`**, or **`profile`:** a model key (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, or `DEEPSEEK_API_KEY`)
+- **Ask**, **`--filter`**, **`--discover-nav`**, **`--enrich`**, or **`profile`:** a model key (`GOOGLE_GENERATIVE_AI_API_KEY`, `OPENAI_API_KEY`, or `DEEPSEEK_API_KEY`)
 - Optional: `COHERE_API_KEY` for Cohere rerank on `ask` (otherwise local BGE rerank)
 
 ## Install
@@ -79,13 +79,14 @@ ledgeindex ask my-source "How do I install?" --provider google
 ### Crawl and index
 
 ```bash
-ledgeindex crawl <url> [--name <name>] [--max-pages N] [--filter] [--enrich] [--json]
+ledgeindex crawl <url> [--name <name>] [--max-pages N] [--filter] [--discover-nav] [--enrich] [--json]
 ```
 
 | Flag | What it does |
 |------|----------------|
 | `--max-pages N` | Cap discovered pages (default 1000) |
 | `--filter` | Opt-in LLM URL cleanup after crawl (requires model key) |
+| `--discover-nav` | After preflight, scan the site header for sibling docs sections (guides, reference, …) and crawl them as extra start URLs — [details](/reference/sdk/crawl#header-nav-path-discovery-discoverheadernav) |
 | `--enrich` | Opt-in **example enrichment** during ingest — see below (requires model key) |
 | `--provider` | `google` \| `openai` \| `deepseek` for this run |
 | `--json` | Print result JSON (source id, page/chunk counts) |
@@ -94,6 +95,7 @@ Example:
 
 ```bash
 ledgeindex crawl https://docs.astro.build --max-pages 20
+ledgeindex crawl https://ledgeindex.com/docs --discover-nav   # guides + reference as extra start URLs
 ledgeindex crawl https://docs.astro.build --filter   # optional AI URL cleanup
 ```
 

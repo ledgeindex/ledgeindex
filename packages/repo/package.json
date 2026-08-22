@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/repo",
-  "version": "0.1.15",
+  "version": "0.1.16",
   "description": "LedgeIndex repo — index local/GitHub checkouts and explore for grounded usage examples",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
@@ -31,7 +31,7 @@
   },
   "dependencies": {
     "@babel/parser": "^8.0.4",
-    "@ledgeindex/core": "^0.1.15",
+    "@ledgeindex/core": "^0.1.16",
     "@mastra/core": "^1.49.0",
     "zod": "3.25.76"
   },
