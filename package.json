@@ -25,6 +25,8 @@
     "release:desktop": "node scripts/release-desktop.mjs",
     "build:packages": "npm run build -w @ledgeindex/core -w @ledgeindex/repo -w @ledgeindex/profile -w @ledgeindex/docs -w @ledgeindex/client -w @ledgeindex/sdk -w @ledgeindex/ag -w @ledgeindex/server -w @ledgeindex/model -w ledgeindex",
     "upload:widget": "node scripts/upload-widget-gcs.mjs",
+    "pack:stagehand-runtime": "node scripts/pack-stagehand-runtime.mjs",
+    "upload:stagehand-runtime": "node scripts/pack-stagehand-runtime.mjs --upload",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "publish:packages:dry-run": "node scripts/publish-packages.mjs --dry-run",

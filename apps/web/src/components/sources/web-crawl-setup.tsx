@@ -67,6 +67,8 @@ import {
   normalizeStartUrl,
   preflightSite,
   discoverHeaderNavPaths,
+  getStagehandRuntimeStatus,
+  installStagehandRuntime,
   resumeIngestWorkflow,
   runParsePreview,
   startIngestWorkflow,
@@ -659,6 +661,15 @@ export function WebCrawlSetup() {
   );
   const [headerNavPaths, setHeaderNavPaths] = useState<HeaderNavPath[]>([]);
   const [headerNavReason, setHeaderNavReason] = useState<string | null>(null);
+  const [headerNavDownloading, setHeaderNavDownloading] = useState(false);
+  const [stagehandRuntimeReady, setStagehandRuntimeReady] = useState<
+    boolean | null
+  >(null);
+  const [stagehandRuntimeInstalling, setStagehandRuntimeInstalling] =
+    useState(false);
+  const [stagehandInstallError, setStagehandInstallError] = useState<
+    string | null
+  >(null);
   const headerNavAbortRef = useRef<AbortController | null>(null);
   const isDesktopShell = Boolean(getLedgeIndexDesktop());
   const [sitemapUrlsText, setSitemapUrlsText] = useState("");
@@ -939,7 +950,45 @@ export function WebCrawlSetup() {
     });
   }, [primaryStartUrl]);
 
+  useEffect(() => {
+    if (!isDesktopShell) return;
+    const controller = new AbortController();
+    void getStagehandRuntimeStatus(controller.signal)
+      .then((status) => setStagehandRuntimeReady(status.installed))
+      .catch(() => setStagehandRuntimeReady(null));
+    return () => controller.abort();
+  }, [isDesktopShell, discoverHeaderNav]);
+
+  useEffect(() => {
+    if (!isDesktopShell || (!stagehandRuntimeInstalling && headerNavStatus !== "loading")) {
+      setHeaderNavDownloading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const status = await getStagehandRuntimeStatus();
+        if (cancelled) return;
+        setHeaderNavDownloading(!status.installed || status.installing);
+      } catch {
+        if (!cancelled) setHeaderNavDownloading(false);
+      }
+    };
+
+    void poll();
+    const timer = window.setInterval(() => void poll(), 1500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [isDesktopShell, headerNavStatus, stagehandRuntimeInstalling]);
+
   const runHeaderNavDiscovery = useCallback(async () => {
+    if (isDesktopShell && stagehandRuntimeReady !== true) {
+      return;
+    }
+
     const url = normalizeStartUrl(primaryStartUrl.trim());
     if (!url) {
       setHeaderNavStatus("idle");
@@ -965,6 +1014,7 @@ export function WebCrawlSetup() {
       setHeaderNavPaths(result.paths);
       setHeaderNavReason(result.reason);
       setHeaderNavStatus("ready");
+      setStagehandRuntimeReady(true);
     } catch (error) {
       if (
         controller.signal.aborted ||
@@ -992,10 +1042,40 @@ export function WebCrawlSetup() {
             : null,
       );
     }
-  }, [primaryStartUrl]);
+  }, [isDesktopShell, primaryStartUrl, stagehandRuntimeReady]);
+
+  const installStagehandRuntimeClick = useCallback(async () => {
+    if (!isDesktopShell || stagehandRuntimeInstalling) return;
+    setStagehandInstallError(null);
+    setStagehandRuntimeInstalling(true);
+    try {
+      const status = await installStagehandRuntime();
+      setStagehandRuntimeReady(status.installed);
+      if (status.installed && discoverHeaderNav && isValidStartUrl(primaryStartUrl)) {
+        void runHeaderNavDiscovery();
+      }
+    } catch (error) {
+      setStagehandInstallError(
+        error instanceof KnowledgeIndexApiError
+          ? error.message
+          : error instanceof Error
+            ? error.message
+            : "Download failed",
+      );
+    } finally {
+      setStagehandRuntimeInstalling(false);
+    }
+  }, [
+    discoverHeaderNav,
+    isDesktopShell,
+    primaryStartUrl,
+    runHeaderNavDiscovery,
+    stagehandRuntimeInstalling,
+  ]);
 
   useEffect(() => {
     if (!discoverHeaderNav) return;
+    if (isDesktopShell && stagehandRuntimeReady !== true) return;
     const url = normalizeStartUrl(primaryStartUrl.trim());
     if (!url || !isValidStartUrl(primaryStartUrl)) {
       headerNavAbortRef.current?.abort();
@@ -1013,7 +1093,7 @@ export function WebCrawlSetup() {
       window.clearTimeout(timer);
       headerNavAbortRef.current?.abort();
     };
-  }, [discoverHeaderNav, primaryStartUrl, runHeaderNavDiscovery]);
+  }, [discoverHeaderNav, isDesktopShell, primaryStartUrl, runHeaderNavDiscovery, stagehandRuntimeReady]);
 
   useEffect(() => {
     autoDiscoverExcludesRef.current = autoDiscoverExcludes;
@@ -2935,6 +3015,40 @@ export function WebCrawlSetup() {
                     label="Discover header nav paths"
                   />
                 </div>
+                {isDesktopShell &&
+                discoverHeaderNav &&
+                stagehandRuntimeReady === false ? (
+                  <div className="space-y-2 border-t border-border/60 pt-3">
+                    <p className="text-xs text-muted">
+                      Header nav needs a one-time browser bundle (~150 MB) on
+                      your machine. Download it when you are ready — nothing
+                      installs until you click.
+                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        disabled={stagehandRuntimeInstalling}
+                        onClick={() => void installStagehandRuntimeClick()}
+                      >
+                        {stagehandRuntimeInstalling ? (
+                          <span className="inline-flex items-center gap-2">
+                            <Spinner className="size-3.5" />
+                            Downloading browser runtime…
+                          </span>
+                        ) : (
+                          "Download browser runtime"
+                        )}
+                      </Button>
+                    </div>
+                    {stagehandInstallError ? (
+                      <p className="text-xs text-amber-800 dark:text-amber-300">
+                        {stagehandInstallError}
+                      </p>
+                    ) : null}
+                  </div>
+                ) : null}
                 {discoverHeaderNav ? (
                   <div className="space-y-2 pt-2">
                     {primaryStartUrl.trim() ? (
@@ -2949,7 +3063,9 @@ export function WebCrawlSetup() {
                           title={`${headerNavSeed?.url || primaryStartUrl} — start URL (always included)`}
                         />
                         {headerNavStatus === "loading" ? (
-                          <HeaderNavScanningPill />
+                          <HeaderNavScanningPill
+                            downloading={headerNavDownloading}
+                          />
                         ) : null}
                         {headerNavStatus === "ready"
                           ? filterHeaderNavExtraPaths(
@@ -3126,6 +3242,7 @@ export function WebCrawlSetup() {
             headerNavStatus={headerNavStatus}
             headerNavReason={headerNavReason}
             headerNavScanning={discoverHeaderNav && headerNavStatus === "loading"}
+            headerNavDownloading={headerNavDownloading}
             onToggleNavPath={toggleHeaderNavPath}
             onOpenSitemapSelect={() => setSitemapModalOpen(true)}
             onOpenRobotsTxt={() => setRobotsModalOpen(true)}
@@ -3904,9 +4021,23 @@ function filterHeaderNavExtraPaths(
   });
 }
 
-function HeaderNavScanningPill({ compact = false }: { compact?: boolean }) {
+function HeaderNavScanningPill({
+  compact = false,
+  downloading = false,
+}: {
+  compact?: boolean;
+  downloading?: boolean;
+}) {
+  const label = downloading
+    ? "Downloading browser runtime…"
+    : "Scanning header nav…";
   return (
     <span
+      title={
+        downloading
+          ? "One-time download (~150 MB). Later scans skip this step."
+          : "Reading the site header for sibling docs sections."
+      }
       className={cn(
         "inline-flex shrink-0 items-center gap-1.5 rounded-md border border-accent/30 bg-accent/10 font-mono font-semibold tracking-[0.08em] text-accent uppercase",
         compact
@@ -3916,7 +4047,7 @@ function HeaderNavScanningPill({ compact = false }: { compact?: boolean }) {
       aria-live="polite"
     >
       <Spinner className={compact ? "size-3" : "size-3.5"} />
-      Scanning header nav…
+      {label}
     </span>
   );
 }
@@ -4340,6 +4471,7 @@ function StartUrlCard({
   headerNavStatus = "idle",
   headerNavReason = null,
   headerNavScanning = false,
+  headerNavDownloading = false,
   onToggleNavPath,
   onOpenSitemapSelect,
   onOpenRobotsTxt,
@@ -4379,6 +4511,7 @@ function StartUrlCard({
   headerNavStatus?: "idle" | "loading" | "ready" | "error";
   headerNavReason?: string | null;
   headerNavScanning?: boolean;
+  headerNavDownloading?: boolean;
   onToggleNavPath?: (url: string) => void;
   onOpenSitemapSelect?: () => void;
   onOpenRobotsTxt?: () => void;
@@ -4842,7 +4975,10 @@ function StartUrlCard({
             aria-busy={headerNavStatus === "loading"}
           >
             {headerNavStatus === "loading" ? (
-              <HeaderNavScanningPill compact />
+              <HeaderNavScanningPill
+                compact
+                downloading={headerNavDownloading}
+              />
             ) : headerNavStatus === "ready" ? (
               headerNavExtraPaths.length > 0 ? (
                 headerNavExtraPaths.map((path) => {

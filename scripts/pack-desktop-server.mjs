@@ -40,7 +40,7 @@ import {
   START_FILE,
   bundleDesktopServer,
 } from "./bundle-desktop-server.mjs";
-import { RUNTIME_TREE_SEEDS } from "./desktop-server-externals.mjs";
+import { RUNTIME_TREE_SEEDS, OPTIONAL_RUNTIME_PACKAGES } from "./desktop-server-externals.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = join(__dirname, "..");
@@ -716,6 +716,7 @@ function assertStagedIntegrity(externals, unresolvedSeeds) {
   // which is how a missing @libsql/client shipped.
   const missing = externals.filter(
     (name) =>
+      !OPTIONAL_RUNTIME_PACKAGES.has(name) &&
       !unresolvedSeeds.has(name) &&
       !existsSync(join(destPathForPackage(name), "package.json")),
   );
@@ -954,9 +955,14 @@ async function main() {
 
   const { externals } = await bundleDesktopServer(dest);
 
-  // Seed from what the bundle actually imports, plus the names that are only
-  // reached through a dynamic require esbuild cannot see (playwright, canvas).
-  const seeds = [...new Set([...externals, ...RUNTIME_TREE_SEEDS])].sort();
+  // Seed from what the bundle actually imports, plus lazy-only names — skip optional
+  // browser automation (stagehand/playwright) so the release tree stays small.
+  const seeds = [
+    ...new Set([
+      ...externals.filter((name) => !OPTIONAL_RUNTIME_PACKAGES.has(name)),
+      ...RUNTIME_TREE_SEEDS,
+    ]),
+  ].sort();
 
   log("collecting externals dependency tree (per-consumer resolve)…");
   const { flat, nested, unresolvedSeeds } = collectProductionPackages(seeds);

@@ -13,7 +13,6 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@browserbasehq/stagehand": "^3.1.0",
     "@ledgeindex/docs": "^0.1.16",
     "@ledgeindex/server": "^0.1.16"
   },

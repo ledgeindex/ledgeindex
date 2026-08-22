@@ -58,6 +58,8 @@ export const LEDGEINDEX_API_RATE_LIMIT: RateLimitConfig = {
         { method: "POST", path: "/api/preflight" },
         { method: "POST", path: "/api/discover-header-nav" },
         { method: "GET", path: "/api/discover-header-nav" },
+        { method: "GET", path: "/api/discover-header-nav/runtime" },
+        { method: "POST", path: "/api/discover-header-nav/runtime/install" },
         { method: "POST", path: "/api/crawl/url-filter" },
         { method: "POST", path: "/api/crawl/url-removals" },
         { method: "POST", path: "/api/crawl/sitemap-pages" },

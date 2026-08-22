@@ -746,6 +746,27 @@ export async function listHeaderNavProviders(signal?: AbortSignal) {
   });
 }
 
+export type StagehandRuntimeStatus = {
+  installed: boolean;
+  installing: boolean;
+  version: string;
+  downloadUrl: string;
+};
+
+export async function getStagehandRuntimeStatus(signal?: AbortSignal) {
+  return api<StagehandRuntimeStatus>("/api/discover-header-nav/runtime", {
+    method: "GET",
+    signal,
+  });
+}
+
+export async function installStagehandRuntime(signal?: AbortSignal) {
+  return api<StagehandRuntimeStatus>("/api/discover-header-nav/runtime/install", {
+    method: "POST",
+    signal,
+  });
+}
+
 export async function discoverHeaderNavPaths(
   url: string,
   signal?: AbortSignal,

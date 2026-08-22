@@ -327,7 +327,7 @@ async function loadStagehand(): Promise<{
       Stagehand: new (options: Record<string, unknown>) => StagehandHandle;
     };
   } catch {
-    // Workspace fallback: catalog scripts already install Stagehand on agents-content.
+    // Packaged desktop / monorepo fallbacks below.
   }
 
   const { createRequire } = await import("node:module");
@@ -355,8 +355,18 @@ async function loadStagehand(): Promise<{
     }
   }
 
+  const {
+    isStagehandRuntimeInstalled,
+    loadStagehandFromRuntimeDir,
+  } = await import("./stagehand-runtime.js");
+  if (isStagehandRuntimeInstalled()) {
+    return loadStagehandFromRuntimeDir() as {
+      Stagehand: new (options: Record<string, unknown>) => StagehandHandle;
+    };
+  }
+
   throw new Error(
-    "Stagehand is not installed for this LedgeIndex server. Add @browserbasehq/stagehand to the desktop server, or run from the monorepo where agents-content already has it.",
+    "Browser runtime not installed. Download it from Header nav paths in crawl settings first.",
   );
 }
 
@@ -825,9 +835,16 @@ export async function discoverHeaderNavPaths(
   }
 
   return enqueue(async () => {
+    await ensureStagehandForDiscovery();
+
     if (!isMainThread) {
       return discoverViaSubprocess(seedUrl, preferredProvider);
     }
     return discoverHeaderNavPathsInternal(seedUrl, preferredProvider);
   });
+}
+
+/** Verify Stagehand is available before discovery (no implicit download). */
+export async function ensureStagehandForDiscovery(): Promise<void> {
+  await loadStagehand();
 }

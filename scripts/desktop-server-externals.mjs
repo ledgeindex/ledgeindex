@@ -31,7 +31,7 @@ export const BUNDLE_EXTERNALS = [
   // Native: napi-rs helpers pulled in by crawlee's file store
   "@napi-rs/*",
   "@reflink/*",
-  // Optional browser automation; never bundled, resolved only when used
+  // Optional browser automation; never bundled, resolved only when installed locally
   "playwright",
   "playwright-core",
   "@browserbasehq/stagehand",
@@ -53,6 +53,18 @@ export const BUNDLE_EXTERNALS = [
 ];
 
 /**
+ * Optional runtime packages — keep external so esbuild does not bundle them, but
+ * do not walk/copy them into the desktop release tree (playwright alone is tens
+ * of thousands of files and blows CI signing limits).
+ */
+export const OPTIONAL_RUNTIME_PACKAGES = new Set([
+  "playwright",
+  "playwright-core",
+  "@browserbasehq/stagehand",
+  "canvas",
+]);
+
+/**
  * Extra seeds for staging desktop-server/node_modules, unioned with the packages
  * esbuild reports as external in the built bundle. Those reported names are the
  * authoritative list; this covers the ones no static import reaches, because
@@ -62,8 +74,9 @@ export const BUNDLE_EXTERNALS = [
  * (e.g. @img/sharp-darwin-arm64) through their parents' optionalDependencies.
  */
 export const RUNTIME_TREE_SEEDS = [
-  ...BUNDLE_EXTERNALS.filter((name) => !name.includes("*")),
+  ...BUNDLE_EXTERNALS.filter(
+    (name) => !name.includes("*") && !OPTIONAL_RUNTIME_PACKAGES.has(name),
+  ),
   // Wildcard @crawlee/* is dropped above; this is the package we import.
   "@crawlee/cheerio",
-  "@browserbasehq/stagehand",
 ];
