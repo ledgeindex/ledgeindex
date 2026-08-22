@@ -3,7 +3,19 @@ import {
   getLedgeIndexApiBaseUrl,
   KnowledgeIndexApiError,
   listSources,
+  resolveRemoteApiBaseUrl,
 } from "@/lib/ledgeindex-api";
+
+const DEFAULT_CLOUD_API = "https://api.ledgeindex.com";
+
+/** Widget registry + chat for embeds always use the hosted cloud API. */
+export function resolveWidgetCloudApiBaseUrl(): string {
+  const remote = resolveRemoteApiBaseUrl();
+  if (remote) return remote;
+  const active = getLedgeIndexApiBaseUrl().replace(/\/$/, "");
+  if (active && !/localhost|127\.0\.0\.1/i.test(active)) return active;
+  return DEFAULT_CLOUD_API;
+}
 
 export type WidgetBrand = {
   projectName: string;
@@ -24,13 +36,7 @@ export type WidgetIntegrationSummary = {
 
 /** Always hit the Fastify API — never the Next.js origin (e.g. :3004). */
 function widgetApiUrl(path: string): string {
-  const base = getLedgeIndexApiBaseUrl().replace(/\/$/, "");
-  if (!base) {
-    throw new KnowledgeIndexApiError(
-      "LedgeIndex API URL is not configured. Set NEXT_PUBLIC_LEDGEINDEX_API_URL (local: http://localhost:3010).",
-      503,
-    );
-  }
+  const base = resolveWidgetCloudApiBaseUrl();
   return `${base}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
@@ -122,7 +128,7 @@ export async function deleteWidgetIntegration(websiteId: string): Promise<void> 
 }
 
 export function widgetEmbedSnippet(websiteId: string, brand: WidgetBrand): string {
-  const api = getLedgeIndexApiBaseUrl() || "https://api.ledgeindex.com";
+  const api = resolveWidgetCloudApiBaseUrl();
   const scriptSrc =
     typeof process !== "undefined" &&
     process.env.NEXT_PUBLIC_LEDGEINDEX_WIDGET_SCRIPT_URL?.trim()

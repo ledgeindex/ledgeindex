@@ -3122,7 +3122,6 @@ export function WebCrawlSetup() {
             maxPages={maxPages}
             enableSitemap={enableSitemap}
             discoverHeaderNav={discoverHeaderNav}
-            headerNavSeed={headerNavSeed}
             headerNavPaths={headerNavPaths}
             headerNavStatus={headerNavStatus}
             headerNavReason={headerNavReason}
@@ -4337,7 +4336,6 @@ function StartUrlCard({
   maxPages,
   enableSitemap,
   discoverHeaderNav = false,
-  headerNavSeed = null,
   headerNavPaths = [],
   headerNavStatus = "idle",
   headerNavReason = null,
@@ -4377,7 +4375,6 @@ function StartUrlCard({
   maxPages: number;
   enableSitemap: boolean;
   discoverHeaderNav?: boolean;
-  headerNavSeed?: HeaderNavPath | null;
   headerNavPaths?: HeaderNavPath[];
   headerNavStatus?: "idle" | "loading" | "ready" | "error";
   headerNavReason?: string | null;

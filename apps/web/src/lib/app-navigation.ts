@@ -42,6 +42,12 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
     icon: MessageSquare,
   },
   {
+    id: "website-widget",
+    label: "Website widget",
+    href: "/widget",
+    icon: Puzzle,
+  },
+  {
     id: "dashboard",
     label: "Sources",
     href: "/dashboard",
@@ -64,12 +70,6 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
     label: "MCP",
     href: "/mcp/connect",
     icon: Plug,
-  },
-  {
-    id: "integrations",
-    label: "Widget",
-    href: "/integrations",
-    icon: Puzzle,
   },
   {
     id: "api-keys",

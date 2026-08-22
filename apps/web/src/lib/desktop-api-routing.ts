@@ -76,6 +76,19 @@ export function syncApiBaseForHosting(input: {
   setLedgeIndexApiBaseUrl(resolveApiBaseForHosting(input));
 }
 
+/** Website widget CRUD always targets the hosted cloud API (not local :3015). */
+export function syncWidgetCloudApi(): void {
+  const remote = resolveRemoteApiBaseUrl();
+  if (remote) {
+    setLedgeIndexApiBaseUrl(remote);
+    return;
+  }
+  const webLocal = resolveWebLocalApiUrl();
+  if (webLocal && !/localhost|127\.0\.0\.1/i.test(webLocal)) {
+    setLedgeIndexApiBaseUrl(webLocal);
+  }
+}
+
 /** Current API base after sync — for debugging chat routing. */
 export function getSyncedApiBaseUrl(): string {
   return getLedgeIndexApiBaseUrl();

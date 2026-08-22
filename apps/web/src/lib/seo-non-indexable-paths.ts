@@ -2,6 +2,7 @@
 export const ROBOTS_DISALLOW_PATHS: readonly string[] = [
   "/dashboard",
   "/chat",
+  "/widget",
   "/billing",
   "/api-keys",
   "/settings",

@@ -18,7 +18,7 @@ Most product teams want docs chat on *their* domain — not a separate app, not 
 ## Quick install
 
 1. Index a docs site ([guide](/guides/setup-docs)).
-2. In the web app, open **Integrations** → create a widget (source + allowed origins).
+2. In the web app, open **Website widget** (`/widget`) → create a widget (source + allowed origins).
 3. Paste the snippet before `</body>`:
 
 ```html
@@ -32,7 +32,7 @@ Most product teams want docs chat on *their* domain — not a separate app, not 
 ></script>
 ```
 
-Copy the snippet from Integrations when you can — it fills ids and brand for you.
+Copy the snippet from Website widget when you can — it fills ids and brand for you.
 
 Full walkthrough (origins, local testing, troubleshooting): **[Set up website widget](/guides/setup-widget)**.
 
@@ -65,7 +65,7 @@ A public website cannot reach your laptop’s local index. Use Cloud for anythin
 
 | Attribute | Purpose |
 |-----------|---------|
-| `data-website-id` | Public id from Integrations (`wgt_…`) |
+| `data-website-id` | Public id from Website widget (`wgt_…`) |
 | `data-api-base-url` | API that serves widget chat |
 | `data-project-name` | Header + launcher label (default **Ask AI**) |
 | `data-project-color` | Accent color |

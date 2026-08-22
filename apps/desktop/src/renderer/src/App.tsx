@@ -25,6 +25,7 @@ import McpConnectPage from '@/app/(app)/mcp/connect/page'
 import ApiKeysPage from '@/app/(app)/api-keys/page'
 import DesktopProviderKeysPage from '@/app/(app)/settings/providers/page'
 import ExploreChatPage from '@/app/(app)/chat/page'
+import WebsiteWidgetPage from '@/app/(app)/widget/page'
 import AdminSourceUpdaterPage from '@/app/(app)/admin/source-updater/page'
 
 const FALLBACK_DESKTOP_API = 'http://127.0.0.1:3015'
@@ -50,6 +51,11 @@ function AuthenticatedApp(): React.JSX.Element {
                       <Route path="/sources/:sourceId/chat" element={<SourceChatPage />} />
                       <Route path="/source-sets" element={<SourceSetsPage />} />
                       <Route path="/mcp/connect" element={<McpConnectPage />} />
+                      <Route path="/widget" element={<WebsiteWidgetPage />} />
+                      <Route
+                        path="/integrations"
+                        element={<Navigate to="/widget" replace />}
+                      />
                       <Route path="/api-keys" element={<ApiKeysPage />} />
                       <Route
                         path="/settings/providers"
