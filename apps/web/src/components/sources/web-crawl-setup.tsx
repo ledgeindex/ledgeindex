@@ -3028,7 +3028,7 @@ export function WebCrawlSetup() {
                       <Button
                         type="button"
                         variant="secondary"
-                        size="sm"
+                        className="h-8 rounded-full px-4 text-xs"
                         disabled={stagehandRuntimeInstalling}
                         onClick={() => void installStagehandRuntimeClick()}
                       >
