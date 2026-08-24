@@ -56,8 +56,6 @@ export type WidgetAbuseLimits = {
   ipPerMinute: number;
   /** Max chats per websiteId per minute (any origin). */
   sitePerMinute: number;
-  /** Max chats per websiteId per UTC day. */
-  sitePerDay: number;
   /** Max chats per websiteId+origin per minute (normal embed traffic). */
   siteOriginPerMinute: number;
 };
@@ -66,7 +64,6 @@ export function getWidgetAbuseLimits(): WidgetAbuseLimits {
   return {
     ipPerMinute: envInt("WIDGET_RATE_IP_PER_MIN", 20),
     sitePerMinute: envInt("WIDGET_RATE_SITE_PER_MIN", 60),
-    sitePerDay: envInt("WIDGET_RATE_SITE_PER_DAY", 2_000),
     siteOriginPerMinute: envInt("WIDGET_RATE_SITE_ORIGIN_PER_MIN", 40),
   };
 }
@@ -85,7 +82,6 @@ export function enforceWidgetAbuseLimits(input: {
 }): WidgetAbuseDecision {
   const limits = getWidgetAbuseLimits();
   const { websiteId, origin, clientIp } = input;
-  const dayKey = new Date().toISOString().slice(0, 10); // UTC YYYY-MM-DD
 
   if (!takeRateLimit(`widget:ip:${clientIp}`, limits.ipPerMinute, 60_000)) {
     return {
@@ -106,20 +102,6 @@ export function enforceWidgetAbuseLimits(input: {
       ok: false,
       status: 429,
       error: "Widget rate limit exceeded. Try again shortly.",
-    };
-  }
-
-  if (
-    !takeRateLimit(
-      `widget:site-day:${websiteId}:${dayKey}`,
-      limits.sitePerDay,
-      86_400_000,
-    )
-  ) {
-    return {
-      ok: false,
-      status: 429,
-      error: "Daily widget message budget exceeded for this site.",
     };
   }
 

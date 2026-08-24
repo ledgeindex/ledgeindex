@@ -1,5 +1,6 @@
 import type { FastifyInstance } from "fastify";
 import { getBillingConfig } from "../services/billing-config.js";
+import { getDailyMessageUsage } from "../services/daily-message-limit.js";
 import { isPlanLimitsEnabled } from "../services/source-set-limits.js";
 import { getUserPlan } from "../services/user-plan.js";
 import { requireUser } from "../lib/resource-access.js";
@@ -14,6 +15,9 @@ export async function billingRoutes(fastify: FastifyInstance) {
     }
 
     const plan = await getUserPlan(userId);
-    return getBillingConfig(plan);
+    const dailyMessageUsage = isPlanLimitsEnabled()
+      ? await getDailyMessageUsage(userId)
+      : null;
+    return getBillingConfig(plan, dailyMessageUsage);
   });
 }

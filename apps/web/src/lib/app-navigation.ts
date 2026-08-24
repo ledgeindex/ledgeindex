@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   CreditCard,
   BookOpen,
+  BarChart3,
   KeyRound,
   Layers,
   LayoutDashboard,
@@ -76,6 +77,12 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
     label: "API keys",
     href: "/api-keys",
     icon: KeyRound,
+  },
+  {
+    id: "usage",
+    label: "Usage",
+    href: "/usage",
+    icon: BarChart3,
   },
   {
     id: "billing",

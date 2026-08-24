@@ -1959,11 +1959,20 @@ export async function ensurePlaygroundApiKey() {
   });
 }
 
+export type DailyMessageUsage = {
+  apply: boolean;
+  limit: number | null;
+  used: number;
+  remaining: number | null;
+  resetsAt: string;
+};
+
 export async function getAuthMe() {
   return api<{
     role: "user" | "admin";
     plan?: "free" | "pro";
     planLimitsEnabled?: boolean;
+    dailyMessages?: DailyMessageUsage | null;
   }>("/api/auth/me");
 }
 
@@ -1982,7 +1991,10 @@ export type BillingConfigResponse = {
   limits: {
     maxSourceSets: number;
     maxSourcesPerSet: number;
+    maxSources: number;
+    dailyMessages: number | null;
   };
+  dailyMessageUsage: DailyMessageUsage | null;
   checkout: PaddleCheckoutConfig | null;
 };
 

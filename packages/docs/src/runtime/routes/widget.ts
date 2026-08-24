@@ -2,6 +2,10 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { logError } from "../lib/logger.js";
 import { getSourceForUser, requireUser } from "../lib/resource-access.js";
+import {
+  DailyMessageLimitError,
+  takeDailyMessage,
+} from "../services/daily-message-limit.js";
 import { askSourceStream } from "../services/source-ask.js";
 import {
   enforceWidgetAbuseLimits,
@@ -131,6 +135,21 @@ export async function widgetRoutes(fastify: FastifyInstance) {
           ? "Origin header required"
           : "Origin not allowed for this widget",
       });
+    }
+
+    try {
+      await takeDailyMessage(integration.ownerUserId);
+    } catch (error) {
+      if (error instanceof DailyMessageLimitError) {
+        return reply.status(429).send({
+          error: error.message,
+          code: error.code,
+          limit: error.limit,
+          used: error.used,
+          resetsAt: error.resetsAt,
+        });
+      }
+      throw error;
     }
 
     // Normalized origin used for limits (always present when allowlist passed in prod).

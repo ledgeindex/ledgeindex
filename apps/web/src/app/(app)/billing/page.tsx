@@ -109,6 +109,14 @@ export default function BillingPage() {
                 <li>• Up to {billing.limits.maxSources} personal sources</li>
                 <li>• {billing.limits.maxSourceSets} source set</li>
                 <li>• Up to {billing.limits.maxSourcesPerSet} sources per set</li>
+                {billing.limits.dailyMessages != null ? (
+                  <li>
+                    •{" "}
+                    {billing.dailyMessageUsage?.apply
+                      ? `${billing.dailyMessageUsage.remaining ?? 0} of ${billing.limits.dailyMessages} chat messages left today (UTC)`
+                      : `${billing.limits.dailyMessages} chat messages per day (UTC)`}
+                  </li>
+                ) : null}
               </ul>
             </div>
           ) : null}

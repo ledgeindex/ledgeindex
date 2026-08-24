@@ -3,6 +3,11 @@ import {
   FREE_MAX_SOURCE_SETS,
   isPlanLimitsEnabled,
 } from "./source-set-limits.js";
+import {
+  getFreeDailyMessageLimit,
+  isCloudDailyMessageMeteringEnabled,
+  type DailyMessageUsage,
+} from "./daily-message-limit.js";
 
 export type PaddleCheckoutConfig = {
   clientToken: string;
@@ -20,7 +25,9 @@ export type BillingConfigResponse = {
     maxSourceSets: number;
     maxSourcesPerSet: number;
     maxSources: number;
+    dailyMessages: number | null;
   };
+  dailyMessageUsage: DailyMessageUsage | null;
   checkout: PaddleCheckoutConfig | null;
 };
 
@@ -46,7 +53,15 @@ export function getPaddleCheckoutConfig(): PaddleCheckoutConfig | null {
   };
 }
 
-export function getBillingConfig(plan: "free" | "pro"): BillingConfigResponse {
+export function getBillingConfig(
+  plan: "free" | "pro",
+  dailyMessageUsage: DailyMessageUsage | null = null,
+): BillingConfigResponse {
+  const dailyMessages =
+    plan === "pro" || !isCloudDailyMessageMeteringEnabled()
+      ? null
+      : getFreeDailyMessageLimit();
+
   return {
     enabled: isPlanLimitsEnabled(),
     plan,
@@ -54,7 +69,9 @@ export function getBillingConfig(plan: "free" | "pro"): BillingConfigResponse {
       maxSourceSets: FREE_MAX_SOURCE_SETS,
       maxSourcesPerSet: FREE_MAX_SOURCES,
       maxSources: FREE_MAX_SOURCES,
+      dailyMessages,
     },
+    dailyMessageUsage,
     checkout: getPaddleCheckoutConfig(),
   };
 }

@@ -14,6 +14,7 @@ import {
 } from "../services/api-key-store.js";
 import { getUserRole, isAdminRole } from "../services/user-role.js";
 import { isPlanLimitsEnabled } from "../services/source-set-limits.js";
+import { getDailyMessageUsage } from "../services/daily-message-limit.js";
 import { getUserPlan } from "../services/user-plan.js";
 
 const createApiKeySchema = z.object({
@@ -56,10 +57,14 @@ export async function apiKeyRoutes(fastify: FastifyInstance) {
       getUserRole(user.uid),
       getUserPlan(user.uid),
     ]);
+    const dailyMessages = isPlanLimitsEnabled()
+      ? await getDailyMessageUsage(user.uid)
+      : null;
     return {
       role,
       plan,
       planLimitsEnabled: isPlanLimitsEnabled(),
+      dailyMessages,
     };
   });
 
