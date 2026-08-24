@@ -14,8 +14,15 @@ export function stagehandBrowsersPath(): string {
   return dataPath("stagehand-runtime", "browsers");
 }
 
+/** Docker sets PLAYWRIGHT_BROWSERS_PATH at build time; desktop uses user data. */
+export function playwrightBrowsersDir(): string {
+  const preset = process.env.PLAYWRIGHT_BROWSERS_PATH?.trim();
+  if (preset) return preset;
+  return stagehandBrowsersPath();
+}
+
 export function applyPlaywrightBrowsersEnv(): void {
-  process.env.PLAYWRIGHT_BROWSERS_PATH = stagehandBrowsersPath();
+  process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersDir();
 }
 
 function sidecarRoot(): string {
@@ -50,7 +57,8 @@ function chromiumFolderPresent(browsersDir: string): boolean {
 
 export function isStagehandRuntimeInstalled(): boolean {
   applyPlaywrightBrowsersEnv();
-  if (!chromiumFolderPresent(stagehandBrowsersPath())) return false;
+  const browsersDir = playwrightBrowsersDir();
+  if (!chromiumFolderPresent(browsersDir)) return false;
   try {
     const req = createRequire(join(sidecarRoot(), "package.json"));
     const pw = req("playwright-core") as {
@@ -59,7 +67,7 @@ export function isStagehandRuntimeInstalled(): boolean {
     const path = pw.chromium?.executablePath?.();
     return Boolean(path && existsSync(path));
   } catch {
-    return chromiumFolderPresent(stagehandBrowsersPath());
+    return chromiumFolderPresent(browsersDir);
   }
 }
 
@@ -93,7 +101,8 @@ export async function resolveChromiumExecutable(): Promise<string> {
 
 async function installChromiumFromPlaywrightCdn(): Promise<void> {
   applyPlaywrightBrowsersEnv();
-  mkdirSync(stagehandBrowsersPath(), { recursive: true });
+  const browsersDir = playwrightBrowsersDir();
+  mkdirSync(browsersDir, { recursive: true });
 
   const cli = resolvePlaywrightCoreCli();
   if (!cli) {
@@ -106,7 +115,7 @@ async function installChromiumFromPlaywrightCdn(): Promise<void> {
     await execFileAsync(process.execPath, [cli, "install", "chromium"], {
       env: {
         ...process.env,
-        PLAYWRIGHT_BROWSERS_PATH: stagehandBrowsersPath(),
+        PLAYWRIGHT_BROWSERS_PATH: browsersDir,
       },
       windowsHide: true,
     });
