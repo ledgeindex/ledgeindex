@@ -1,3 +1,5 @@
+import { HomeJsonLd } from "@/components/marketing/home-json-ld";
+import { HomeOutlineSection } from "@/components/marketing/home-outline-section";
 import { SiteHeader } from "@/components/site-header";
 import { HeroAnnouncementStrip } from "@/components/home/hero-announcement-strip";
 import { SiteFooter } from "@/components/site-footer";
@@ -25,9 +27,11 @@ export default async function Home() {
 
   return (
     <div className="relative flex min-h-full flex-1 flex-col">
+      <HomeJsonLd />
       <HeroAnnouncementStrip />
       <SiteHeader />
       <main className="flex-1">
+        <HomeOutlineSection />
         <HeroSection />
         <RegistrySection />
         <UseCaseFocusSection />

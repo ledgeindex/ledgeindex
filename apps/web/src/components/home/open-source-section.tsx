@@ -175,7 +175,7 @@ export function OpenSourceSection({
 
         <div className="mt-8 flex flex-col items-center gap-3 sm:flex-row sm:justify-center">
           <Button
-            href="https://github.com/ledgeindex"
+            href="https://github.com/ledgeindex/ledgeindex"
             variant="secondary"
             className="w-full sm:w-auto"
           >

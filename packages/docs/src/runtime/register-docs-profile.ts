@@ -8,6 +8,7 @@ import chatThinkingRequestMiddleware from "./middleware/chat-thinking-request.js
 import chatUserRequestContextMiddleware from "./middleware/chat-user-request-context.js";
 import dailyMessageLimitMiddleware from "./middleware/daily-message-limit.js";
 import { healthRoutes } from "./routes/health.js";
+import { openApiRoutes } from "./routes/openapi.js";
 import { projectRoutes } from "./routes/projects.js";
 import { sourceRoutes } from "./routes/sources.js";
 import { crawlRunRoutes } from "./routes/crawl-runs.js";
@@ -35,6 +36,7 @@ export async function registerDocsProfile(fastify: FastifyInstance): Promise<voi
   await fastify.register(chatUserRequestContextMiddleware);
   await fastify.register(dailyMessageLimitMiddleware);
   await fastify.register(healthRoutes);
+  await fastify.register(openApiRoutes);
   await fastify.register(projectRoutes);
   await fastify.register(sourceRoutes);
   await fastify.register(crawlRunRoutes);

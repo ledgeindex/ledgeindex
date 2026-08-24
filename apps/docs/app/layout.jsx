@@ -17,7 +17,14 @@ export const metadata = {
     "Guides for LedgeIndex packages and apps — crawl, index, retrieve, chat, MCP, web, and desktop.",
 };
 
-const navbar = <Navbar logo={<DocsNavbarBrand />} logoLink={false} />;
+const navbar = (
+  <Navbar
+    logo={<DocsNavbarBrand />}
+    logoLink={false}
+    projectLink="https://github.com/ledgeindex/ledgeindex"
+    chatLink="https://discord.gg/gzeKZxsrsP"
+  />
+);
 const footer = null;
 
 const LEGACY_TOP_LEVEL = new Set(["core", "profile", "server"]);

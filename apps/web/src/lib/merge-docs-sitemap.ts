@@ -78,7 +78,14 @@ export async function fetchDocsSitemapEntries(
   return [];
 }
 
-export const PUBLIC_MARKETING_PATHS: readonly string[] = ["/login"];
+export const PUBLIC_MARKETING_PATHS: readonly string[] = [
+  "/about",
+  "/contact",
+  "/privacy",
+  "/login",
+  "/llms.txt",
+  "/openapi.json",
+];
 
 export function marketingSitemapEntries(
   apex: string,

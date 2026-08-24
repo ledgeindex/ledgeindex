@@ -1,16 +1,23 @@
 import { Container } from "@/components/ui/container";
 import { Eyebrow } from "@/components/ui/section-badge";
+import { docsSiteHref } from "@/lib/docs-site-url";
 
 const FOOTER_LINKS = {
   Product: [
     { href: "#use-cases", label: "Use cases" },
     { href: "#showcase", label: "How it works" },
-    { href: "#", label: "Request demo" },
+    { href: "/login", label: "Sign in" },
+  ],
+  Developers: [
+    { href: docsSiteHref(), label: "Documentation" },
+    { href: "/openapi.json", label: "OpenAPI spec" },
+    { href: "/llms.txt", label: "llms.txt" },
+    { href: "/.well-known/mcp.json", label: "MCP manifest" },
   ],
   Company: [
-    { href: "#", label: "Contact" },
-    { href: "#", label: "Privacy" },
-    { href: "#", label: "Terms" },
+    { href: "/about", label: "About" },
+    { href: "/contact", label: "Contact" },
+    { href: "/privacy", label: "Privacy" },
   ],
 } as const;
 

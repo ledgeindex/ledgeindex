@@ -9,6 +9,9 @@ export const metadata: Metadata = {
   description:
     "Turn product docs into an assistant people trust. Users get clear answers with links back to the source. Support handles fewer repeat questions.",
   metadataBase: new URL("https://ledgeindex.com"),
+  alternates: {
+    canonical: "https://ledgeindex.com",
+  },
   openGraph: {
     title: "LedgeIndex | Answers from your docs, not guesses",
     description:
