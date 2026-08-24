@@ -1,4 +1,5 @@
 import { createConnection } from 'node:net'
+import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { Worker } from 'node:worker_threads'
 import { app, net } from 'electron'
@@ -117,18 +118,43 @@ async function waitForWorkerReady(worker: Worker, timeoutMs = 180_000): Promise<
   }
 }
 
+function resolveRuntimeRoot(): string {
+  if (app.isPackaged) {
+    return resolvePackagedRuntimeDir()
+  }
+  // out/main → apps/desktop → ledgeindex/hosts/desktop-server
+  return join(__dirname, '../../../hosts/desktop-server')
+}
+
+/** Fork target for header nav — Stagehand must not run inside the API worker thread. */
+function resolveHeaderNavChildScriptPath(): string | undefined {
+  if (app.isPackaged) {
+    const packaged = join(resolvePackagedRuntimeDir(), 'discover-header-nav-child.js')
+    return existsSync(packaged) ? packaged : undefined
+  }
+  const dev = join(
+    __dirname,
+    '../../../../packages/docs/dist/runtime/crawler/discover-header-nav-child.js'
+  )
+  return existsSync(dev) ? dev : undefined
+}
+
 async function spawnApiWorker(): Promise<void> {
   // Packaged: one bundled file. Its externals resolve from the sibling
   // node_modules, so no NODE_PATH juggling. Dev: workspace packages by name.
+  const runtimeRoot = resolveRuntimeRoot()
   const runtimeBundlePath = app.isPackaged
-    ? resolvePackagedBundlePath(resolvePackagedRuntimeDir())
+    ? resolvePackagedBundlePath(runtimeRoot)
     : undefined
+  const headerNavChildScript = resolveHeaderNavChildScriptPath()
 
   status = 'starting'
   const worker = new Worker(resolveWorkerScriptPath(), {
     workerData: {
       env: snapshotLedgeindexRuntimeEnv(),
       runtimeBundlePath,
+      runtimeRoot,
+      headerNavChildScript,
       port: DESKTOP_SERVER_PORT,
       host: '127.0.0.1',
       dataDir: ledgeindexDataDir(),

@@ -15,6 +15,8 @@ import { getModelObject } from "../llm/model-utils.js";
 import { normalizeStartUrl } from "../lib/url.js";
 import { isLocalHostingDeployment } from "../db/types.js";
 import {
+  applyPlaywrightBrowsersEnv,
+  playwrightBrowsersDir,
   resolveChromiumExecutable,
 } from "./stagehand-runtime.js";
 
@@ -36,6 +38,13 @@ const DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash";
 const DEEPSEEK_BASE_URL = "https://api.deepseek.com/v1";
 const SNAPSHOT_MAX_CHARS = 12_000;
 const BROWSER_TIMEOUT_MS = 90_000;
+const LLM_STEP_TIMEOUT_MS = 30_000;
+const STAGEHAND_INIT_TIMEOUT_MS = 45_000;
+const CHROMIUM_LAUNCH_ARGS = [
+  "--disable-gpu",
+  "--no-sandbox",
+  "--disable-dev-shm-usage",
+];
 const MARKETING_SEG_RE =
   /^(pricing|login|signin|signup|register|careers|jobs|about|contact|legal|privacy|terms|cookies|status|blog|github|discord|twitter)$/i;
 
@@ -378,6 +387,7 @@ ${input.snapshotText || "(empty)"}`;
     const { object } = await generateObject({
       model: getModelObject(input.languageModelId),
       schema: navLayoutSchema,
+      abortSignal: AbortSignal.timeout(LLM_STEP_TIMEOUT_MS),
       ...(typeof content === "string"
         ? { prompt: content }
         : { messages: [{ role: "user", content }] }),
@@ -574,13 +584,25 @@ async function discoverWithStagehand(
           localBrowserLaunchOptions: {
             headless: true,
             executablePath,
+            args: CHROMIUM_LAUNCH_ARGS,
           },
           verbose: 0,
         },
   );
 
   try {
-    await stagehand.init();
+    await Promise.race([
+      stagehand.init(),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(
+            new Error(
+              `Stagehand browser init timed out after ${Math.round(STAGEHAND_INIT_TIMEOUT_MS / 1000)}s`,
+            ),
+          );
+        }, STAGEHAND_INIT_TIMEOUT_MS);
+      }),
+    ]);
     const page =
       stagehand.context.pages()[0] || (await stagehand.context.newPage());
     await gotoSeedPage(page, seed.url);
@@ -626,9 +648,20 @@ async function discoverWithStagehand(
       };
     }
 
-    const observed = await stagehand.observe(
-      "find the active/current primary HEADER/TOP navigation tab for Documentation, Docs, Guide, or Learn — not a sidebar link",
-    );
+    const observed = await Promise.race([
+      stagehand.observe(
+        "find the active/current primary HEADER/TOP navigation tab for Documentation, Docs, Guide, or Learn — not a sidebar link",
+      ),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => {
+          reject(
+            new Error(
+              `Header nav observe() timed out after ${Math.round(LLM_STEP_TIMEOUT_MS / 1000)}s`,
+            ),
+          );
+        }, LLM_STEP_TIMEOUT_MS);
+      }),
+    ]);
     const first = Array.isArray(observed) ? observed[0] : observed;
     const selector =
       first && typeof first === "object" && "selector" in first
@@ -703,6 +736,8 @@ async function discoverWithStagehand(
  * caller stays in-process instead of forking.
  */
 function resolveHeaderNavChildScript(): string | null {
+  const fromEnv = process.env.LEDGEINDEX_HEADER_NAV_CHILD?.trim();
+  if (fromEnv && existsSync(fromEnv)) return fromEnv;
   try {
     const candidate = join(
       dirname(fileURLToPath(import.meta.url)),
@@ -714,6 +749,16 @@ function resolveHeaderNavChildScript(): string | null {
   }
 }
 
+function headerNavForkEnv(): NodeJS.ProcessEnv {
+  applyPlaywrightBrowsersEnv();
+  const isElectron = Boolean(process.versions.electron);
+  return {
+    ...process.env,
+    PLAYWRIGHT_BROWSERS_PATH: playwrightBrowsersDir(),
+    ...(isElectron ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
+  };
+}
+
 function discoverViaSubprocess(
   childScript: string,
   seedUrl: string,
@@ -722,9 +767,7 @@ function discoverViaSubprocess(
   return new Promise((resolve, reject) => {
     const isElectron = Boolean(process.versions.electron);
     const child = fork(childScript, [], {
-      env: isElectron
-        ? { ...process.env, ELECTRON_RUN_AS_NODE: "1" }
-        : (process.env as NodeJS.ProcessEnv),
+      env: headerNavForkEnv(),
       execPath: process.execPath,
       execArgv: isElectron ? [] : process.execArgv,
     });
@@ -827,6 +870,9 @@ export async function discoverHeaderNavPaths(
       if (childScript) {
         return discoverViaSubprocess(childScript, seedUrl, preferredProvider);
       }
+      throw new Error(
+        "Header nav discovery child script is missing from the worker runtime. Restart the desktop app or rebuild — Stagehand cannot run inside the Electron worker thread.",
+      );
     }
     return discoverHeaderNavPathsInternal(seedUrl, preferredProvider);
   });

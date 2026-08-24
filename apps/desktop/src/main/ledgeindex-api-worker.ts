@@ -2,6 +2,7 @@
  * Runs @ledgeindex/server in a worker thread so crawl/index/embeddings
  * do not block the Electron main process (window IPC, tray, etc.).
  */
+import { dirname } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parentPort, workerData } from 'node:worker_threads'
 import type { FastifyInstance } from 'fastify'
@@ -15,6 +16,10 @@ type ApiWorkerData = {
   env: Record<string, string>
   /** Packaged: absolute path to the bundled server (server.cjs) */
   runtimeBundlePath?: string
+  /** Packaged: Resources/desktop-server. Dev: hosts/desktop-server. */
+  runtimeRoot?: string
+  /** Absolute path to discover-header-nav-child.js for forked Stagehand runs. */
+  headerNavChildScript?: string
   port: number
   host: string
   dataDir: string
@@ -45,9 +50,19 @@ async function loadRuntime(bundlePath?: string): Promise<DesktopRuntime> {
   }
 }
 
+function applyRuntimeRoot(data: ApiWorkerData): void {
+  const root =
+    data.runtimeRoot?.trim() ||
+    (data.runtimeBundlePath ? dirname(data.runtimeBundlePath) : undefined)
+  if (root) process.env.LEDGEINDEX_RUNTIME_ROOT = root
+  const child = data.headerNavChildScript?.trim()
+  if (child) process.env.LEDGEINDEX_HEADER_NAV_CHILD = child
+}
+
 async function run(): Promise<void> {
   const data = workerData as ApiWorkerData
   applyEnv(data.env)
+  applyRuntimeRoot(data)
 
   const { createLedgeIndexServer, firebaseAuthMiddleware } = await loadRuntime(
     data.runtimeBundlePath,

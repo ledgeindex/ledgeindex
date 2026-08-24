@@ -25,14 +25,17 @@ export function applyPlaywrightBrowsersEnv(): void {
   process.env.PLAYWRIGHT_BROWSERS_PATH = playwrightBrowsersDir();
 }
 
-function sidecarRoot(): string {
+/** Directory with server.cjs + node_modules (desktop worker) or API cwd. */
+function runtimeRoot(): string {
+  const fromEnv = process.env.LEDGEINDEX_RUNTIME_ROOT?.trim();
+  if (fromEnv) return fromEnv;
   const argv1 = process.argv[1];
   if (argv1) return dirname(argv1);
   return process.cwd();
 }
 
 function resolvePlaywrightCoreCli(): string | null {
-  const roots = [sidecarRoot(), process.cwd()];
+  const roots = [runtimeRoot(), process.cwd()];
   for (const root of roots) {
     const pkgJson = join(root, "package.json");
     if (!existsSync(pkgJson)) continue;
@@ -60,7 +63,7 @@ export function isStagehandRuntimeInstalled(): boolean {
   const browsersDir = playwrightBrowsersDir();
   if (!chromiumFolderPresent(browsersDir)) return false;
   try {
-    const req = createRequire(join(sidecarRoot(), "package.json"));
+    const req = createRequire(join(runtimeRoot(), "package.json"));
     const pw = req("playwright-core") as {
       chromium?: { executablePath?: () => string };
     };
@@ -99,6 +102,15 @@ export async function resolveChromiumExecutable(): Promise<string> {
   );
 }
 
+function playwrightInstallEnv(browsersDir: string): NodeJS.ProcessEnv {
+  const isElectron = Boolean(process.versions.electron);
+  return {
+    ...process.env,
+    PLAYWRIGHT_BROWSERS_PATH: browsersDir,
+    ...(isElectron ? { ELECTRON_RUN_AS_NODE: "1" } : {}),
+  };
+}
+
 async function installChromiumFromPlaywrightCdn(): Promise<void> {
   applyPlaywrightBrowsersEnv();
   const browsersDir = playwrightBrowsersDir();
@@ -107,16 +119,13 @@ async function installChromiumFromPlaywrightCdn(): Promise<void> {
   const cli = resolvePlaywrightCoreCli();
   if (!cli) {
     throw new Error(
-      "playwright-core is missing from the packaged sidecar, so Chromium cannot be downloaded. Rebuild the desktop app — only the browser is fetched from Playwright’s CDN (~150 MB), not from LedgeIndex.",
+      "playwright-core is missing from the packaged worker runtime, so Chromium cannot be downloaded. Rebuild the desktop app — only the browser is fetched from Playwright’s CDN (~150 MB), not from LedgeIndex.",
     );
   }
 
   try {
     await execFileAsync(process.execPath, [cli, "install", "chromium"], {
-      env: {
-        ...process.env,
-        PLAYWRIGHT_BROWSERS_PATH: browsersDir,
-      },
+      env: playwrightInstallEnv(browsersDir),
       windowsHide: true,
     });
   } catch (error) {

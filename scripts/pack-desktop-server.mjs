@@ -955,6 +955,19 @@ async function main() {
 
   const { externals } = await bundleDesktopServer(dest);
 
+  const headerNavChildSrc = join(
+    root,
+    "packages/docs/dist/runtime/crawler/discover-header-nav-child.js",
+  );
+  const headerNavChildDest = join(dest, "discover-header-nav-child.js");
+  if (!existsSync(headerNavChildSrc)) {
+    throw new Error(
+      `missing ${headerNavChildSrc} — run npm run build -w @ledgeindex/docs first`,
+    );
+  }
+  cpSync(headerNavChildSrc, headerNavChildDest);
+  log("staged header nav child →", relative(root, headerNavChildDest));
+
   // Stagehand + playwright-core JS are staged; Chromium is not (first-use CDN).
   const seeds = [
     ...new Set([

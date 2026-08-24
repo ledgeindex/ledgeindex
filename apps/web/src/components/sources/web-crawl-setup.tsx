@@ -618,8 +618,8 @@ export function WebCrawlSetup() {
   const [excludePatternsText, setExcludePatternsText] = useState(
     () => initialExcludePatterns.join("\n"),
   );
-  const [autoDiscoverExcludes, setAutoDiscoverExcludes] = useState(true);
-  const autoDiscoverExcludesRef = useRef(true);
+  const [autoDiscoverExcludes, setAutoDiscoverExcludes] = useState(false);
+  const autoDiscoverExcludesRef = useRef(false);
   const excludePatternsTextRef = useRef(excludePatternsText);
   const patternsAreRegexRef = useRef(initialPatternsAreRegex);
   const autoDiscoverAppliedForRunRef = useRef<string | null>(null);
@@ -2922,6 +2922,7 @@ export function WebCrawlSetup() {
                       : "Sitemap + links"
                     : "Links",
                   discoverHeaderNav ? "nav" : null,
+                  autoDiscoverExcludes ? "filter" : null,
                 ]
                   .filter(Boolean)
                   .join(" · ")
@@ -2934,6 +2935,7 @@ export function WebCrawlSetup() {
                       : "Sitemap + link crawl"
                     : "Links only",
                   discoverHeaderNav ? "header nav" : null,
+                  autoDiscoverExcludes ? "filter on" : null,
                 ]
                   .filter(Boolean)
                   .join(" · ")
@@ -3131,6 +3133,23 @@ export function WebCrawlSetup() {
                   </div>
                 ) : null}
               </div>
+              <div className="mt-4 space-y-1 border-t border-border/60 pt-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-medium text-foreground">Filter</p>
+                    <p className="mt-0.5 text-xs text-muted">
+                      After crawl: drop not-found pages and next/previous
+                      (legacy, beta, canary…) version trees
+                    </p>
+                  </div>
+                  <Switch
+                    checked={autoDiscoverExcludes}
+                    onChange={setAutoDiscoverExcludes}
+                    label="Filter discovered URLs after crawl"
+                    disabled={toolbarLocked}
+                  />
+                </div>
+              </div>
               </div>
             </ConfigPill>
 
@@ -3261,8 +3280,6 @@ export function WebCrawlSetup() {
                 ? liveCrawlCount
                 : discoveredUrls.length
             }
-            autoDiscoverExcludes={autoDiscoverExcludes}
-            onAutoDiscoverExcludesChange={setAutoDiscoverExcludes}
             autoExcludePhase={autoExcludePhase}
             autoExcludeResult={autoExcludeResult}
             httpCleanupPhase={httpCleanupPhase}
@@ -4486,8 +4503,6 @@ function StartUrlCard({
   busy,
   crawlCardPhase,
   pagesDiscovered,
-  autoDiscoverExcludes,
-  onAutoDiscoverExcludesChange,
   autoExcludePhase,
   autoExcludeResult,
   httpCleanupPhase,
@@ -4526,8 +4541,6 @@ function StartUrlCard({
   busy: string | null;
   crawlCardPhase: CrawlCardPhase;
   pagesDiscovered: number;
-  autoDiscoverExcludes: boolean;
-  onAutoDiscoverExcludesChange: (value: boolean) => void;
   autoExcludePhase: "idle" | "analysing" | "done";
   autoExcludeResult: {
     scanned: number;
@@ -4643,40 +4656,6 @@ function StartUrlCard({
         label={widgetLabel}
         aside={
           <div className="flex items-center gap-2">
-            {crawlCardPhase === "idle" ? (
-              <div
-                className={cn(
-                  "inline-flex max-w-[9.5rem] items-center gap-1.5 sm:max-w-none",
-                  Boolean(busy) && "opacity-50",
-                )}
-              >
-                <Switch
-                  checked={autoDiscoverExcludes}
-                  onChange={onAutoDiscoverExcludesChange}
-                  label="Filter"
-                  disabled={Boolean(busy)}
-                />
-                <button
-                  type="button"
-                  disabled={Boolean(busy)}
-                  onClick={() =>
-                    onAutoDiscoverExcludesChange(!autoDiscoverExcludes)
-                  }
-                  className="truncate font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-muted uppercase hover:text-foreground disabled:cursor-not-allowed"
-                >
-                  Filter
-                </button>
-                <span
-                  className="inline-flex size-3.5 shrink-0 items-center justify-center text-muted"
-                  title="After crawl: drops not-found pages and next/previous (legacy, beta, canary…) version trees"
-                >
-                  <Info className="size-3" aria-hidden />
-                  <span className="sr-only">
-                    Drops not-found pages and next/previous version trees
-                  </span>
-                </span>
-              </div>
-            ) : null}
             {httpCleanupPhase === "cleaning" ||
             (isCrawling && liveCrawlPhase === "validating") ? (
               <span className="inline-flex max-w-[11rem] items-center gap-1.5 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-accent uppercase sm:max-w-none">
