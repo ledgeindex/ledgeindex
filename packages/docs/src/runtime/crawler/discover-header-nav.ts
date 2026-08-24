@@ -1,5 +1,6 @@
 import { generateObject } from "ai";
 import { fork } from "node:child_process";
+import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { isMainThread } from "node:worker_threads";
@@ -13,6 +14,9 @@ import {
 import { getModelObject } from "../llm/model-utils.js";
 import { normalizeStartUrl } from "../lib/url.js";
 import { isLocalHostingDeployment } from "../db/types.js";
+import {
+  resolveChromiumExecutable,
+} from "./stagehand-runtime.js";
 
 export type HeaderNavPath = {
   url: string;
@@ -319,6 +323,11 @@ function resolveStagehandModel(preferred?: HeaderNavProviderId): {
   };
 }
 
+/**
+ * Dynamic so the docs runtime still loads where Stagehand is not installed (it
+ * is an optionalDependency). esbuild resolves and inlines this for the desktop
+ * sidecar bundle, which is why nothing has to be staged on disk.
+ */
 async function loadStagehand(): Promise<{
   Stagehand: new (options: Record<string, unknown>) => StagehandHandle;
 }> {
@@ -326,48 +335,10 @@ async function loadStagehand(): Promise<{
     return (await import("@browserbasehq/stagehand")) as unknown as {
       Stagehand: new (options: Record<string, unknown>) => StagehandHandle;
     };
-  } catch {
-    // Packaged desktop / monorepo fallbacks below.
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Stagehand is not available in this build. ${detail}`);
   }
-
-  const { createRequire } = await import("node:module");
-  const { dirname, join, resolve } = await import("node:path");
-  const { fileURLToPath } = await import("node:url");
-  const here = dirname(fileURLToPath(import.meta.url));
-  const ledgeRoot = resolve(here, "../../../../..");
-  const monoRoot = resolve(ledgeRoot, "..");
-  const roots = [
-    join(monoRoot, "agents-content"),
-    ledgeRoot,
-    join(ledgeRoot, "hosts", "desktop-server"),
-    process.cwd(),
-  ];
-
-  for (const root of roots) {
-    try {
-      const req = createRequire(join(root, "package.json"));
-      const mod = req("@browserbasehq/stagehand") as {
-        Stagehand: new (options: Record<string, unknown>) => StagehandHandle;
-      };
-      if (mod?.Stagehand) return mod;
-    } catch {
-      // try next root
-    }
-  }
-
-  const {
-    isStagehandRuntimeInstalled,
-    loadStagehandFromRuntimeDir,
-  } = await import("./stagehand-runtime.js");
-  if (isStagehandRuntimeInstalled()) {
-    return loadStagehandFromRuntimeDir() as {
-      Stagehand: new (options: Record<string, unknown>) => StagehandHandle;
-    };
-  }
-
-  throw new Error(
-    "Browser runtime not installed. Download it from Header nav paths in crawl settings first.",
-  );
 }
 
 function truncateSnapshot(tree: string): string {
@@ -587,6 +558,7 @@ async function discoverWithStagehand(
     apiKey: model.apiKey,
   };
   if (model.baseURL) stagehandModel.baseURL = model.baseURL;
+  const executablePath = await resolveChromiumExecutable();
   const stagehand = new Stagehand(
     env === "BROWSERBASE"
       ? {
@@ -599,7 +571,10 @@ async function discoverWithStagehand(
       : {
           env: "LOCAL",
           model: stagehandModel,
-          localBrowserLaunchOptions: { headless: true },
+          localBrowserLaunchOptions: {
+            headless: true,
+            executablePath,
+          },
           verbose: 0,
         },
   );
@@ -723,20 +698,30 @@ async function discoverWithStagehand(
   }
 }
 
-function resolveHeaderNavChildScript(): string {
-  return join(
-    dirname(fileURLToPath(import.meta.url)),
-    "discover-header-nav-child.js",
-  );
+/**
+ * null in the bundled desktop sidecar: there is no sibling file on disk, so the
+ * caller stays in-process instead of forking.
+ */
+function resolveHeaderNavChildScript(): string | null {
+  try {
+    const candidate = join(
+      dirname(fileURLToPath(import.meta.url)),
+      "discover-header-nav-child.js",
+    );
+    return existsSync(candidate) ? candidate : null;
+  } catch {
+    return null;
+  }
 }
 
 function discoverViaSubprocess(
+  childScript: string,
   seedUrl: string,
   preferredProvider?: HeaderNavProviderId,
 ): Promise<HeaderNavDiscoveryResult> {
   return new Promise((resolve, reject) => {
     const isElectron = Boolean(process.versions.electron);
-    const child = fork(resolveHeaderNavChildScript(), [], {
+    const child = fork(childScript, [], {
       env: isElectron
         ? { ...process.env, ELECTRON_RUN_AS_NODE: "1" }
         : (process.env as NodeJS.ProcessEnv),
@@ -838,7 +823,10 @@ export async function discoverHeaderNavPaths(
     await ensureStagehandForDiscovery();
 
     if (!isMainThread) {
-      return discoverViaSubprocess(seedUrl, preferredProvider);
+      const childScript = resolveHeaderNavChildScript();
+      if (childScript) {
+        return discoverViaSubprocess(childScript, seedUrl, preferredProvider);
+      }
     }
     return discoverHeaderNavPathsInternal(seedUrl, preferredProvider);
   });

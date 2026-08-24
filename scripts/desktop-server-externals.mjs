@@ -31,10 +31,10 @@ export const BUNDLE_EXTERNALS = [
   // Native: napi-rs helpers pulled in by crawlee's file store
   "@napi-rs/*",
   "@reflink/*",
-  // Optional browser automation; never bundled, resolved only when installed locally
+  // Stagehand is bundled into server.cjs. playwright-core stays on disk so
+  // cli.js can fetch Chromium from Playwright’s CDN on first use.
   "playwright",
   "playwright-core",
-  "@browserbasehq/stagehand",
   // Optional native canvas behind jsdom
   "canvas",
   // jsdom spawns ./xhr-sync-worker.js as a child process and reads
@@ -59,8 +59,6 @@ export const BUNDLE_EXTERNALS = [
  */
 export const OPTIONAL_RUNTIME_PACKAGES = new Set([
   "playwright",
-  "playwright-core",
-  "@browserbasehq/stagehand",
   "canvas",
 ]);
 
@@ -79,4 +77,5 @@ export const RUNTIME_TREE_SEEDS = [
   ),
   // Wildcard @crawlee/* is dropped above; this is the package we import.
   "@crawlee/cheerio",
+  "playwright-core",
 ];

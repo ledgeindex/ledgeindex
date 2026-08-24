@@ -5,7 +5,10 @@ import {
   discoverHeaderNavPaths,
   listHeaderNavProviders,
 } from "../crawler/discover-header-nav.js";
-import { getStagehandRuntimeStatus, ensureStagehandRuntime } from "../crawler/stagehand-runtime.js";
+import {
+  ensureStagehandRuntime,
+  getStagehandRuntimeStatus,
+} from "../crawler/stagehand-runtime.js";
 
 const bodySchema = z.object({
   url: z.string().min(1),
@@ -28,7 +31,9 @@ export async function discoverHeaderNavRoutes(fastify: FastifyInstance) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Browser runtime install failed";
-      const status = /Failed to download Stagehand runtime/i.test(message)
+      const status = /Chromium install failed|playwright-core is missing/i.test(
+        message,
+      )
         ? 503
         : 502;
       return reply.status(status).send({ error: message });
@@ -51,13 +56,16 @@ export async function discoverHeaderNavRoutes(fastify: FastifyInstance) {
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Header nav discovery failed";
-      const status = /Failed to download Stagehand runtime/i.test(message)
-        ? 503
-        : /not installed|Browser runtime not installed|api key missing|needs a .+ key/i.test(
-              message,
-            )
-          ? 501
-          : 502;
+      const status =
+        /Chromium install failed|playwright-core is missing|Browser runtime not installed/i.test(
+          message,
+        )
+          ? 503
+          : /not installed|api key missing|needs a .+ key|Stagehand is not available/i.test(
+                message,
+              )
+            ? 501
+            : 502;
       return reply.status(status).send({ error: message });
     }
   });

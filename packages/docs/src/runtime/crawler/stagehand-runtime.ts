@@ -1,56 +1,65 @@
 import { createRequire } from "node:module";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import {
-  createWriteStream,
-  existsSync,
-  mkdirSync,
-  readFileSync,
-  renameSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { pipeline } from "node:stream/promises";
 import { dataPath } from "../lib/data-dir.js";
 
 const execFileAsync = promisify(execFile);
 
-/** Bump when the downloadable runtime layout or package set changes. */
+/** Bump when the on-disk Chromium layout we look for changes. */
 export const STAGEHAND_RUNTIME_VERSION = "1";
 
-const STAGEHAND_PKG = "@browserbasehq/stagehand";
-
-export function stagehandRuntimeRoot(): string {
-  return dataPath("stagehand-runtime");
-}
-
 export function stagehandBrowsersPath(): string {
-  return join(stagehandRuntimeRoot(), "browsers");
+  return dataPath("stagehand-runtime", "browsers");
 }
 
-function installedMarkerPath(): string {
-  return join(stagehandRuntimeRoot(), ".installed");
+export function applyPlaywrightBrowsersEnv(): void {
+  process.env.PLAYWRIGHT_BROWSERS_PATH = stagehandBrowsersPath();
 }
 
-function stagehandModulePath(): string {
-  return join(
-    stagehandRuntimeRoot(),
-    "node_modules",
-    "@browserbasehq",
-    "stagehand",
-    "package.json",
-  );
+function sidecarRoot(): string {
+  const argv1 = process.argv[1];
+  if (argv1) return dirname(argv1);
+  return process.cwd();
+}
+
+function resolvePlaywrightCoreCli(): string | null {
+  const roots = [sidecarRoot(), process.cwd()];
+  for (const root of roots) {
+    const pkgJson = join(root, "package.json");
+    if (!existsSync(pkgJson)) continue;
+    try {
+      const req = createRequire(pkgJson);
+      const resolved = req.resolve("playwright-core/package.json");
+      const cli = join(dirname(resolved), "cli.js");
+      if (existsSync(cli)) return cli;
+    } catch {
+      // try next root
+    }
+    const cli = join(root, "node_modules", "playwright-core", "cli.js");
+    if (existsSync(cli)) return cli;
+  }
+  return null;
+}
+
+function chromiumFolderPresent(browsersDir: string): boolean {
+  if (!existsSync(browsersDir)) return false;
+  return readdirSync(browsersDir).some((name) => name.startsWith("chromium"));
 }
 
 export function isStagehandRuntimeInstalled(): boolean {
-  if (!existsSync(stagehandModulePath())) return false;
+  applyPlaywrightBrowsersEnv();
+  if (!chromiumFolderPresent(stagehandBrowsersPath())) return false;
   try {
-    const marker = readFileSync(installedMarkerPath(), "utf8").trim();
-    return marker === STAGEHAND_RUNTIME_VERSION;
+    const req = createRequire(join(sidecarRoot(), "package.json"));
+    const pw = req("playwright-core") as {
+      chromium?: { executablePath?: () => string };
+    };
+    const path = pw.chromium?.executablePath?.();
+    return Boolean(path && existsSync(path));
   } catch {
-    return false;
+    return chromiumFolderPresent(stagehandBrowsersPath());
   }
 }
 
@@ -60,107 +69,66 @@ export function isStagehandRuntimeInstalling(): boolean {
   return installInFlight !== null;
 }
 
-export function resolveStagehandRuntimeDownloadUrl(): string {
-  const override = process.env.LEDGEINDEX_STAGEHAND_RUNTIME_URL?.trim();
-  if (override) return override;
-  const platform = process.platform;
-  const arch = process.arch === "arm64" ? "arm64" : "x64";
-  return `https://storage.googleapis.com/ledgeindex-runtime/stagehand-v${STAGEHAND_RUNTIME_VERSION}-${platform}-${arch}.tar.gz`;
-}
-
-export function applyStagehandRuntimeEnv(): void {
-  if (!isStagehandRuntimeInstalled()) return;
-  process.env.PLAYWRIGHT_BROWSERS_PATH = stagehandBrowsersPath();
-}
-
-export function loadStagehandFromRuntimeDir(): {
-  Stagehand: new (options: Record<string, unknown>) => unknown;
-} {
-  applyStagehandRuntimeEnv();
-  const req = createRequire(join(stagehandRuntimeRoot(), "package.json"));
-  return req(STAGEHAND_PKG) as {
-    Stagehand: new (options: Record<string, unknown>) => unknown;
-  };
-}
-
-async function downloadFile(url: string, destPath: string): Promise<void> {
-  const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok) {
+/** Path to Playwright-managed Chromium for Stagehand's chrome-launcher. */
+export async function resolveChromiumExecutable(): Promise<string> {
+  applyPlaywrightBrowsersEnv();
+  if (!isStagehandRuntimeInstalled()) {
     throw new Error(
-      `Failed to download Stagehand runtime (${res.status}) from ${url}`,
+      "Browser runtime not installed. Download it from Header nav paths in crawl settings first.",
     );
   }
-  if (!res.body) {
-    throw new Error(`Empty download body from ${url}`);
+  try {
+    const { chromium } = (await import("playwright-core")) as {
+      chromium: { executablePath: () => string };
+    };
+    const path = chromium.executablePath();
+    if (path && existsSync(path)) return path;
+  } catch {
+    // fall through
   }
-  await pipeline(res.body as unknown as NodeJS.ReadableStream, createWriteStream(destPath));
+  throw new Error(
+    "Chromium folder exists but Playwright cannot resolve the executable. Re-download the browser runtime.",
+  );
 }
 
-async function extractTarGz(archivePath: string, destParent: string): Promise<void> {
-  mkdirSync(destParent, { recursive: true });
-  const root = stagehandRuntimeRoot();
-  if (existsSync(root)) {
-    rmSync(root, { recursive: true, force: true });
-  }
-  await execFileAsync(
-    "tar",
-    ["-xzf", archivePath, "-C", destParent],
-    { windowsHide: true },
-  );
-  const extracted = join(destParent, "stagehand-runtime");
-  if (!existsSync(extracted)) {
+async function installChromiumFromPlaywrightCdn(): Promise<void> {
+  applyPlaywrightBrowsersEnv();
+  mkdirSync(stagehandBrowsersPath(), { recursive: true });
+
+  const cli = resolvePlaywrightCoreCli();
+  if (!cli) {
     throw new Error(
-      "Stagehand runtime archive is missing a stagehand-runtime/ root folder",
+      "playwright-core is missing from the packaged sidecar, so Chromium cannot be downloaded. Rebuild the desktop app — only the browser is fetched from Playwright’s CDN (~150 MB), not from LedgeIndex.",
     );
   }
-  if (extracted !== root) {
-    mkdirSync(dirname(root), { recursive: true });
-    renameSync(extracted, root);
-  }
-}
-
-async function installStagehandRuntimeOnce(): Promise<void> {
-  if (isStagehandRuntimeInstalled()) return;
-
-  const url = resolveStagehandRuntimeDownloadUrl();
-  const tmpArchive = join(
-    tmpdir(),
-    `ledgeindex-stagehand-runtime-${process.pid}.tar.gz`,
-  );
-  const extractParent = join(tmpdir(), `ledgeindex-stagehand-extract-${process.pid}`);
 
   try {
-    mkdirSync(extractParent, { recursive: true });
-    await downloadFile(url, tmpArchive);
-    await extractTarGz(tmpArchive, extractParent);
+    await execFileAsync(process.execPath, [cli, "install", "chromium"], {
+      env: {
+        ...process.env,
+        PLAYWRIGHT_BROWSERS_PATH: stagehandBrowsersPath(),
+      },
+      windowsHide: true,
+    });
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `Chromium install failed (Playwright CDN, not LedgeIndex). ${detail}`,
+    );
+  }
 
-    if (!existsSync(stagehandModulePath())) {
-      throw new Error(
-        "Downloaded Stagehand runtime is incomplete (missing @browserbasehq/stagehand)",
-      );
-    }
-
-    writeFileSync(installedMarkerPath(), `${STAGEHAND_RUNTIME_VERSION}\n`, "utf8");
-    applyStagehandRuntimeEnv();
-  } finally {
-    try {
-      rmSync(tmpArchive, { force: true });
-    } catch {
-      // ignore
-    }
-    try {
-      rmSync(extractParent, { recursive: true, force: true });
-    } catch {
-      // ignore
-    }
+  if (!isStagehandRuntimeInstalled()) {
+    throw new Error(
+      "Playwright finished but Chromium is not in the local browsers folder.",
+    );
   }
 }
 
-/** First-use download into LEDGEINDEX_DATA_DIR/stagehand-runtime (packaged desktop). */
+/** First-use Chromium download into LEDGEINDEX_DATA_DIR (Playwright CDN). */
 export async function ensureStagehandRuntime(): Promise<void> {
   if (isStagehandRuntimeInstalled()) return;
   if (!installInFlight) {
-    installInFlight = installStagehandRuntimeOnce().finally(() => {
+    installInFlight = installChromiumFromPlaywrightCdn().finally(() => {
       installInFlight = null;
     });
   }
@@ -177,6 +145,6 @@ export function getStagehandRuntimeStatus(): {
     installed: isStagehandRuntimeInstalled(),
     installing: isStagehandRuntimeInstalling(),
     version: STAGEHAND_RUNTIME_VERSION,
-    downloadUrl: resolveStagehandRuntimeDownloadUrl(),
+    downloadUrl: "",
   };
 }

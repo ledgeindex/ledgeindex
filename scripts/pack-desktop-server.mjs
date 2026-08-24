@@ -955,8 +955,7 @@ async function main() {
 
   const { externals } = await bundleDesktopServer(dest);
 
-  // Seed from what the bundle actually imports, plus lazy-only names — skip optional
-  // browser automation (stagehand/playwright) so the release tree stays small.
+  // Stagehand + playwright-core JS are staged; Chromium is not (first-use CDN).
   const seeds = [
     ...new Set([
       ...externals.filter((name) => !OPTIONAL_RUNTIME_PACKAGES.has(name)),

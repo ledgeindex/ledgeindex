@@ -960,7 +960,10 @@ export function WebCrawlSetup() {
   }, [isDesktopShell, discoverHeaderNav]);
 
   useEffect(() => {
-    if (!isDesktopShell || (!stagehandRuntimeInstalling && headerNavStatus !== "loading")) {
+    if (
+      !isDesktopShell ||
+      (!stagehandRuntimeInstalling && headerNavStatus !== "loading")
+    ) {
       setHeaderNavDownloading(false);
       return;
     }
@@ -1051,7 +1054,11 @@ export function WebCrawlSetup() {
     try {
       const status = await installStagehandRuntime();
       setStagehandRuntimeReady(status.installed);
-      if (status.installed && discoverHeaderNav && isValidStartUrl(primaryStartUrl)) {
+      if (
+        status.installed &&
+        discoverHeaderNav &&
+        isValidStartUrl(primaryStartUrl)
+      ) {
         void runHeaderNavDiscovery();
       }
     } catch (error) {
@@ -3020,9 +3027,9 @@ export function WebCrawlSetup() {
                 stagehandRuntimeReady === false ? (
                   <div className="space-y-2 border-t border-border/60 pt-3">
                     <p className="text-xs text-muted">
-                      Header nav needs a one-time browser bundle (~150 MB) on
-                      your machine. Download it when you are ready — nothing
-                      installs until you click.
+                      Header nav needs Chromium on this machine (~150 MB). It
+                      downloads from Playwright’s CDN on first use, not from
+                      LedgeIndex.
                     </p>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button
