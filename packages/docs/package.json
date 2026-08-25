@@ -28,7 +28,8 @@
     "prepublishOnly": "npm run clean && npm run build",
     "build": "tsup",
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
-    "test:agent-readiness": "node --import tsx --test src/runtime/openapi/public-api-spec.test.ts"
+    "test:agent-readiness": "node --import tsx --test src/runtime/openapi/public-api-spec.test.ts",
+    "test:system-browser": "node --import tsx --test src/runtime/crawler/system-browser.test.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "2.0.86",

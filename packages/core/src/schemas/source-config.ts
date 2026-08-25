@@ -46,9 +46,9 @@ export const createSourceBodySchema = z
     scope: sourceScopeSchema.default("personal"),
     /** Where to store the index. Ignored on cloud-only deployments (always cloud). */
     hosting: sourceHostingSchema.optional(),
-    config: webCrawlSourceConfigSchema,
-    sourceMetadata: sourceMetadataSchema.nullable().optional(),
-    versionMode: z.enum(["new", "replace"]).optional(),
+  config: webCrawlSourceConfigSchema,
+  sourceMetadata: sourceMetadataSchema.nullable().optional(),
+  versionMode: z.enum(["new", "replace"]).optional(),
     replaceSourceId: z.string().uuid().optional(),
     versionLabel: z.string().min(1).max(120).optional(),
   })

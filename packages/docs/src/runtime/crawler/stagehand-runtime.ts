@@ -4,6 +4,10 @@ import { promisify } from "node:util";
 import { existsSync, mkdirSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { dataPath } from "../lib/data-dir.js";
+import { detectSystemBrowser, type SystemBrowserInfo } from "./system-browser.js";
+
+export type { SystemBrowserInfo };
+export type BrowserRuntimeMode = "playwright" | "system";
 
 const execFileAsync = promisify(execFile);
 
@@ -80,8 +84,20 @@ export function isStagehandRuntimeInstalling(): boolean {
   return installInFlight !== null;
 }
 
-/** Path to Playwright-managed Chromium for Stagehand's chrome-launcher. */
-export async function resolveChromiumExecutable(): Promise<string> {
+/** Path to Chromium for Stagehand — Playwright bundle or system Chrome/Edge. */
+export async function resolveChromiumExecutable(
+  mode: BrowserRuntimeMode = "playwright",
+): Promise<string> {
+  if (mode === "system") {
+    const system = detectSystemBrowser();
+    if (!system) {
+      throw new Error(
+        "No installed Chrome, Edge, or Chromium found on this machine.",
+      );
+    }
+    return system.path;
+  }
+
   applyPlaywrightBrowsersEnv();
   if (!isStagehandRuntimeInstalled()) {
     throw new Error(
@@ -100,6 +116,11 @@ export async function resolveChromiumExecutable(): Promise<string> {
   throw new Error(
     "Chromium folder exists but Playwright cannot resolve the executable. Re-download the browser runtime.",
   );
+}
+
+export function isBrowserRuntimeReady(mode: BrowserRuntimeMode = "playwright"): boolean {
+  if (mode === "system") return detectSystemBrowser() !== null;
+  return isStagehandRuntimeInstalled();
 }
 
 function playwrightInstallEnv(browsersDir: string): NodeJS.ProcessEnv {
@@ -158,11 +179,16 @@ export function getStagehandRuntimeStatus(): {
   installing: boolean;
   version: string;
   downloadUrl: string;
+  systemBrowser: SystemBrowserInfo | null;
+  readyWithSystemBrowser: boolean;
 } {
+  const systemBrowser = detectSystemBrowser();
   return {
     installed: isStagehandRuntimeInstalled(),
     installing: isStagehandRuntimeInstalling(),
     version: STAGEHAND_RUNTIME_VERSION,
     downloadUrl: "",
+    systemBrowser,
+    readyWithSystemBrowser: systemBrowser !== null,
   };
 }

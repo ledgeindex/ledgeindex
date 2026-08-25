@@ -93,3 +93,27 @@ export function syncWidgetCloudApi(): void {
 export function getSyncedApiBaseUrl(): string {
   return getLedgeIndexApiBaseUrl();
 }
+
+export function isLoopbackApiBaseUrl(url?: string): boolean {
+  const base = (url ?? getLedgeIndexApiBaseUrl()).trim().replace(/\/$/, "");
+  if (!base) return false;
+  try {
+    const host = new URL(base).hostname;
+    return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+  } catch {
+    return /localhost|127\.0\.0\.1|\[::1\]/i.test(base);
+  }
+}
+
+/** Local API for header nav / Stagehand — always local in dev, even when scope is global. */
+export function resolveHeaderNavDiscoveryApiBase(): string | null {
+  if (getLedgeIndexDesktop()) return resolveDesktopLocalApiUrl();
+  const webLocal = resolveWebLocalApiUrl();
+  if (webLocal && isLoopbackApiBaseUrl(webLocal)) return webLocal;
+  return null;
+}
+
+/** Local API or desktop sidecar — can download Chromium via /discover-header-nav/runtime/install. */
+export function canManageStagehandRuntimeOnApi(): boolean {
+  return resolveHeaderNavDiscoveryApiBase() !== null;
+}

@@ -13,6 +13,7 @@ import {
 const bodySchema = z.object({
   url: z.string().min(1),
   provider: z.enum(["google", "openai", "deepseek"]).optional(),
+  browserRuntime: z.enum(["playwright", "system"]).optional(),
 });
 
 export async function discoverHeaderNavRoutes(fastify: FastifyInstance) {
@@ -41,7 +42,8 @@ export async function discoverHeaderNavRoutes(fastify: FastifyInstance) {
   });
 
   fastify.post("/api/discover-header-nav", async (request, reply) => {
-    const { url: rawUrl, provider } = bodySchema.parse(request.body);
+    const { url: rawUrl, provider, browserRuntime = "playwright" } =
+      bodySchema.parse(request.body);
     const url = normalizeStartUrl(rawUrl);
 
     try {
@@ -51,13 +53,13 @@ export async function discoverHeaderNavRoutes(fastify: FastifyInstance) {
     }
 
     try {
-      const result = await discoverHeaderNavPaths(url, provider);
+      const result = await discoverHeaderNavPaths(url, provider, browserRuntime);
       return result;
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Header nav discovery failed";
       const status =
-        /Chromium install failed|playwright-core is missing|Browser runtime not installed/i.test(
+        /Chromium install failed|playwright-core is missing|Browser runtime not installed|No installed Chrome/i.test(
           message,
         )
           ? 503

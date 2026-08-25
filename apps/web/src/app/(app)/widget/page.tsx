@@ -18,10 +18,42 @@ import {
   widgetEmbedSnippet,
   type WidgetIntegrationSummary,
 } from "@/lib/widget-api";
+import {
+  resolveWidgetSourceLabels,
+  widgetSourceLabelsForRow,
+  type WidgetSourceLabel,
+} from "@/lib/widget-source-labels";
 import { cn } from "@/lib/utils";
 
 function isCloudBoundableSource(source: SourceSummary): boolean {
   return source.scope === "global" || source.hosting === "cloud";
+}
+
+function WidgetSourceDisplay({ labels }: { labels: WidgetSourceLabel[] }) {
+  if (labels.length === 0) {
+    return <span className="font-medium text-foreground">No source linked</span>;
+  }
+
+  return (
+    <span className="inline-flex flex-col gap-0.5">
+      {labels.map((label) => (
+        <span key={label.id}>
+          <span className="font-medium text-foreground">
+            {label.scope === "global" ? `${label.name} (public)` : label.name}
+          </span>
+          {label.startUrl ? (
+            <span className="mt-0.5 block font-mono text-[0.6875rem] font-normal text-muted">
+              {label.startUrl}
+            </span>
+          ) : label.name === "Unknown source" ? (
+            <span className="mt-0.5 block font-mono text-[0.6875rem] font-normal text-muted">
+              {label.id}
+            </span>
+          ) : null}
+        </span>
+      ))}
+    </span>
+  );
 }
 
 /** Normalize to origin (scheme + host + port). Returns null if invalid. */
@@ -45,11 +77,13 @@ function OriginsEditor({
   onChange,
   disabled,
   draftId,
+  onDraftChange,
 }: {
   origins: string[];
   onChange: (next: string[]) => void;
   disabled?: boolean;
   draftId: string;
+  onDraftChange?: (draft: string) => void;
 }) {
   const [draft, setDraft] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
@@ -108,6 +142,7 @@ function OriginsEditor({
           placeholder="https://docs.yoursite.com"
           onChange={(e) => {
             setDraft(e.target.value);
+            onDraftChange?.(e.target.value);
             if (localError) setLocalError(null);
           }}
           onKeyDown={(e) => {
@@ -155,7 +190,10 @@ async function loadCloudSources(): Promise<SourceSummary[]> {
   ]);
   const byId = new Map<string, SourceSummary>();
   for (const source of personalRes.sources) {
-    if (source.hosting === "cloud") byId.set(source.id, source);
+    byId.set(source.id, source);
+    if (source.sourceFamilyId) {
+      byId.set(source.sourceFamilyId, source);
+    }
   }
   for (const source of globalRes.sources) {
     byId.set(source.id, source);
@@ -174,13 +212,17 @@ export default function WebsiteWidgetPage() {
   const [name, setName] = useState("Ask AI");
   const [sourceId, setSourceId] = useState("");
   const [createOrigins, setCreateOrigins] = useState<string[]>([]);
+  const [createOriginDraft, setCreateOriginDraft] = useState("");
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [savingOriginsId, setSavingOriginsId] = useState<string | null>(null);
   const [editOrigins, setEditOrigins] = useState<Record<string, string[]>>({});
+  const [sourceLabelsById, setSourceLabelsById] = useState<
+    Record<string, WidgetSourceLabel>
+  >({});
 
   const cloudApi = resolveWidgetCloudApiBaseUrl();
 
-  const loadWidgets = useCallback(async () => {
+  const loadWidgets = useCallback(async (catalog: SourceSummary[]) => {
     syncWidgetCloudApi();
     const widgetRows = await listWidgetIntegrations();
     setWidgets(widgetRows);
@@ -189,6 +231,8 @@ export default function WebsiteWidgetPage() {
         widgetRows.map((row) => [row.websiteId, [...row.allowedOrigins]]),
       ),
     );
+    const labels = await resolveWidgetSourceLabels(widgetRows, catalog);
+    setSourceLabelsById(labels);
   }, []);
 
   const reload = useCallback(async () => {
@@ -196,11 +240,9 @@ export default function WebsiteWidgetPage() {
     setError(null);
     try {
       syncWidgetCloudApi();
-      const [cloudSources] = await Promise.all([
-        loadCloudSources(),
-        loadWidgets(),
-      ]);
+      const cloudSources = await loadCloudSources();
       setSources(cloudSources);
+      await loadWidgets(cloudSources);
       setSourceId((current) => {
         if (current && cloudSources.some((s) => s.id === current)) return current;
         return cloudSources[0]?.id ?? "";
@@ -220,9 +262,24 @@ export default function WebsiteWidgetPage() {
     void reload();
   }, [reload]);
 
+  const pendingCreateOrigin = useMemo(
+    () => parseOriginInput(createOriginDraft),
+    [createOriginDraft],
+  );
+
+  const canCreateWidget = Boolean(
+    sourceId && name.trim() && (createOrigins.length > 0 || pendingCreateOrigin),
+  );
+
   async function handleCreate() {
-    if (createOrigins.length === 0) {
-      setError("Add at least one website origin");
+    let origins = [...createOrigins];
+    if (origins.length === 0 && pendingCreateOrigin) {
+      origins = [pendingCreateOrigin];
+      setCreateOrigins(origins);
+      setCreateOriginDraft("");
+    }
+    if (origins.length === 0) {
+      setError("Add at least one website origin (e.g. http://localhost:3000)");
       return;
     }
     setCreating(true);
@@ -232,14 +289,14 @@ export default function WebsiteWidgetPage() {
       await createWidgetIntegration({
         name,
         sourceIds: [sourceId],
-        allowedOrigins: createOrigins,
+        allowedOrigins: origins,
         brand: {
           projectName: name,
           projectColor: "#6b5a3e",
           projectLogo: null,
         },
       });
-      await loadWidgets();
+      await loadWidgets(sources);
     } catch (err) {
       setError(
         err instanceof KnowledgeIndexApiError
@@ -262,7 +319,7 @@ export default function WebsiteWidgetPage() {
     try {
       syncWidgetCloudApi();
       await updateWidgetIntegration(websiteId, { allowedOrigins: next });
-      await loadWidgets();
+      await loadWidgets(sources);
     } catch (err) {
       setError(
         err instanceof KnowledgeIndexApiError
@@ -279,7 +336,7 @@ export default function WebsiteWidgetPage() {
     try {
       syncWidgetCloudApi();
       await deleteWidgetIntegration(websiteId);
-      await loadWidgets();
+      await loadWidgets(sources);
     } catch (err) {
       setError(
         err instanceof KnowledgeIndexApiError
@@ -380,17 +437,13 @@ export default function WebsiteWidgetPage() {
               draftId="create"
               origins={createOrigins}
               onChange={setCreateOrigins}
+              onDraftChange={setCreateOriginDraft}
               disabled={creating}
             />
 
             <Button
               type="button"
-              disabled={
-                creating ||
-                !sourceId ||
-                !name.trim() ||
-                createOrigins.length === 0
-              }
+              disabled={creating || !canCreateWidget}
               onClick={() => void handleCreate()}
             >
               {creating ? "Creating…" : "Create widget"}
@@ -418,6 +471,12 @@ export default function WebsiteWidgetPage() {
                       <h3 className="font-semibold text-foreground">
                         {row.name}
                       </h3>
+                      <p className="mt-1 text-sm text-muted">
+                        Source:{" "}
+                        <WidgetSourceDisplay
+                          labels={widgetSourceLabelsForRow(row, sourceLabelsById)}
+                        />
+                      </p>
                       <p className="mt-1 font-mono text-[0.6875rem] text-muted">
                         {row.websiteId}
                       </p>

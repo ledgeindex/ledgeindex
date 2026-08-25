@@ -6,7 +6,10 @@ import {
   escapeHtml,
   type WidgetCitation,
   type WidgetConfig,
+  type WidgetHandle,
 } from "./api";
+import { clearDrawerLayout, syncDrawerLayout } from "./drawer-layout";
+import { CHAT_ICON_SVG } from "./icons";
 
 /** Map common markdown fences onto speed-highlight language ids. */
 function mapLang(lang: string | undefined): string {
@@ -44,9 +47,10 @@ marked.setOptions({
   breaks: false,
 });
 
-function widgetStyles(accent: string): string {
+function widgetStyles(cfg: WidgetConfig): string {
   // Match apps/web light theme tokens (globals.css :root).
-  const brand = accent?.trim() || "#6b5a3e";
+  const brand = cfg.projectColor?.trim() || "#6b5a3e";
+  const drawerWidth = cfg.drawerWidth || "400px";
   return `
 ${shjCss}
 :host {
@@ -122,6 +126,21 @@ ${shjCss}
   height: 8px;
   border-radius: 999px;
   background: linear-gradient(135deg, #b45309, #64748b);
+}
+.li-launcher-icon {
+  width: 52px;
+  height: 52px;
+  padding: 0;
+  justify-content: center;
+  color: var(--li-fg);
+}
+.li-launcher-icon-svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
+.li-launcher-hidden {
+  display: none !important;
 }
 .li-modal {
   pointer-events: auto;
@@ -297,36 +316,66 @@ ${shjCss}
   background: var(--li-raised);
 }
 .li-form {
-  display: flex;
-  gap: 8px;
-  align-items: flex-end;
+  display: block;
 }
-.li-form textarea {
-  flex: 1;
-  resize: none;
-  min-height: 42px;
-  max-height: 120px;
-  border-radius: 12px;
+.li-composer {
   border: 1px solid var(--li-border);
+  border-radius: 16px;
   background: var(--li-card);
-  color: var(--li-fg);
-  padding: 10px 12px;
-  font: inherit;
-  font-size: 13px;
-  outline: none;
+  overflow: hidden;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
 }
-.li-form textarea:focus {
+.li-composer:focus-within {
   border-color: color-mix(in srgb, var(--li-accent) 45%, var(--li-border));
   box-shadow: 0 0 0 3px var(--li-accent-soft);
 }
+.li-composer textarea {
+  display: block;
+  width: 100%;
+  resize: none;
+  min-height: 56px;
+  max-height: 120px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--li-fg);
+  padding: 12px 14px 6px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  outline: none;
+  box-shadow: none;
+}
+.li-composer-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 10px 10px 12px;
+}
+.li-powered {
+  margin: 0;
+  text-align: left;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--li-muted);
+  white-space: nowrap;
+}
 .li-form button[type="submit"] {
-  width: 40px;
-  height: 40px;
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 999px;
   background: var(--li-accent);
   color: #fffcf7;
+  font-size: 15px;
   font-weight: 700;
+  line-height: 1;
   cursor: pointer;
 }
 .li-form button[type="submit"]:hover {
@@ -354,14 +403,51 @@ ${shjCss}
 }
 .li-form button:disabled { opacity: 0.5; cursor: not-allowed; }
 .li-error { color: #b91c1c; font-size: 12px; margin-bottom: 6px; }
-.li-powered {
-  margin-top: 6px;
-  text-align: center;
-  font-size: 10px;
-  font-family: ui-monospace, monospace;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--li-muted);
+
+/* Drawer — full-height panel that pushes page layout from the right */
+.li-mode-drawer .li-modal {
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(${drawerWidth}, 100vw);
+  height: 100vh;
+  max-height: none;
+  border-radius: 0;
+  border-right: 0;
+  border-top: 0;
+  border-bottom: 0;
+  display: flex;
+  transform: translateX(100%);
+  transition: transform 0.25s ease;
+}
+.li-mode-drawer .li-modal[data-open="true"] {
+  transform: translateX(0);
+}
+
+/* Inline — mount inside a host div */
+.li-mode-inline {
+  position: relative;
+  inset: auto;
+  pointer-events: auto;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  z-index: auto;
+}
+.li-mode-inline .li-launcher {
+  display: none;
+}
+.li-mode-inline .li-modal {
+  position: relative;
+  inset: auto;
+  right: auto;
+  bottom: auto;
+  width: 100%;
+  height: 100%;
+  min-height: 420px;
+  max-height: none;
+  display: flex;
+  transform: none;
 }
 `;
 }
@@ -392,6 +478,23 @@ function findDataEl(
   return null;
 }
 
+function launcherMarkup(cfg: WidgetConfig): string {
+  if (cfg.launcherStyle === "hidden") {
+    return "";
+  }
+
+  if (cfg.launcherStyle === "pill") {
+    return `<button type="button" class="li-launcher" data-action="toggle" aria-expanded="false">
+          <span class="li-launcher-dot"></span>
+          <span data-launcher-label>${escapeHtml(cfg.projectName)}</span>
+        </button>`;
+  }
+
+  return `<button type="button" class="li-launcher li-launcher-icon" data-action="toggle" aria-expanded="false" aria-label="${escapeHtml(cfg.launcherLabel)}">
+          ${CHAT_ICON_SVG}
+        </button>`;
+}
+
 export class LedgeIndexChatWidget extends HTMLElement {
   #config: WidgetConfig;
   #busy = false;
@@ -412,12 +515,33 @@ export class LedgeIndexChatWidget extends HTMLElement {
   disconnectedCallback(): void {
     this.#bindAbort?.abort();
     this.#bindAbort = null;
+    if (this.#config.mode === "drawer") {
+      clearDrawerLayout();
+    }
+  }
+
+  open(): void {
+    this.#setOpen(true);
+  }
+
+  close(): void {
+    this.#setOpen(false);
+  }
+
+  toggle(): void {
+    this.#setOpen(!this.#open);
   }
 
   #renderShell(): void {
     const root = this.shadowRoot;
     if (!root) return;
     const cfg = this.#config;
+    const modeClass =
+      cfg.mode === "drawer"
+        ? "li-mode-drawer"
+        : cfg.mode === "inline"
+          ? "li-mode-inline"
+          : "li-mode-floating";
     const logo = cfg.projectLogo
       ? `<img class="li-logo" src="${escapeHtml(cfg.projectLogo)}" alt="" />`
       : "";
@@ -432,10 +556,12 @@ export class LedgeIndexChatWidget extends HTMLElement {
             .join("")}</div>`
         : "";
 
+    const inlineOpen = cfg.mode === "inline";
+
     root.innerHTML = `
-      <style>${widgetStyles(cfg.projectColor)}</style>
-      <div class="li-root">
-        <div class="li-modal" data-open="false" role="dialog" aria-hidden="true">
+      <style>${widgetStyles(cfg)}</style>
+      <div class="li-root ${modeClass}">
+        <div class="li-modal" data-open="${inlineOpen ? "true" : "false"}" role="dialog" aria-hidden="${inlineOpen ? "false" : "true"}">
           <div class="li-header">
             ${logo}
             <div class="li-title">${escapeHtml(cfg.projectName)}</div>
@@ -451,20 +577,21 @@ export class LedgeIndexChatWidget extends HTMLElement {
           <div class="li-footer">
             <div class="li-error" id="error" hidden></div>
             <form class="li-form" id="form">
-              <textarea id="input" rows="1" placeholder="Ask me a question about ${escapeHtml(cfg.projectName)}…"></textarea>
-              <button type="submit" id="send" aria-label="Send">↑</button>
+              <div class="li-composer">
+                <textarea id="input" rows="1" placeholder="Ask me a question about ${escapeHtml(cfg.projectName)}…"></textarea>
+                <div class="li-composer-bar">
+                  <div class="li-powered">Powered by LedgeIndex</div>
+                  <button type="submit" id="send" aria-label="Send">↑</button>
+                </div>
+              </div>
             </form>
-            <div class="li-powered">Powered by LedgeIndex</div>
           </div>
         </div>
-        <button type="button" class="li-launcher" data-action="toggle" aria-expanded="false">
-          <span class="li-launcher-dot"></span>
-          <span data-launcher-label>${escapeHtml(cfg.projectName)}</span>
-        </button>
+        ${launcherMarkup(cfg)}
       </div>
     `;
 
-    // Preserve open state across shell re-renders (+ New).
+    this.#open = inlineOpen;
     this.#applyOpen(this.#open);
   }
 
@@ -528,11 +655,25 @@ export class LedgeIndexChatWidget extends HTMLElement {
     const modal = root.querySelector(".li-modal");
     const label = root.querySelector("[data-launcher-label]");
     const launcher = root.querySelector(".li-launcher");
-    if (!modal || !label) return;
+    if (!modal) return;
     modal.setAttribute("data-open", open ? "true" : "false");
     modal.setAttribute("aria-hidden", open ? "false" : "true");
     launcher?.setAttribute("aria-expanded", open ? "true" : "false");
-    label.textContent = open ? "Close" : this.#config.projectName;
+    if (label) {
+      label.textContent = open ? "Close" : this.#config.projectName;
+    }
+
+    if (this.#config.mode === "drawer") {
+      syncDrawerLayout(open, this.#config.drawerWidth);
+    }
+
+    if (this.#config.launcherSelector) {
+      document
+        .querySelectorAll<HTMLElement>(this.#config.launcherSelector)
+        .forEach((node) => {
+          node.setAttribute("aria-pressed", open ? "true" : "false");
+        });
+    }
   }
 
   #resetChat(): void {
@@ -668,7 +809,33 @@ export class LedgeIndexChatWidget extends HTMLElement {
   }
 }
 
-export function mountWidget(config: WidgetConfig): { unmount: () => void } {
+export function bindExternalLaunchers(
+  selector: string,
+  toggle: () => void,
+): () => void {
+  const onClick = (event: Event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (!target.closest(selector)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    toggle();
+  };
+
+  document.addEventListener("click", onClick, true);
+  return () => {
+    document.removeEventListener("click", onClick, true);
+  };
+}
+
+export function bindExternalLaunchersWhenReady(
+  selector: string,
+  toggle: () => void,
+): () => void {
+  return bindExternalLaunchers(selector, toggle);
+}
+
+export function mountWidget(config: WidgetConfig): WidgetHandle {
   const existing = document.querySelector("ledgeindex-chat-widget");
   existing?.remove();
 
@@ -677,8 +844,36 @@ export function mountWidget(config: WidgetConfig): { unmount: () => void } {
   }
 
   const el = new LedgeIndexChatWidget(config);
-  document.body.appendChild(el);
+  const mountTarget =
+    config.mode === "inline" && config.mountSelector
+      ? document.querySelector(config.mountSelector)
+      : null;
+
+  if (config.mode === "inline" && config.mountSelector && !mountTarget) {
+    console.warn(
+      `[LedgeIndex widget] mount target not found: ${config.mountSelector}`,
+    );
+  }
+
+  (mountTarget ?? document.body).appendChild(el);
+
+  let unbindLaunchers: (() => void) | undefined;
+  if (config.launcherSelector) {
+    unbindLaunchers = bindExternalLaunchersWhenReady(
+      config.launcherSelector,
+      () => el.toggle(),
+    );
+  }
+
   return {
-    unmount: () => el.remove(),
+    element: el,
+    open: () => el.open(),
+    close: () => el.close(),
+    toggle: () => el.toggle(),
+    unmount: () => {
+      unbindLaunchers?.();
+      clearDrawerLayout();
+      el.remove();
+    },
   };
 }

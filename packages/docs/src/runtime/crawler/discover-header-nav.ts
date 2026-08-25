@@ -16,8 +16,10 @@ import { normalizeStartUrl } from "../lib/url.js";
 import { isLocalHostingDeployment } from "../db/types.js";
 import {
   applyPlaywrightBrowsersEnv,
+  isBrowserRuntimeReady,
   playwrightBrowsersDir,
   resolveChromiumExecutable,
+  type BrowserRuntimeMode,
 } from "./stagehand-runtime.js";
 
 export type HeaderNavPath = {
@@ -555,6 +557,7 @@ async function gotoSeedPage(page: StagehandPage, url: string): Promise<void> {
 async function discoverWithStagehand(
   seedUrl: string,
   preferredProvider?: HeaderNavProviderId,
+  browserRuntime: BrowserRuntimeMode = "playwright",
 ): Promise<HeaderNavDiscoveryResult> {
   const seed = {
     url: normalizeUrl(seedUrl) || normalizeStartUrl(seedUrl),
@@ -568,7 +571,7 @@ async function discoverWithStagehand(
     apiKey: model.apiKey,
   };
   if (model.baseURL) stagehandModel.baseURL = model.baseURL;
-  const executablePath = await resolveChromiumExecutable();
+  const executablePath = await resolveChromiumExecutable(browserRuntime);
   const stagehand = new Stagehand(
     env === "BROWSERBASE"
       ? {
@@ -763,6 +766,7 @@ function discoverViaSubprocess(
   childScript: string,
   seedUrl: string,
   preferredProvider?: HeaderNavProviderId,
+  browserRuntime: BrowserRuntimeMode = "playwright",
 ): Promise<HeaderNavDiscoveryResult> {
   return new Promise((resolve, reject) => {
     const isElectron = Boolean(process.versions.electron);
@@ -816,13 +820,14 @@ function discoverViaSubprocess(
         );
       }
     });
-    child.send({ url: seedUrl, provider: preferredProvider });
+    child.send({ url: seedUrl, provider: preferredProvider, browserRuntime });
   });
 }
 
 export async function discoverHeaderNavPathsInternal(
   rawUrl: string,
   preferredProvider?: HeaderNavProviderId,
+  browserRuntime: BrowserRuntimeMode = "playwright",
 ): Promise<HeaderNavDiscoveryResult> {
   const seedUrl = normalizeStartUrl(rawUrl);
   try {
@@ -831,7 +836,7 @@ export async function discoverHeaderNavPathsInternal(
     throw new Error("Invalid URL");
   }
 
-  const work = discoverWithStagehand(seedUrl, preferredProvider);
+  const work = discoverWithStagehand(seedUrl, preferredProvider, browserRuntime);
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
     return await Promise.race([
@@ -854,6 +859,7 @@ export async function discoverHeaderNavPathsInternal(
 export async function discoverHeaderNavPaths(
   rawUrl: string,
   preferredProvider?: HeaderNavProviderId,
+  browserRuntime: BrowserRuntimeMode = "playwright",
 ): Promise<HeaderNavDiscoveryResult> {
   const seedUrl = normalizeStartUrl(rawUrl);
   try {
@@ -863,22 +869,42 @@ export async function discoverHeaderNavPaths(
   }
 
   return enqueue(async () => {
-    await ensureStagehandForDiscovery();
+    await ensureStagehandForDiscovery(browserRuntime);
 
     if (!isMainThread) {
       const childScript = resolveHeaderNavChildScript();
       if (childScript) {
-        return discoverViaSubprocess(childScript, seedUrl, preferredProvider);
+        return discoverViaSubprocess(
+          childScript,
+          seedUrl,
+          preferredProvider,
+          browserRuntime,
+        );
       }
       throw new Error(
         "Header nav discovery child script is missing from the worker runtime. Restart the desktop app or rebuild — Stagehand cannot run inside the Electron worker thread.",
       );
     }
-    return discoverHeaderNavPathsInternal(seedUrl, preferredProvider);
+    return discoverHeaderNavPathsInternal(
+      seedUrl,
+      preferredProvider,
+      browserRuntime,
+    );
   });
 }
 
 /** Verify Stagehand is available before discovery (no implicit download). */
-export async function ensureStagehandForDiscovery(): Promise<void> {
+export async function ensureStagehandForDiscovery(
+  browserRuntime: BrowserRuntimeMode = "playwright",
+): Promise<void> {
   await loadStagehand();
+  if (isBrowserRuntimeReady(browserRuntime)) return;
+  if (browserRuntime === "system") {
+    throw new Error(
+      "No installed Chrome, Edge, or Chromium found on this machine.",
+    );
+  }
+  throw new Error(
+    "Browser runtime not installed. Download it from Header nav paths in crawl settings first.",
+  );
 }

@@ -751,35 +751,68 @@ export type StagehandRuntimeStatus = {
   installing: boolean;
   version: string;
   downloadUrl: string;
+  systemBrowser: {
+    label: string;
+    path: string;
+    kind: "chrome" | "edge" | "chromium";
+  } | null;
+  readyWithSystemBrowser: boolean;
 };
 
-export async function getStagehandRuntimeStatus(signal?: AbortSignal) {
-  return api<StagehandRuntimeStatus>("/api/discover-header-nav/runtime", {
-    method: "GET",
-    signal,
-  });
+export type HeaderNavBrowserRuntime = "playwright" | "system";
+
+export type HeaderNavApiOptions = {
+  baseUrl?: string;
+};
+
+export async function getStagehandRuntimeStatus(
+  signal?: AbortSignal,
+  options?: HeaderNavApiOptions,
+) {
+  return api<StagehandRuntimeStatus>(
+    "/api/discover-header-nav/runtime",
+    {
+      method: "GET",
+      signal,
+    },
+    options?.baseUrl ? { baseUrl: options.baseUrl } : undefined,
+  );
 }
 
-export async function installStagehandRuntime(signal?: AbortSignal) {
-  return api<StagehandRuntimeStatus>("/api/discover-header-nav/runtime/install", {
-    method: "POST",
-    signal,
-  });
+export async function installStagehandRuntime(
+  signal?: AbortSignal,
+  options?: HeaderNavApiOptions,
+) {
+  return api<StagehandRuntimeStatus>(
+    "/api/discover-header-nav/runtime/install",
+    {
+      method: "POST",
+      signal,
+    },
+    options?.baseUrl ? { baseUrl: options.baseUrl } : undefined,
+  );
 }
 
 export async function discoverHeaderNavPaths(
   url: string,
   signal?: AbortSignal,
   provider?: HeaderNavProviderId,
+  browserRuntime?: HeaderNavBrowserRuntime,
+  options?: HeaderNavApiOptions,
 ) {
-  return api<HeaderNavDiscoveryResult>("/api/discover-header-nav", {
-    method: "POST",
-    body: JSON.stringify({
-      url: normalizeStartUrl(url),
-      ...(provider ? { provider } : {}),
-    }),
-    signal,
-  });
+  return api<HeaderNavDiscoveryResult>(
+    "/api/discover-header-nav",
+    {
+      method: "POST",
+      body: JSON.stringify({
+        url: normalizeStartUrl(url),
+        ...(provider ? { provider } : {}),
+        ...(browserRuntime ? { browserRuntime } : {}),
+      }),
+      signal,
+    },
+    options?.baseUrl ? { baseUrl: options.baseUrl } : undefined,
+  );
 }
 
 export async function preflightSite(

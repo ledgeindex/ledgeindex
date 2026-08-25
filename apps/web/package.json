@@ -8,6 +8,7 @@
     "build": "next build",
     "start": "next start --port 3004",
     "test:agent-readiness": "node --import tsx --test src/lib/agent-readiness/agent-readiness.test.ts src/lib/agent-readiness/markdown.test.ts",
+    "test:widget-labels": "node --import tsx --test src/lib/widget-source-labels.test.ts",
     "dotenv:sync": "npx dotenv-vault@latest pull && npx dotenv-vault@latest pull production && npx dotenv-vault@latest build",
     "prepare-image:logo": "node scripts/prepare-logo.mjs",
     "prepare-image:favicon": "node scripts/prepare-favicon.mjs",

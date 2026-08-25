@@ -64,6 +64,55 @@ function publicWidgetView(row: WidgetIntegration) {
   };
 }
 
+function sourceDisplayName(source: {
+  name?: string | null;
+  slug?: string | null;
+  id: string;
+  config?: { startUrls?: string[] };
+}): string {
+  const fromName = source.name?.trim();
+  if (fromName) return fromName;
+  const fromSlug = source.slug?.trim();
+  if (fromSlug) return fromSlug;
+  const startUrl = source.config?.startUrls?.[0]?.trim();
+  if (startUrl) {
+    try {
+      return new URL(startUrl).hostname;
+    } catch {
+      return startUrl;
+    }
+  }
+  return source.id;
+}
+
+async function publicWidgetViewForUser(row: WidgetIntegration, userId: string) {
+  const sources = await Promise.all(
+    row.sourceIds.map(async (sourceId) => {
+      const source = await getSourceForUser(sourceId, userId);
+      if (!source) {
+        return {
+          id: sourceId,
+          name: "Unknown source",
+          startUrl: null,
+          scope: "personal" as const,
+        };
+      }
+      const startUrl = source.config?.startUrls?.[0]?.trim() || null;
+      return {
+        id: source.id,
+        name: sourceDisplayName(source),
+        startUrl,
+        scope: (source.scope ?? "personal") as "personal" | "global",
+      };
+    }),
+  );
+
+  return {
+    ...publicWidgetView(row),
+    sources,
+  };
+}
+
 function requestOrigin(request: FastifyRequest): string | null {
   const origin = request.headers.origin;
   if (typeof origin === "string" && origin.trim()) return origin.trim();
@@ -264,7 +313,10 @@ export async function widgetRoutes(fastify: FastifyInstance) {
     const userId = await requireUser(request, reply);
     if (!userId) return;
     const data = await listWidgetIntegrations(userId);
-    return { success: true, data: data.map(publicWidgetView) };
+    return {
+      success: true,
+      data: await Promise.all(data.map((row) => publicWidgetViewForUser(row, userId))),
+    };
   });
 
   fastify.post("/api/widget/integrations", async (request, reply) => {
@@ -297,7 +349,7 @@ export async function widgetRoutes(fastify: FastifyInstance) {
 
     return reply.status(201).send({
       success: true,
-      data: publicWidgetView(created),
+      data: await publicWidgetViewForUser(created, userId),
     });
   });
 
@@ -330,7 +382,10 @@ export async function widgetRoutes(fastify: FastifyInstance) {
       return reply.status(404).send({ error: "Widget not found" });
     }
 
-    return { success: true, data: publicWidgetView(updated) };
+    return {
+      success: true,
+      data: await publicWidgetViewForUser(updated, userId),
+    };
   });
 
   fastify.delete("/api/widget/integrations/:websiteId", async (request, reply) => {

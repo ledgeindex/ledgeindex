@@ -1,3 +1,6 @@
+export type WidgetLayoutMode = "floating" | "drawer" | "inline";
+export type WidgetLauncherStyle = "icon" | "pill" | "hidden";
+
 export type WidgetConfig = {
   websiteId: string;
   apiBaseUrl: string;
@@ -5,6 +8,20 @@ export type WidgetConfig = {
   projectColor: string;
   projectLogo: string | null;
   exampleQuestions: string[];
+  mode: WidgetLayoutMode;
+  mountSelector: string | null;
+  launcherSelector: string | null;
+  drawerWidth: string;
+  launcherStyle: WidgetLauncherStyle;
+  launcherLabel: string;
+};
+
+export type WidgetHandle = {
+  unmount: () => void;
+  open: () => void;
+  close: () => void;
+  toggle: () => void;
+  element: HTMLElement;
 };
 
 export type WidgetCitation = {
@@ -36,6 +53,28 @@ function trimSlash(url: string): string {
   return url.replace(/\/$/, "");
 }
 
+function parseLayoutMode(raw: string | undefined): WidgetLayoutMode {
+  const value = raw?.trim().toLowerCase();
+  if (value === "drawer" || value === "inline") return value;
+  return "floating";
+}
+
+function normalizeDrawerWidth(raw: string | undefined): string {
+  const value = raw?.trim() || "400px";
+  if (/^\d+$/.test(value)) return `${value}px`;
+  return value;
+}
+
+function parseLauncherStyle(
+  raw: string | undefined,
+  hasExternalLauncher: boolean,
+): WidgetLauncherStyle {
+  const value = raw?.trim().toLowerCase();
+  if (value === "pill") return "pill";
+  if (value === "hidden" || hasExternalLauncher) return "hidden";
+  return "icon";
+}
+
 export function readConfigFromScript(script: HTMLScriptElement): WidgetConfig {
   const dataset = script.dataset;
   const apiBase =
@@ -52,13 +91,27 @@ export function readConfigFromScript(script: HTMLScriptElement): WidgetConfig {
         .slice(0, 6)
     : [];
 
+  const projectName = dataset.projectName?.trim() || "Ask AI";
+  const launcherSelector = dataset.launcherSelector?.trim() || null;
+  const mode = parseLayoutMode(dataset.mode);
+  const drawerWidth = normalizeDrawerWidth(dataset.drawerWidth);
+
   return {
     websiteId: dataset.websiteId?.trim() || "",
     apiBaseUrl: trimSlash(apiBase),
-    projectName: dataset.projectName?.trim() || "Ask AI",
+    projectName,
     projectColor: dataset.projectColor?.trim() || "#6b5a3e",
     projectLogo: dataset.projectLogo?.trim() || null,
     exampleQuestions,
+    mode,
+    mountSelector: dataset.mount?.trim() || null,
+    launcherSelector,
+    drawerWidth,
+    launcherStyle: parseLauncherStyle(
+      dataset.launcher,
+      Boolean(launcherSelector),
+    ),
+    launcherLabel: dataset.launcherLabel?.trim() || projectName,
   };
 }
 

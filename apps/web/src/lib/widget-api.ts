@@ -23,12 +23,20 @@ export type WidgetBrand = {
   projectLogo: string | null;
 };
 
+export type WidgetSourceSummary = {
+  id: string;
+  name: string;
+  startUrl?: string | null;
+  scope: "personal" | "global";
+};
+
 export type WidgetIntegrationSummary = {
   websiteId: string;
   name: string;
   brand: WidgetBrand;
   status: "active" | "disabled";
   sourceIds: string[];
+  sources?: WidgetSourceSummary[];
   allowedOrigins: string[];
   createdAt: string;
   updatedAt: string;

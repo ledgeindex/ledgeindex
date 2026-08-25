@@ -21,6 +21,8 @@ import { IndexLocationInfo } from "@/components/sources/index-location-info";
 import { useAuth } from "@/lib/auth-context";
 import { usePlanBilling } from "@/contexts/plan-billing-context";
 import {
+  canManageStagehandRuntimeOnApi,
+  resolveHeaderNavDiscoveryApiBase,
   syncApiBaseForHosting,
   syncDesktopApiBaseForScope,
 } from "@/lib/desktop-api-routing";
@@ -79,10 +81,12 @@ import {
   type CrawlRun,
   type DiscoverySignals,
   type HeaderNavPath,
+  type HeaderNavBrowserRuntime,
   type IngestPipelineSnapshot,
   type IndexSizeEstimate,
   type ParsePreviewPage,
   type SourceDuplicateMatch,
+  type StagehandRuntimeStatus,
   type WebCrawlConfig,
 } from "@/lib/ledgeindex-api";
 import {
@@ -336,6 +340,23 @@ function linesToList(value: string) {
     .split("\n")
     .map((line) => line.trim())
     .filter(Boolean);
+}
+
+function sameStartUrlForBranding(left: string, right: string): boolean {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  try {
+    const normalize = (raw: string) => {
+      const url = new URL(raw);
+      url.hash = "";
+      url.search = "";
+      url.pathname = url.pathname.replace(/\/+$/, "") || "/";
+      return url.href;
+    };
+    return normalize(left) === normalize(right);
+  } catch {
+    return false;
+  }
 }
 
 function urlMatchesPattern(
@@ -662,16 +683,36 @@ export function WebCrawlSetup() {
   const [headerNavPaths, setHeaderNavPaths] = useState<HeaderNavPath[]>([]);
   const [headerNavReason, setHeaderNavReason] = useState<string | null>(null);
   const [headerNavDownloading, setHeaderNavDownloading] = useState(false);
-  const [stagehandRuntimeReady, setStagehandRuntimeReady] = useState<
-    boolean | null
-  >(null);
+  const [stagehandRuntimeStatus, setStagehandRuntimeStatus] =
+    useState<StagehandRuntimeStatus | null>(null);
+  const [headerNavBrowserMode, setHeaderNavBrowserMode] =
+    useState<HeaderNavBrowserRuntime>("playwright");
   const [stagehandRuntimeInstalling, setStagehandRuntimeInstalling] =
     useState(false);
   const [stagehandInstallError, setStagehandInstallError] = useState<
     string | null
   >(null);
   const headerNavAbortRef = useRef<AbortController | null>(null);
+  const headerNavScanKeyRef = useRef<string | null>(null);
+  const runHeaderNavDiscoveryRef = useRef<(() => Promise<void>) | null>(null);
   const isDesktopShell = Boolean(getLedgeIndexDesktop());
+  const stagehandRuntimeManageable = canManageStagehandRuntimeOnApi();
+  const headerNavDiscoveryApiBase = resolveHeaderNavDiscoveryApiBase();
+  const headerNavApiOptions = useMemo(
+    () =>
+      headerNavDiscoveryApiBase
+        ? { baseUrl: headerNavDiscoveryApiBase }
+        : undefined,
+    [headerNavDiscoveryApiBase],
+  );
+
+  const headerNavBrowserReady = useMemo(() => {
+    if (!stagehandRuntimeStatus) return null;
+    if (headerNavBrowserMode === "system") {
+      return stagehandRuntimeStatus.readyWithSystemBrowser;
+    }
+    return stagehandRuntimeStatus.installed;
+  }, [stagehandRuntimeStatus, headerNavBrowserMode]);
   const [sitemapUrlsText, setSitemapUrlsText] = useState("");
   const [maxPages, setMaxPages] = useState(DEFAULT_MAX_CRAWL_PAGES);
   const [renderJs, setRenderJs] = useState(false);
@@ -931,6 +972,12 @@ export function WebCrawlSetup() {
     filterPipelinePhase === "http" ||
     filterPipelinePhase === "auto-exclude";
   const toolbarLocked = Boolean(busy);
+  /** Storage/hosting must not change mid-crawl — source is created on one API. */
+  const storageSelectionLocked =
+    Boolean(sourceId) ||
+    toolbarLocked ||
+    crawlCardPhase !== "idle" ||
+    Boolean(ingestRunId);
   const didInitialPreflight = useRef(false);
 
   const toggleHeaderNavPath = useCallback((url: string) => {
@@ -951,17 +998,24 @@ export function WebCrawlSetup() {
   }, [primaryStartUrl]);
 
   useEffect(() => {
-    if (!isDesktopShell) return;
+    if (!discoverHeaderNav) return;
     const controller = new AbortController();
-    void getStagehandRuntimeStatus(controller.signal)
-      .then((status) => setStagehandRuntimeReady(status.installed))
-      .catch(() => setStagehandRuntimeReady(null));
+    void getStagehandRuntimeStatus(controller.signal, headerNavApiOptions)
+      .then((status) => {
+        setStagehandRuntimeStatus(status);
+        setHeaderNavBrowserMode((prev) => {
+          if (prev === "system" && status.readyWithSystemBrowser) return "system";
+          if (prev === "playwright" && status.installed) return "playwright";
+          return status.readyWithSystemBrowser ? "system" : "playwright";
+        });
+      })
+      .catch(() => setStagehandRuntimeStatus(null));
     return () => controller.abort();
-  }, [isDesktopShell, discoverHeaderNav]);
+  }, [discoverHeaderNav, headerNavApiOptions]);
 
   useEffect(() => {
     if (
-      !isDesktopShell ||
+      !stagehandRuntimeManageable ||
       (!stagehandRuntimeInstalling && headerNavStatus !== "loading")
     ) {
       setHeaderNavDownloading(false);
@@ -971,7 +1025,7 @@ export function WebCrawlSetup() {
     let cancelled = false;
     const poll = async () => {
       try {
-        const status = await getStagehandRuntimeStatus();
+        const status = await getStagehandRuntimeStatus(undefined, headerNavApiOptions);
         if (cancelled) return;
         setHeaderNavDownloading(!status.installed || status.installing);
       } catch {
@@ -985,10 +1039,10 @@ export function WebCrawlSetup() {
       cancelled = true;
       window.clearInterval(timer);
     };
-  }, [isDesktopShell, headerNavStatus, stagehandRuntimeInstalling]);
+  }, [stagehandRuntimeManageable, headerNavStatus, stagehandRuntimeInstalling, headerNavApiOptions]);
 
   const runHeaderNavDiscovery = useCallback(async () => {
-    if (isDesktopShell && stagehandRuntimeReady !== true) {
+    if (headerNavBrowserReady !== true) {
       return;
     }
 
@@ -1011,13 +1065,14 @@ export function WebCrawlSetup() {
         url,
         controller.signal,
         readCrawlProvider() ?? undefined,
+        headerNavBrowserMode,
+        headerNavApiOptions,
       );
       if (controller.signal.aborted) return;
       setHeaderNavSeed(result.seed);
       setHeaderNavPaths(result.paths);
       setHeaderNavReason(result.reason);
       setHeaderNavStatus("ready");
-      setStagehandRuntimeReady(true);
     } catch (error) {
       if (
         controller.signal.aborted ||
@@ -1035,6 +1090,20 @@ export function WebCrawlSetup() {
         setHeaderNavReason(null);
         return;
       }
+      if (
+        error instanceof KnowledgeIndexApiError &&
+        error.status === 503 &&
+        stagehandRuntimeManageable &&
+        headerNavBrowserMode === "playwright"
+      ) {
+        setStagehandRuntimeStatus((prev) =>
+          prev ? { ...prev, installed: false } : prev,
+        );
+        setHeaderNavStatus("idle");
+        setHeaderNavPaths([]);
+        setHeaderNavReason(null);
+        return;
+      }
       setHeaderNavStatus("ready");
       setHeaderNavPaths([]);
       setHeaderNavReason(
@@ -1045,15 +1114,24 @@ export function WebCrawlSetup() {
             : null,
       );
     }
-  }, [isDesktopShell, primaryStartUrl, stagehandRuntimeReady]);
+  }, [
+    headerNavApiOptions,
+    headerNavBrowserMode,
+    headerNavBrowserReady,
+    primaryStartUrl,
+    stagehandRuntimeManageable,
+  ]);
+
+  runHeaderNavDiscoveryRef.current = runHeaderNavDiscovery;
 
   const installStagehandRuntimeClick = useCallback(async () => {
-    if (!isDesktopShell || stagehandRuntimeInstalling) return;
+    if (!stagehandRuntimeManageable || stagehandRuntimeInstalling) return;
     setStagehandInstallError(null);
     setStagehandRuntimeInstalling(true);
+    setHeaderNavBrowserMode("playwright");
     try {
-      const status = await installStagehandRuntime();
-      setStagehandRuntimeReady(status.installed);
+      const status = await installStagehandRuntime(undefined, headerNavApiOptions);
+      setStagehandRuntimeStatus(status);
       if (
         status.installed &&
         discoverHeaderNav &&
@@ -1074,33 +1152,56 @@ export function WebCrawlSetup() {
     }
   }, [
     discoverHeaderNav,
-    isDesktopShell,
+    headerNavApiOptions,
+    stagehandRuntimeManageable,
     primaryStartUrl,
     runHeaderNavDiscovery,
     stagehandRuntimeInstalling,
   ]);
 
   useEffect(() => {
-    if (!discoverHeaderNav) return;
-    if (isDesktopShell && stagehandRuntimeReady !== true) return;
+    if (!discoverHeaderNav) {
+      headerNavScanKeyRef.current = null;
+      return;
+    }
+    if (headerNavBrowserReady !== true) return;
     const url = normalizeStartUrl(primaryStartUrl.trim());
     if (!url || !isValidStartUrl(primaryStartUrl)) {
       headerNavAbortRef.current?.abort();
       setHeaderNavStatus("idle");
       setHeaderNavReason(null);
       setHeaderNavPaths([]);
+      headerNavScanKeyRef.current = null;
       return;
     }
 
+    const scanKey = `${url}|${headerNavBrowserMode}`;
+    if (headerNavScanKeyRef.current === scanKey) return;
+    headerNavScanKeyRef.current = scanKey;
+
     const timer = window.setTimeout(() => {
-      void runHeaderNavDiscovery();
+      void runHeaderNavDiscoveryRef.current?.();
     }, 500);
 
     return () => {
       window.clearTimeout(timer);
-      headerNavAbortRef.current?.abort();
     };
-  }, [discoverHeaderNav, isDesktopShell, primaryStartUrl, runHeaderNavDiscovery, stagehandRuntimeReady]);
+  }, [
+    discoverHeaderNav,
+    headerNavBrowserMode,
+    headerNavBrowserReady,
+    primaryStartUrl,
+  ]);
+
+  useEffect(() => {
+    if (!discoverHeaderNav || stagehandRuntimeManageable) return;
+    if (headerNavBrowserReady !== false) return;
+    setHeaderNavStatus("ready");
+    setHeaderNavPaths([]);
+    setHeaderNavReason(
+      "Header nav needs a browser on the API server. Use local dev (API on :3010) or the desktop app.",
+    );
+  }, [discoverHeaderNav, headerNavBrowserReady, stagehandRuntimeManageable]);
 
   useEffect(() => {
     autoDiscoverExcludesRef.current = autoDiscoverExcludes;
@@ -1406,7 +1507,7 @@ export function WebCrawlSetup() {
       return;
     }
 
-    if (preflightCheckedUrl && url !== preflightCheckedUrl) {
+    if (preflightCheckedUrl && !sameStartUrlForBranding(url, preflightCheckedUrl)) {
       setPreflightState("idle");
       setPreflightError(null);
       setPreflightOgImage(null);
@@ -1709,6 +1810,35 @@ export function WebCrawlSetup() {
     if (!sourceMetadata) return undefined;
     if (!resolution?.versionLabel) return sourceMetadata;
     return { ...sourceMetadata, version: resolution.versionLabel };
+  }
+
+  async function resolveSourceBranding(): Promise<{
+    ogImageUrl: string | null;
+    faviconUrl: string | null;
+  }> {
+    const startUrl =
+      normalizeStartUrl(primaryStartUrl.trim()) || config.startUrls[0] || "";
+
+    if (preflightOgImage && preflightFaviconUrl) {
+      return { ogImageUrl: preflightOgImage, faviconUrl: preflightFaviconUrl };
+    }
+
+    if (!startUrl) {
+      return { ogImageUrl: preflightOgImage, faviconUrl: preflightFaviconUrl };
+    }
+
+    try {
+      const { preflight } = await preflightSite(startUrl);
+      const ogImageUrl = preflightOgImage ?? preflight.ogImage ?? null;
+      const faviconUrl = preflightFaviconUrl ?? preflight.faviconUrl ?? null;
+      if (ogImageUrl !== preflightOgImage) setPreflightOgImage(ogImageUrl);
+      if (faviconUrl !== preflightFaviconUrl) {
+        setPreflightFaviconUrl(faviconUrl);
+      }
+      return { ogImageUrl, faviconUrl };
+    } catch {
+      return { ogImageUrl: preflightOgImage, faviconUrl: preflightFaviconUrl };
+    }
   }
 
   async function createDraftSource() {
@@ -2377,13 +2507,14 @@ export function WebCrawlSetup() {
 
       const id = await ensureSource();
       const sourceMetadataPayload = metadataWithVersionLabel();
+      const branding = await resolveSourceBranding();
       await updateSource(id, {
         name: isPathScopedMode
           ? sourceName
           : resolveSourceName(sourceName, primaryStartUrl),
         config,
-        ogImageUrl: preflightOgImage,
-        faviconUrl: preflightFaviconUrl,
+        ogImageUrl: branding.ogImageUrl,
+        faviconUrl: branding.faviconUrl,
         ...(sourceMetadataPayload
           ? { sourceMetadata: sourceMetadataPayload }
           : {}),
@@ -2456,10 +2587,11 @@ export function WebCrawlSetup() {
     setBusy("parse");
     try {
       const id = await ensureSource();
+      const branding = await resolveSourceBranding();
       await updateSource(id, {
         config,
-        ogImageUrl: preflightOgImage,
-        faviconUrl: preflightFaviconUrl,
+        ogImageUrl: branding.ogImageUrl,
+        faviconUrl: branding.faviconUrl,
         sourceMetadata,
       });
 
@@ -2489,13 +2621,14 @@ export function WebCrawlSetup() {
     setBusy("save");
     try {
       const id = await ensureSource();
+      const branding = await resolveSourceBranding();
       await updateSource(id, {
         name: isPathScopedMode
           ? sourceName
           : resolveSourceName(sourceName, primaryStartUrl),
         config,
-        ogImageUrl: preflightOgImage,
-        faviconUrl: preflightFaviconUrl,
+        ogImageUrl: branding.ogImageUrl,
+        faviconUrl: branding.faviconUrl,
         sourceMetadata,
       });
 
@@ -3024,33 +3157,95 @@ export function WebCrawlSetup() {
                     label="Discover header nav paths"
                   />
                 </div>
-                {isDesktopShell &&
+                {stagehandRuntimeManageable &&
                 discoverHeaderNav &&
-                stagehandRuntimeReady === false ? (
+                stagehandRuntimeStatus ? (
                   <div className="space-y-2 border-t border-border/60 pt-3">
-                    <p className="text-xs text-muted">
-                      Header nav needs Chromium on this machine (~150 MB). It
-                      downloads from Playwright’s CDN on first use, not from
-                      LedgeIndex.
-                    </p>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        className="h-8 rounded-full px-4 text-xs"
-                        disabled={stagehandRuntimeInstalling}
-                        onClick={() => void installStagehandRuntimeClick()}
-                      >
-                        {stagehandRuntimeInstalling ? (
-                          <span className="inline-flex items-center gap-2">
-                            <Spinner className="size-3.5" />
-                            Downloading browser runtime…
-                          </span>
-                        ) : (
-                          "Download browser runtime"
-                        )}
-                      </Button>
-                    </div>
+                    {stagehandRuntimeStatus.systemBrowser ? (
+                      <>
+                        <p className="text-xs text-muted">
+                          Installed browser detected on the API host:
+                        </p>
+                        <p
+                          className="truncate font-mono text-[0.6875rem] text-muted-strong"
+                          title={stagehandRuntimeStatus.systemBrowser.path}
+                        >
+                          {stagehandRuntimeStatus.systemBrowser.label}
+                          {" · "}
+                          {stagehandRuntimeStatus.systemBrowser.path}
+                        </p>
+                        <div className="space-y-2 pt-1">
+                          <label className="flex cursor-pointer items-start gap-2 text-xs text-foreground">
+                            <input
+                              type="radio"
+                              name="header-nav-browser"
+                              className="mt-0.5"
+                              checked={headerNavBrowserMode === "system"}
+                              onChange={() =>
+                                setHeaderNavBrowserMode("system")
+                              }
+                            />
+                            <span>
+                              Use installed{" "}
+                              {stagehandRuntimeStatus.systemBrowser.label}{" "}
+                              (headless — no extra download)
+                            </span>
+                          </label>
+                          <label className="flex cursor-pointer items-start gap-2 text-xs text-foreground">
+                            <input
+                              type="radio"
+                              name="header-nav-browser"
+                              className="mt-0.5"
+                              checked={headerNavBrowserMode === "playwright"}
+                              onChange={() =>
+                                setHeaderNavBrowserMode("playwright")
+                              }
+                            />
+                            <span>
+                              Download Playwright Chromium (~150 MB, isolated
+                              copy)
+                            </span>
+                          </label>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-muted">
+                        No Chrome, Edge, or Chromium found on the API host.
+                        Download Playwright Chromium (~150 MB) from Playwright’s
+                        CDN on first use
+                        {isDesktopShell
+                          ? " on this machine"
+                          : " into your local API (port 3010)"}
+                        .
+                      </p>
+                    )}
+                    {headerNavBrowserMode === "playwright" &&
+                    !stagehandRuntimeStatus.installed ? (
+                      <div className="flex flex-wrap items-center gap-2 pt-1">
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          className="h-8 rounded-full px-4 text-xs"
+                          disabled={stagehandRuntimeInstalling}
+                          onClick={() => void installStagehandRuntimeClick()}
+                        >
+                          {stagehandRuntimeInstalling ? (
+                            <span className="inline-flex items-center gap-2">
+                              <Spinner className="size-3.5" />
+                              Downloading browser runtime…
+                            </span>
+                          ) : (
+                            "Download browser runtime"
+                          )}
+                        </Button>
+                      </div>
+                    ) : headerNavBrowserReady ? (
+                      <p className="text-xs text-muted">
+                        {headerNavBrowserMode === "system"
+                          ? `Ready — header nav will launch ${stagehandRuntimeStatus.systemBrowser?.label ?? "your browser"} headlessly.`
+                          : "Ready — Playwright Chromium is installed."}
+                      </p>
+                    ) : null}
                     {stagehandInstallError ? (
                       <p className="text-xs text-amber-800 dark:text-amber-300">
                         {stagehandInstallError}
@@ -3185,9 +3380,16 @@ export function WebCrawlSetup() {
                     <SourceHostingToggle
                       value={sourceHosting}
                       onChange={setSourceHosting}
-                      disabled={toolbarLocked}
+                      disabled={toolbarLocked || storageSelectionLocked}
                       size="default"
                     />
+                    {storageSelectionLocked ? (
+                      <p className="text-[0.6875rem] leading-4 text-muted">
+                        Locked for this crawl (
+                        {sourceHosting === "local" ? "Local" : "Cloud"}). Start
+                        a new source to change storage.
+                      </p>
+                    ) : null}
                   </>
                 ) : (
                   <p className="text-xs leading-5 text-muted">
@@ -4563,7 +4765,8 @@ function StartUrlCard({
     additionalStartUrls,
   ).length;
   const isCurrentUrlChecked =
-    preflightState === "ok" && normalizedUrl === preflightCheckedUrl;
+    preflightState === "ok" &&
+    sameStartUrlForBranding(normalizedUrl, preflightCheckedUrl);
   const showSitePreview =
     isCurrentUrlChecked && Boolean(sourceName) && hasUrl;
   const isCrawling = crawlCardPhase === "crawling";
