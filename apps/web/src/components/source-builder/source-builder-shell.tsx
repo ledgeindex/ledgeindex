@@ -281,7 +281,7 @@ export function SourceBuilderShell({
               <input
                 value={activePage.title}
                 onChange={(event) => renameActivePage(event.target.value)}
-                className="w-full max-w-md truncate bg-transparent text-base font-semibold text-foreground outline-none"
+                className="w-full max-w-md bg-transparent text-base font-semibold text-foreground outline-none select-text"
                 aria-label="Page title"
               />
             ) : (

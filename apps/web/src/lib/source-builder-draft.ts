@@ -143,7 +143,6 @@ function migrateDraft(raw: SourceBuilderDraft): SourceBuilderDraft {
 export function createEmptyDraft(name = "Untitled source"): SourceBuilderDraft {
   const draftId = createId("draft");
   const categoryId = createId("cat");
-  const subcategoryId = createId("sub");
   const pageId = createId("page");
   const createdAt = nowIso();
 
@@ -166,19 +165,17 @@ export function createEmptyDraft(name = "Untitled source"): SourceBuilderDraft {
     categories: [
       {
         id: categoryId,
-        title: "Getting started",
-        subcategories: [{ id: subcategoryId, title: "Basics" }],
+        title: "General",
       },
     ],
     pages: [
-      emptyMarkdownPage({
-        pageId,
+      {
+        id: pageId,
         categoryId,
-        subcategoryId,
-        title: "Introduction",
-        markdown:
-          "# Introduction\n\nStart documenting this source. Add categories, subcategories, and pages on the left, then drop markdown or code pins here.",
-      }),
+        subcategoryId: null,
+        title: "Page 1",
+        pins: [],
+      },
     ],
     activePageId: pageId,
     createdAt,

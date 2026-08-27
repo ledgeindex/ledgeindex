@@ -12,6 +12,8 @@ import { cn } from "@/lib/utils";
 export function BuilderPinCard({
   icon: Icon,
   title,
+  onTitleChange,
+  titlePlaceholder = "Title",
   headerTrailing,
   className,
   children,
@@ -20,6 +22,8 @@ export function BuilderPinCard({
 }: {
   icon: LucideIcon;
   title: string;
+  onTitleChange?: (title: string) => void;
+  titlePlaceholder?: string;
   headerTrailing?: ReactNode;
   className?: string;
   children: ReactNode;
@@ -63,9 +67,19 @@ export function BuilderPinCard({
     >
       <header className="flex shrink-0 items-center gap-2 rounded-t-lg border-b border-border/50 bg-surface-raised/80 px-3 py-2 dark:border-white/10">
         <Icon className="size-3.5 shrink-0 text-muted" aria-hidden />
-        <h3 className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
-          {title}
-        </h3>
+        {onTitleChange ? (
+          <input
+            value={title}
+            onChange={(event) => onTitleChange(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-xs font-medium text-foreground outline-none placeholder:text-muted"
+            placeholder={titlePlaceholder}
+            aria-label={titlePlaceholder}
+          />
+        ) : (
+          <h3 className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
+            {title}
+          </h3>
+        )}
         {headerTrailing ? (
           <div className="flex shrink-0 items-center gap-1">{headerTrailing}</div>
         ) : null}

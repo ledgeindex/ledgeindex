@@ -37,6 +37,12 @@ export function BuilderCodePinCard({
     <BuilderPinCard
       icon={Code2}
       title={pin.title || "Code"}
+      onTitleChange={
+        editable
+          ? (title) => onChange?.({ ...pin, title })
+          : undefined
+      }
+      titlePlaceholder="Code"
       onRemove={onRemove}
       removeLabel="Remove code block"
     >
@@ -44,15 +50,6 @@ export function BuilderCodePinCard({
         <div className="flex flex-wrap items-center justify-between gap-2 border-b border-border/50 bg-surface-raised/60 px-3 py-1.5">
           {editable ? (
             <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
-              <input
-                value={pin.title}
-                onChange={(event) =>
-                  onChange?.({ ...pin, title: event.target.value })
-                }
-                className="min-w-0 flex-1 rounded border border-border bg-background px-2 py-0.5 font-mono text-[10px] text-foreground outline-none"
-                placeholder="Title"
-                aria-label="Code pin title"
-              />
               <input
                 value={pin.language}
                 onChange={(event) =>

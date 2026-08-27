@@ -150,6 +150,19 @@ export default function SourceBuilderDetailPage() {
         setDirty(false);
         setJustSaved(true);
         window.setTimeout(() => setJustSaved(false), 1600);
+        if (saved.linkedSourceId) {
+          void ensureBuilderLinkedSource(saved, metadataForDraft(saved))
+            .then(({ sourceId, sourceMetadata }) => {
+              setDraft((current) =>
+                current?.id === saved.id
+                  ? { ...current, linkedSourceId: sourceId, sourceMetadata }
+                  : current,
+              );
+            })
+            .catch(() => {
+              // Name still saved locally; linked source sync can retry on Index/About.
+            });
+        }
       },
       onSaveAsNew: () => {
         const saved = saveBuilderDraftAsNewVersion(draft);

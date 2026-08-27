@@ -106,6 +106,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
   const isSourceBuilderDetail = /^\/sources\/builder\/[^/]+$/.test(pathname);
   const useCustomHeader =
     isSourceChat || isSourceBuilderDetail || isWebCrawlDesktop;
+  const headerUsesDragRegion = desktop && !isOpen;
 
   const onHeaderDoubleClick = useCallback(() => {
     void desktop?.toggleMaximizeWindow();
@@ -130,7 +131,8 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           <header
             className={cn(
               "relative z-10 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card-solid/90 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-sm sm:gap-3",
-              desktop && !isOpen && "select-none [-webkit-app-region:drag]",
+              headerUsesDragRegion &&
+                "select-none [-webkit-app-region:drag]",
               desktop && isOpen && "select-none [-webkit-app-region:no-drag]",
             )}
             onDoubleClick={

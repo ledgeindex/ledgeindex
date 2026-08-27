@@ -57,7 +57,7 @@ export function AppHeaderSourceBuilderControls() {
           <input
             value={name}
             onChange={(event) => onRename(event.target.value)}
-            className="w-full max-w-[10rem] truncate bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted sm:max-w-[16rem] sm:text-base"
+            className="w-[10rem] max-w-[10rem] bg-transparent text-sm font-semibold text-foreground outline-none placeholder:text-muted select-text sm:w-[16rem] sm:max-w-[16rem] sm:text-base"
             placeholder="Source name"
             aria-label="Source name"
           />
@@ -69,6 +69,7 @@ export function AppHeaderSourceBuilderControls() {
         </div>
       </div>
 
+      {/* Flex gap inherits header drag — window move handle on desktop */}
       <div className="min-h-full min-w-[1.5rem] flex-1 self-stretch" aria-hidden />
 
       <div
