@@ -11,6 +11,8 @@ export type RetrievalMetaChunk = {
   score: number;
   category: string;
   section: string;
+  /** `expanded` chunks were pulled in as page context; their score is a placeholder. */
+  retrievalKind?: "direct" | "expanded";
 };
 
 /** Knowledge sources selected for this answer (Explore multi-source / docs active set). */
@@ -72,6 +74,8 @@ export type RetrievalTimings = {
 export type RetrievalMeta = {
   question: string;
   rewrittenQueries: string[];
+  /** Catalog page titles appended after LLM rewrite variants. */
+  catalogQueries?: string[];
   /** Short natural-language question used for cross-encoder reranking. */
   intentForRerank?: string;
   /** Final cross-encoder query (intent + trimmed error/code snippet). */
@@ -124,6 +128,10 @@ export type RetrievalMeta = {
   pickedSources?: RetrievalPickedSource[];
   searchAttempts: RetrievalSearchAttempt[];
   chunks: RetrievalMetaChunk[];
+  /** Pages retrieved then dropped before the answer agent saw them. */
+  droppedPages?: Array<{ url: string; title: string; reason: string }>;
+  /** True when the page keep/drop filter ran. */
+  pageFilterUsed?: boolean;
   /** Per-step latency for Retrieved sources (expandable timing). */
   timings?: RetrievalTimings;
   /** @deprecated use rewrittenQueries */
@@ -140,6 +148,7 @@ export function toRetrievalMetaChunk(
     score: chunk.score,
     category: chunk.category,
     section: chunk.section,
+    retrievalKind: chunk.retrievalKind,
   };
 }
 

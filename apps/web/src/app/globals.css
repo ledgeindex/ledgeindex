@@ -785,12 +785,22 @@ body {
   padding: 0 !important;
   border: none !important;
   border-radius: 0 !important;
-  background: transparent !important;
+}
+
+[data-theme="dark"] .chat-md [data-streamdown="code-block"],
+[data-theme="dark"] .chat-md [data-streamdown="code-block-body"] {
+  /* Streamdown defaults (bg-sidebar / bg-background) are darker than our pre surface */
+  background-color: var(--ink-soft) !important;
+}
+
+[data-theme="light"] .chat-md [data-streamdown="code-block"],
+[data-theme="light"] .chat-md [data-streamdown="code-block-body"] {
+  background-color: var(--surface-alt) !important;
 }
 
 .chat-md [data-streamdown="code-block"] pre,
 .chat-md [data-streamdown="code-block-body"] pre {
-  min-width: 0;
+  min-width: 100%;
   max-width: 100%;
   width: max-content;
   margin: 0;
@@ -833,7 +843,8 @@ body {
 
 [data-theme="dark"] [data-streamdown="code-block"] span {
   color: var(--shiki-dark) !important;
-  background-color: var(--shiki-dark-bg, transparent) !important;
+  /* Shiki token bg can be near-black and show through as patches in dark mode */
+  background-color: transparent !important;
 }
 
 [data-theme="light"] [data-streamdown="code-block"] span {

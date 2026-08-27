@@ -8,6 +8,8 @@ import {
   PAGE_EXPANSION_CONCENTRATION_RATIO,
   PAGE_EXPANSION_MAX_CHUNKS,
   PAGE_EXPANSION_TOP_URLS,
+  PAGE_EXPANSION_WEAK_MAX_CHUNKS,
+  PAGE_EXPANSION_WEAK_NEIGHBOUR_RADIUS,
   RELEVANCE_THRESHOLD,
   LEDGEINDEX_CHUNKS_INDEX,
   LEXICAL_TOP_K,
@@ -20,6 +22,7 @@ import {
   fuseDenseAndLexical,
   fuseRankedListsByRrf,
   mergeFusedCandidatePoolsMany,
+  ensurePerQueryWinners,
   type FusedQueryResult,
 } from "./hybrid-fuse.js";
 import { applyLastMileRank, lastMileRankEnabled } from "./last-mile-rank.js";
@@ -87,6 +90,69 @@ function applyUrlPrefixFilter<T extends { url: string }>(
 
 export type KapaRetrieveAttemptType = "query" | "catalog_url_fallback";
 
+/**
+ * True when the reranker actually scored this chunk. Page-expansion siblings
+ * carry a placeholder score, so score statistics and coverage grading must be
+ * computed over direct hits only or they read their own filler back.
+ */
+export function isDirectHit(chunk: { retrievalKind?: string }): boolean {
+  return chunk.retrievalKind !== "expanded";
+}
+
+/** True when a page title is the catalog phrase we already chose to search. */
+export function pageTitleMatchesCatalog(
+  title: string,
+  catalogQueries: string[],
+): boolean {
+  const page = title.trim().toLowerCase();
+  if (!page) return false;
+  return catalogQueries.some((query) => {
+    const phrase = query.trim().toLowerCase();
+    if (!phrase) return false;
+    return page === phrase || page.includes(phrase) || phrase.includes(page);
+  });
+}
+
+/**
+ * When threshold survivors are a single page and none of them is a catalog
+ * title we searched, keep the best catalog-aligned chunk the reranker already
+ * scored. Does not replace the winner and does not invent a URL the pool
+ * never contained.
+ */
+export function rescueCatalogAlignedHits(input: {
+  directHits: KapaRetrievedChunk[];
+  reranked: KapaRetrievedChunk[];
+  catalogQueries: string[];
+  minScore: number;
+}): KapaRetrievedChunk[] {
+  const phrases = input.catalogQueries.map((query) => query.trim()).filter(Boolean);
+  if (phrases.length === 0) return input.directHits;
+
+  const alreadyHasCatalogPage = input.directHits.some((chunk) =>
+    pageTitleMatchesCatalog(chunk.title, phrases),
+  );
+  if (alreadyHasCatalogPage) return input.directHits;
+
+  const survivingUrls = new Set(
+    input.directHits.map((chunk) => chunk.url.trim()).filter(Boolean),
+  );
+  if (survivingUrls.size !== 1 && input.directHits.length > 0) {
+    return input.directHits;
+  }
+
+  const rescue = [...input.reranked]
+    .filter((chunk) => {
+      if (chunk.score < input.minScore) return false;
+      if (!pageTitleMatchesCatalog(chunk.title, phrases)) return false;
+      const url = chunk.url.trim();
+      return url && !survivingUrls.has(url);
+    })
+    .sort((left, right) => right.score - left.score)[0];
+
+  if (!rescue) return input.directHits;
+  return [...input.directHits, { ...rescue, retrievalKind: "direct" }];
+}
+
 export type KapaRetrievedChunk = {
   id: string;
   score: number;
@@ -97,6 +163,12 @@ export type KapaRetrievedChunk = {
   section: string;
   headingPath: string[];
   chunkIndex: number;
+  /**
+   * `direct` = scored by the reranker. `expanded` = pulled in as page context,
+   * carrying a placeholder score derived from its page's anchor hit.
+   * Only `direct` scores are real evidence; see {@link isDirectHit}.
+   */
+  retrievalKind?: "direct" | "expanded";
   /** Repo sources only: where in the checkout this chunk came from. */
   filePath?: string;
   startLine?: number;
@@ -172,6 +244,7 @@ function toRetrievedChunk(
     section: String(metadata.section ?? ""),
     headingPath,
     chunkIndex: Number(metadata.chunkIndex ?? 0),
+    retrievalKind: "direct",
     filePath: optionalString(metadata.filePath),
     startLine: optionalLine(metadata.startLine),
     endLine: optionalLine(metadata.endLine),
@@ -319,12 +392,20 @@ function orderChunksForContext(
  * pages. When hits concentrate on one URL (typical for a single huge docs page),
  * pull a wide page slice and force-include keyword matches so rare entities
  * (e.g. "plan" pin) are not dropped by small top-K vector similarity alone.
+ *
+ * Width is gated on `allowConcentrated`, which the caller sets from the anchor's
+ * real rerank score. Sole-surviving-page is also the signature of a barely
+ * passing relaxed retrieve, so without that gate the widest pull fires exactly
+ * when the winner is least trustworthy and a confusable page fills the whole
+ * context. Weak anchors get a neighbour window instead of a page slice.
  */
 async function expandTopPages(input: {
   sourceId: string;
   query: string;
   queryVector: number[];
   pruned: KapaRetrievedChunk[];
+  /** Anchor cleared the strict threshold, so a full page slice is earned. */
+  allowConcentrated: boolean;
 }): Promise<KapaRetrievedChunk[]> {
   if (input.pruned.length === 0) return input.pruned;
 
@@ -352,14 +433,27 @@ async function expandTopPages(input: {
     }
   }
   const concentrationRatio = concentratedHits / input.pruned.length;
-  // Concentrated expansion pulls a whole page into context, so only use it when
-  // that page is the *only* page with hits (single-huge-page corpora). A merely
-  // dominant page is often a confusable page that won ranking — letting it
-  // concentrate would crowd every other relevant page out of the context.
+  // Concentrated expansion pulls a whole page into context, so require both that
+  // the page is the *only* one with hits (single-huge-page corpora) and that its
+  // anchor earned it on the strict threshold. A merely dominant page is often a
+  // confusable page that won ranking, and letting it concentrate would crowd
+  // every other relevant page out of the context.
   const useConcentrated =
+    input.allowConcentrated &&
     concentratedUrl != null &&
     hitsByUrl.size === 1 &&
     concentrationRatio >= PAGE_EXPANSION_CONCENTRATION_RATIO;
+
+  // Chunk positions of the real hits on each page, so a weak anchor can be given
+  // reading context around itself without pulling the page it may not deserve.
+  const hitIndexesByUrl = new Map<string, number[]>();
+  for (const chunk of input.pruned) {
+    const url = chunk.url.trim();
+    if (!url) continue;
+    const list = hitIndexesByUrl.get(url);
+    if (list) list.push(chunk.chunkIndex);
+    else hitIndexesByUrl.set(url, [chunk.chunkIndex]);
+  }
 
   const store = getVectorStore();
   const anchorScoreByUrl = new Map<string, number>();
@@ -387,9 +481,33 @@ async function expandTopPages(input: {
         });
 
         const anchorScore = anchorScoreByUrl.get(url) ?? 0.5;
-        const mapped = results.map((result) =>
-          toRetrievedChunk(result, Math.max(0, anchorScore - 0.01))
-        );
+        const mapped = results.map((result) => ({
+          ...toRetrievedChunk(result, Math.max(0, anchorScore - 0.01)),
+          retrievalKind: "expanded" as const,
+        }));
+
+        // Weak anchor: keep only chunks adjacent to a real hit, so the generator
+        // gets reading context without the page taking over the whole budget.
+        if (!input.allowConcentrated) {
+          const hitIndexes = hitIndexesByUrl.get(url) ?? [];
+          const neighbours = mapped
+            .filter((chunk) =>
+              hitIndexes.some(
+                (hitIndex) =>
+                  Math.abs(chunk.chunkIndex - hitIndex) <=
+                  PAGE_EXPANSION_WEAK_NEIGHBOUR_RADIUS
+              )
+            )
+            .slice(0, PAGE_EXPANSION_WEAK_MAX_CHUNKS);
+
+          logVerbose("Page expansion (weak anchor, neighbours)", "KapaRetrieve", {
+            url,
+            anchorScore,
+            hitIndexes,
+            siblingCount: neighbours.length,
+          });
+          return neighbours;
+        }
 
         if (!concentrated || queryTerms.length === 0) {
           logVerbose("Page expansion", "KapaRetrieve", {
@@ -608,6 +726,8 @@ export async function kapaRetrieveMany(input: {
     score: number;
     title?: string;
   };
+  /** Catalog page titles that were searched as extra hybrid queries. */
+  catalogQueries?: string[];
 }): Promise<KapaRetrieveManyResult> {
   const wallStarted = performance.now();
   const generatedQueries = [
@@ -658,6 +778,7 @@ export async function kapaRetrieveMany(input: {
       weakEvidenceMinScore: input.weakEvidenceMinScore,
       weakEvidenceTopK: input.weakEvidenceTopK,
       expandPages: input.expandPages,
+      catalogQueries: input.catalogQueries,
     });
   };
 
@@ -868,8 +989,13 @@ async function fuseHybridCandidates(input: {
     ),
   );
 
-  const results = mergeFusedCandidatePoolsMany(
+  const merged = mergeFusedCandidatePoolsMany(
     hybrids.map((hybrid) => hybrid.results),
+    input.candidateCount,
+  );
+  const results = ensurePerQueryWinners(
+    hybrids.map((hybrid) => hybrid.results),
+    merged,
     input.candidateCount,
   );
 
@@ -930,6 +1056,8 @@ export async function kapaRetrieve(input: {
   allowWeakEvidence?: boolean;
   weakEvidenceMinScore?: number;
   weakEvidenceTopK?: number;
+  /** Catalog page titles that were searched as extra hybrid queries. */
+  catalogQueries?: string[];
 }): Promise<KapaRetrieveResult> {
   const totalStarted = performance.now();
   await ensureChunksIndex();
@@ -1119,7 +1247,30 @@ export async function kapaRetrieve(input: {
     }
   }
 
+  const beforeRescuePages = new Set(
+    effectiveDirectHits.map((chunk) => chunk.url),
+  ).size;
+  effectiveDirectHits = rescueCatalogAlignedHits({
+    directHits: effectiveDirectHits,
+    reranked: chunks,
+    catalogQueries: input.catalogQueries ?? [],
+    minScore: Math.max(0.35, threshold - 0.15),
+  });
+  if (new Set(effectiveDirectHits.map((chunk) => chunk.url)).size > beforeRescuePages) {
+    logVerbose("Kapa retrieve: catalog-aligned page rescued", "KapaRetrieve", {
+      sourceId: input.sourceId,
+      catalogQueries: input.catalogQueries,
+      pages: [...new Set(effectiveDirectHits.map((chunk) => chunk.title))],
+    });
+  }
+
   const expandStarted = performance.now();
+  // Expansion width follows the anchor's real score, not how few pages survived.
+  const anchorTopScore = effectiveDirectHits.reduce(
+    (max, chunk) => Math.max(max, chunk.score),
+    0,
+  );
+  const strictAnchor = !weakEvidenceUsed && anchorTopScore >= RELEVANCE_THRESHOLD;
   const prunedChunks = expandPages
     ? applyUrlPrefixFilter(
         await expandTopPages({
@@ -1127,6 +1278,7 @@ export async function kapaRetrieve(input: {
           query: input.query,
           queryVector,
           pruned: effectiveDirectHits,
+          allowConcentrated: strictAnchor,
         }),
         input.filter?.urlPrefix,
       )
@@ -1142,6 +1294,9 @@ export async function kapaRetrieve(input: {
     directHits: effectiveDirectHits.length,
     directHitPages: new Set(effectiveDirectHits.map((chunk) => chunk.url)).size,
     withExpansion: prunedChunks.length,
+    expandedCount: prunedChunks.filter((chunk) => !isDirectHit(chunk)).length,
+    anchorTopScore,
+    strictAnchor,
     expandPages,
     weakEvidenceUsed,
     fusionRetrieveUsed,

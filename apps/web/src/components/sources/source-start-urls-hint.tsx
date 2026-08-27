@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown } from "lucide-react";
 import { formatUrlLabel } from "@/components/sources/source-display";
-import { getMetadataCatalog } from "@/lib/ledgeindex-api";
+import { getMetadataCatalog, type SourceRoutingHint } from "@/lib/ledgeindex-api";
 import {
   computePathPageCountsByStartUrl,
   normalizeSourcePathStartUrl,
@@ -35,6 +35,14 @@ export function formatStartUrlPathLabel(url: string): string {
   }
 }
 
+/** Stable effect key — parent often passes a fresh `urls` array each render. */
+export function startUrlsEffectKey(urls: string[]): string {
+  return urls
+    .map((url) => url.trim())
+    .filter(Boolean)
+    .join("\0");
+}
+
 export function pageCountForStartUrl(
   url: string,
   counts: ReadonlyMap<string, number> | null,
@@ -49,6 +57,7 @@ export function pageCountForStartUrl(
 export function SourceStartUrlsHint({
   urls,
   sourceId,
+  routing,
   pageCountsByUrl,
   className,
   variant = "badge",
@@ -56,6 +65,7 @@ export function SourceStartUrlsHint({
   urls: string[];
   /** When set, page counts load from the indexed catalog when the menu opens. */
   sourceId?: string;
+  routing?: SourceRoutingHint;
   /** Precomputed counts (normalized start URL → page count). */
   pageCountsByUrl?: ReadonlyMap<string, number>;
   className?: string;
@@ -72,13 +82,14 @@ export function SourceStartUrlsHint({
   const count = urls.length;
 
   const effectiveCounts = pageCountsByUrl ?? loadedCounts;
+  const urlsKey = useMemo(() => startUrlsEffectKey(urls), [urls]);
 
   useEffect(() => {
     if (!open || !sourceId || count <= 1 || pageCountsByUrl) return;
 
     let cancelled = false;
-    setCountsLoading(true);
-    void getMetadataCatalog(sourceId)
+    setCountsLoading(loadedCounts === null);
+    void getMetadataCatalog(sourceId, routing)
       .then(({ catalog }) => {
         if (cancelled) return;
         const pages = catalog?.pages ?? [];
@@ -94,7 +105,7 @@ export function SourceStartUrlsHint({
     return () => {
       cancelled = true;
     };
-  }, [open, sourceId, count, urls, pageCountsByUrl]);
+  }, [open, sourceId, count, urlsKey, pageCountsByUrl, routing?.scope, routing?.hosting]);
 
   useEffect(() => {
     if (!open) return;
@@ -249,15 +260,20 @@ export function SourceStartUrlsHint({
 export function SourceStartUrlPathChips({
   urls,
   sourceId,
+  routing,
   pageCountsByUrl,
   refreshKey,
+  pauseRefresh = false,
   className,
 }: {
   urls: string[];
   sourceId?: string;
+  routing?: SourceRoutingHint;
   pageCountsByUrl?: ReadonlyMap<string, number>;
   /** Bumps catalog reload after refresh / apply. */
   refreshKey?: string | number | null;
+  /** Skip catalog refetch while a refresh run is in flight (avoids badge flicker). */
+  pauseRefresh?: boolean;
   className?: string;
 }) {
   const [loadedCounts, setLoadedCounts] = useState<Map<string, number> | null>(
@@ -265,20 +281,28 @@ export function SourceStartUrlPathChips({
   );
   const [loading, setLoading] = useState(false);
   const effectiveCounts = pageCountsByUrl ?? loadedCounts;
+  const urlsKey = useMemo(() => startUrlsEffectKey(urls), [urls]);
+  const refreshToken =
+    refreshKey == null || refreshKey === "" ? null : String(refreshKey);
 
   useEffect(() => {
-    if (!sourceId || pageCountsByUrl || urls.length === 0) return;
+    if (!sourceId || pageCountsByUrl || urlsKey.length === 0 || pauseRefresh) {
+      return;
+    }
 
     let cancelled = false;
-    setLoading(true);
-    void getMetadataCatalog(sourceId)
+    setLoading((current) => current || loadedCounts === null);
+    void getMetadataCatalog(sourceId, routing)
       .then(({ catalog }) => {
         if (cancelled) return;
         const pages = catalog?.pages ?? [];
         setLoadedCounts(computePathPageCountsByStartUrl(pages, urls));
       })
       .catch(() => {
-        if (!cancelled) setLoadedCounts(null);
+        // Keep last good counts — transient 404s during apply should not flash "—".
+        if (!cancelled) {
+          setLoadedCounts((prev) => prev);
+        }
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -287,7 +311,12 @@ export function SourceStartUrlPathChips({
     return () => {
       cancelled = true;
     };
-  }, [sourceId, urls, pageCountsByUrl, refreshKey]);
+  }, [sourceId, urls, urlsKey, pageCountsByUrl, refreshToken, pauseRefresh, routing?.scope, routing?.hosting]);
+
+  useEffect(() => {
+    if (!pauseRefresh || pageCountsByUrl) return;
+    setLoading(false);
+  }, [pauseRefresh, pageCountsByUrl]);
 
   if (urls.length <= 1) return null;
 

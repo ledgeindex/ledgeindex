@@ -9,6 +9,7 @@ import {
   filterCatalogByUrlPrefix,
 } from "../../retrieval/search-query-planner.js";
 import {
+  isDirectHit,
   kapaRetrieveMany,
   type KapaRetrievedChunk,
 } from "../../retrieval/kapa-retrieve.js";
@@ -24,6 +25,7 @@ import {
   assessCoverage,
   instructionForAnswerMode,
 } from "../../retrieval/assess-coverage.js";
+import { maybeFilterRetrievedPages } from "../../retrieval/filter-retrieved-pages.js";
 import { logVerbose } from "../../lib/logger.js";
 import { getSourceSummary } from "../../services/source-summary.js";
 import { primaryAuxiliaryModelId } from "../../llm/chat-model-config.js";
@@ -174,6 +176,7 @@ function pushRetrievePhaseSteps(
 function buildRetrievalMeta(input: {
   question: string;
   rewrittenQueries: string[];
+  catalogQueries?: string[];
   rerankQuery?: string;
   rewriteMethod: RetrievalMeta["rewriteMethod"];
   rewriteModelId?: string;
@@ -185,6 +188,8 @@ function buildRetrievalMeta(input: {
   chunks: KapaRetrievedChunk[];
   catalogUrlFilter?: RetrievalMeta["catalogUrlFilter"];
   coverage: Awaited<ReturnType<typeof assessCoverage>>;
+  droppedPages?: RetrievalMeta["droppedPages"];
+  pageFilterUsed?: boolean;
   cascadePassUsed?: boolean;
   cascadeTopScore?: number;
   weakEvidenceUsed?: boolean;
@@ -208,6 +213,7 @@ function buildRetrievalMeta(input: {
   return {
     question: input.question,
     rewrittenQueries: input.rewrittenQueries,
+    catalogQueries: input.catalogQueries,
     rerankQuery: input.rerankQuery,
     rewriteMethod: input.rewriteMethod,
     rewriteModelId: input.rewriteModelId,
@@ -252,6 +258,8 @@ function buildRetrievalMeta(input: {
       prunedCount: entry.prunedCount,
     })),
     chunks: input.chunks.map(toRetrievalMetaChunk),
+    droppedPages: input.droppedPages,
+    pageFilterUsed: input.pageFilterUsed,
     timings: input.timings,
   };
 }
@@ -518,6 +526,7 @@ export class RAGQueryProcessor implements Processor {
     const rewriteStarted = performance.now();
     const {
       queries,
+      catalogQueries,
       topicScope,
       method: rewriteMethod,
       rewriteModelId,
@@ -525,6 +534,7 @@ export class RAGQueryProcessor implements Processor {
       question,
       catalogText,
       history,
+      pages: scopedCatalog?.pages,
       requestContext,
     });
     timingSteps.push({
@@ -555,6 +565,7 @@ export class RAGQueryProcessor implements Processor {
       question,
       sourceId,
       catalogUrlFilter,
+      catalogQueries,
       filter: pathFilter,
       relevanceThreshold: retrievalSettings.relevanceThreshold,
     });
@@ -594,6 +605,7 @@ export class RAGQueryProcessor implements Processor {
         question,
         sourceId,
         catalogUrlFilter,
+        catalogQueries,
         filter: pathFilter,
         relevanceThreshold: retrievalSettings.relaxedThreshold,
       });
@@ -623,6 +635,7 @@ export class RAGQueryProcessor implements Processor {
         question,
         sourceId,
         catalogUrlFilter,
+        catalogQueries,
         filter: pathFilter,
         relevanceThreshold: retrievalSettings.relevanceThreshold,
         allowWeakEvidence: true,
@@ -641,13 +654,39 @@ export class RAGQueryProcessor implements Processor {
       weakEvidenceUsed = retrieval.merged.length > 0;
     }
 
-    const agentChunks = retrieval.merged;
+    let agentChunks = retrieval.merged;
+    const filterStarted = performance.now();
+    const filtered = await maybeFilterRetrievedPages({
+      question,
+      chunks: agentChunks,
+      catalogQueries,
+      requestContext,
+      relaxedPassUsed,
+      weakEvidenceUsed,
+    });
+    agentChunks = filtered.kept;
+    const droppedPages = filtered.dropped;
+    const pageFilterUsed = filtered.usedFilter;
+    if (pageFilterUsed) {
+      timingSteps.push({
+        id: "page-filter",
+        label: "Page filter",
+        ms: elapsedMs(filterStarted),
+        detail: filtered.dropped.length
+          ? `dropped ${filtered.dropped.length}`
+          : "kept all",
+      });
+    }
+
     const insufficient = agentChunks.length === 0;
-    const { maxChunkScore, avgTop3Score } = scoreSummary(agentChunks);
+    // Page-expansion siblings carry a placeholder score copied from their anchor,
+    // so grading them as evidence lets retrieval mark its own homework.
+    const evidenceChunks = agentChunks.filter(isDirectHit);
+    const { maxChunkScore, avgTop3Score } = scoreSummary(evidenceChunks);
     const coverageStarted = performance.now();
     const coverage = await assessCoverage({
       question,
-      chunks: agentChunks,
+      chunks: evidenceChunks,
       insufficient,
       relaxedPassUsed,
       weakEvidenceUsed,
@@ -668,6 +707,7 @@ export class RAGQueryProcessor implements Processor {
     const meta = buildRetrievalMeta({
       question,
       rewrittenQueries: retrieval.queries,
+      catalogQueries,
       rerankQuery,
       rewriteMethod,
       rewriteModelId,
@@ -679,6 +719,8 @@ export class RAGQueryProcessor implements Processor {
       chunks: agentChunks,
       catalogUrlFilter: retrieval.catalogUrlFilter,
       coverage,
+      droppedPages,
+      pageFilterUsed,
       weakEvidenceUsed,
       cascadePassUsed: false,
       rerankBackendUsed: retrieval.rerankBackendUsed,

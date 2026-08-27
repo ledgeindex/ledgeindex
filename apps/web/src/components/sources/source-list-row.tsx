@@ -89,7 +89,14 @@ export function SourceListRowDragPreview({
           {startUrls.length > 0 ? (
             <span className="inline-flex min-w-0 max-w-[min(100%,12rem)] items-center gap-1 align-middle">
               <span className="text-muted/50"> · </span>
-              <SourceStartUrlsHint urls={startUrls} sourceId={source.id} />
+              <SourceStartUrlsHint
+                urls={startUrls}
+                sourceId={source.id}
+                routing={{
+                  scope: source.scope,
+                  hosting: source.hosting,
+                }}
+              />
             </span>
           ) : path ? (
             <span className="text-muted/70"> · {path}</span>
@@ -296,7 +303,14 @@ export function SourceListRow({
               <span className="shrink-0 font-mono text-[0.5625rem] text-muted/50">
                 ·
               </span>
-              <SourceStartUrlsHint urls={startUrls} sourceId={source.id} />
+              <SourceStartUrlsHint
+                urls={startUrls}
+                sourceId={source.id}
+                routing={{
+                  scope: source.scope,
+                  hosting: source.hosting,
+                }}
+              />
             </div>
           ) : pathLabel ? (
             <p className="min-w-0 truncate font-mono text-[0.5625rem] leading-3.5 text-muted/75">

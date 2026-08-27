@@ -1505,12 +1505,15 @@ export type MetadataCatalog = {
   updatedAt: string;
 };
 
-export async function getMetadataCatalog(sourceId: string) {
-  return api<{
+export async function getMetadataCatalog(
+  sourceId: string,
+  routing?: SourceRoutingHint,
+) {
+  return apiWithRemoteSourceFallback<{
     sourceId: string;
     catalog: MetadataCatalog | null;
     vectorBackend: string;
-  }>(`/api/sources/${sourceId}/metadata-catalog`);
+  }>(`/api/sources/${sourceId}/metadata-catalog`, undefined, routing);
 }
 
 export type ExampleCatalogEntry = {

@@ -174,6 +174,28 @@ type SourceRunReportMeta = {
 
 const POLL_MS = 1500;
 
+/** Avoid re-rendering the whole updater when status polls return the same UI state. */
+function refreshSnapshotUiKey(
+  snap: RefreshRunSnapshot | null | undefined,
+): string {
+  if (!snap) return "";
+  const changelog = snap.changelog;
+  return [
+    snap.sourceId,
+    snap.status,
+    snap.phase ?? "",
+    snap.current ?? "",
+    snap.total ?? "",
+    snap.activePath ?? "",
+    snap.pathIndex ?? "",
+    snap.pathTotal ?? "",
+    changelog?.added.length ?? "",
+    changelog?.updated.length ?? "",
+    changelog?.removed.length ?? "",
+    changelog?.unchangedCount ?? "",
+  ].join("|");
+}
+
 function changelogHasDiff(
   changelog: RefreshChangelog | null | undefined,
 ): boolean {
@@ -756,7 +778,9 @@ function ChangesSidePanel({
         <SourceStartUrlPathChips
           urls={startUrls}
           sourceId={source.id}
+          routing={{ scope: source.scope, hosting: source.hosting }}
           refreshKey={reportMeta?.finishedAt ?? source.pageCount}
+          pauseRefresh={running || isApplying || isChecking}
         />
       </div>
 
@@ -2320,6 +2344,16 @@ export default function AdminSourceUpdaterPage() {
     setChangelogs((prev) => {
       const existing = prev[sourceId];
       if (
+        existing &&
+        existing.added.length === incoming.added.length &&
+        existing.updated.length === incoming.updated.length &&
+        existing.removed.length === incoming.removed.length &&
+        existing.unchangedCount === incoming.unchangedCount &&
+        existing.baselineCaptured === incoming.baselineCaptured
+      ) {
+        return prev;
+      }
+      if (
         next.status === "done" &&
         !hasIncomingDiff &&
         changelogHasDiff(existing)
@@ -2493,6 +2527,18 @@ export default function AdminSourceUpdaterPage() {
     });
   }
 
+  function routeApiForSource(sourceId: string) {
+    const source = sources?.find((item) => item.id === sourceId);
+    if (!source) {
+      syncDesktopApiBaseForScope(scope);
+      return;
+    }
+    syncApiBaseForHosting({
+      scope: (source.scope ?? "personal") === "global" ? "global" : "personal",
+      hosting: resolveSourceStorage(source),
+    });
+  }
+
   async function pollUntilSettled(
     sourceId: string,
     isSettled: (snap: RefreshRunSnapshot) => boolean,
@@ -2503,7 +2549,16 @@ export default function AdminSourceUpdaterPage() {
       }
       const { snapshot: next } = await getSourceRefreshStatus(sourceId);
       if (next) {
-        setSnapshot(next);
+        setSnapshot((prev) => {
+          if (
+            prev &&
+            prev.sourceId === next.sourceId &&
+            refreshSnapshotUiKey(prev) === refreshSnapshotUiKey(next)
+          ) {
+            return prev;
+          }
+          return next;
+        });
         rememberChangelog(sourceId, next);
         if (
           isSettled(next) ||
@@ -2518,6 +2573,7 @@ export default function AdminSourceUpdaterPage() {
   }
 
   async function checkOne(sourceId: string): Promise<RowStatus> {
+    routeApiForSource(sourceId);
     setCurrentSourceId(sourceId);
     currentSourceIdRef.current = sourceId;
     setFocusSourceId(sourceId);
@@ -2682,6 +2738,7 @@ export default function AdminSourceUpdaterPage() {
 
   async function applyFocusedChanges() {
     if (!activeFocusId || panelActionBusy || running) return;
+    routeApiForSource(activeFocusId);
     setPanelActionBusy(true);
     setRunning(true);
     setRunningMode("refresh");
@@ -2706,6 +2763,7 @@ export default function AdminSourceUpdaterPage() {
 
   async function dismissFocusedChanges() {
     if (!activeFocusId || panelActionBusy || running) return;
+    routeApiForSource(activeFocusId);
     setPanelActionBusy(true);
     try {
       await dismissSourceRefresh(activeFocusId);
@@ -2726,6 +2784,7 @@ export default function AdminSourceUpdaterPage() {
   }
 
   async function updateOne(sourceId: string): Promise<RowStatus> {
+    routeApiForSource(sourceId);
     setCurrentSourceId(sourceId);
     currentSourceIdRef.current = sourceId;
     setFocusSourceId(sourceId);
@@ -2886,6 +2945,7 @@ export default function AdminSourceUpdaterPage() {
     setStopping(true);
     const activeId = currentSourceIdRef.current;
     if (activeId) {
+      routeApiForSource(activeId);
       try {
         if (runningMode === "catalog-crawl") {
           await cancelIngest(activeId);
@@ -3753,7 +3813,12 @@ export default function AdminSourceUpdaterPage() {
                               <SourceStartUrlPathChips
                                 urls={startUrls}
                                 sourceId={source.id}
+                                routing={{
+                                  scope: source.scope,
+                                  hosting: source.hosting,
+                                }}
                                 refreshKey={pathCountRefreshKey}
+                                pauseRefresh={running}
                               />
                               {rowError[source.id] ? (
                                 <p className="mt-0.5 truncate text-[0.625rem] text-red-600 dark:text-red-300">

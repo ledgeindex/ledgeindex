@@ -3,7 +3,7 @@ import type { MastraDBMessage } from "@mastra/core/agent";
 import { Agent } from "@mastra/core/agent";
 import { z } from "zod";
 import type { KapaRetrievedChunk } from "../../retrieval/kapa-retrieve.js";
-import { kapaRetrieveMany } from "../../retrieval/kapa-retrieve.js";
+import { isDirectHit, kapaRetrieveMany } from "../../retrieval/kapa-retrieve.js";
 import {
   LEDGEINDEX_RETRIEVAL_META_KEY,
   toRetrievalMetaChunk,
@@ -13,6 +13,7 @@ import {
   assessCoverage,
   instructionForAnswerMode,
 } from "../../retrieval/assess-coverage.js";
+import { maybeFilterRetrievedPages } from "../../retrieval/filter-retrieved-pages.js";
 import { rewriteQueries, type RewriteResult } from "../../retrieval/rewrite-queries.js";
 import { ensureCatalogHasPages } from "../../retrieval/page-catalog-rebuild.js";
 import { getMetadataCatalog } from "../../retrieval/metadata-catalog-store.js";
@@ -489,12 +490,14 @@ function withSourceRetrievalContext<T>(
   );
 }
 
-async function loadSourceCatalogText(input: {
+async function loadSourceCatalog(input: {
   source: ExploreSource;
   authToken: string;
-}): Promise<string> {
+}): Promise<{ text: string; pages: MetadataCatalog["pages"] }> {
   if (usesRemoteCorpus(input.source)) {
-    if (!input.authToken) return "No catalog available.";
+    if (!input.authToken) {
+      return { text: "No catalog available.", pages: [] };
+    }
     const remote = await remoteGetMetadataCatalog(
       input.authToken,
       input.source.id
@@ -504,15 +507,22 @@ async function loadSourceCatalogText(input: {
         sourceId: input.source.id,
         step: "catalog",
       });
-      return "No catalog available.";
+      return { text: "No catalog available.", pages: [] };
     }
-    return formatCatalogForAgent(remote.catalog as MetadataCatalog | null);
+    const catalog = remote.catalog as MetadataCatalog | null;
+    return {
+      text: formatCatalogForAgent(catalog),
+      pages: catalog?.pages ?? [],
+    };
   }
 
   const catalog =
     (await ensureCatalogHasPages(input.source.id)) ??
     (await getMetadataCatalog(input.source.id));
-  return formatCatalogForAgent(catalog);
+  return {
+    text: formatCatalogForAgent(catalog),
+    pages: catalog?.pages ?? [],
+  };
 }
 
 async function retrieveSourceHits(input: {
@@ -531,7 +541,7 @@ async function retrieveSourceHits(input: {
 }> {
   const queries =
     input.rewrite.queries.length > 0
-      ? input.rewrite.queries.slice(0, 3)
+      ? input.rewrite.queries.slice(0, 6)
       : ["documentation"];
 
   if (usesRemoteCorpus(input.source)) {
@@ -590,6 +600,7 @@ async function retrieveSourceHits(input: {
       queries,
       question: input.question,
       sourceId: input.source.id,
+      catalogQueries: input.rewrite.catalogQueries,
     });
 
     if (retrieval.merged.length === 0) {
@@ -597,6 +608,7 @@ async function retrieveSourceHits(input: {
         queries,
         question: input.question,
         sourceId: input.source.id,
+        catalogQueries: input.rewrite.catalogQueries,
         relevanceThreshold: RELAXED_RELEVANCE_THRESHOLD,
       });
       relaxedPassUsed = retrieval.merged.length > 0;
@@ -974,6 +986,7 @@ ${catalogText}${platformNote}`
               source,
               rewrite: {
                 queries: [question],
+                catalogQueries: [] as string[],
                 topicScope: "single" as const,
                 method: "cascade" as const,
                 rewriteModelId: primaryAuxiliaryModelId(requestContext),
@@ -996,11 +1009,12 @@ ${catalogText}${platformNote}`
           }
         }
 
-        const catalogText = await loadSourceCatalogText({ source, authToken });
+        const catalog = await loadSourceCatalog({ source, authToken });
         const rewrite = await rewriteQueries({
           question,
-          catalogText,
+          catalogText: catalog.text,
           history,
+          pages: catalog.pages,
           requestContext,
         });
         const result = await retrieveSourceHits({
@@ -1019,21 +1033,40 @@ ${catalogText}${platformNote}`
       })
     );
 
-    const agentChunks = mergeAcrossSources(
+    let agentChunks = mergeAcrossSources(
       perSource.map((entry) => entry.chunks),
       AGENT_CHUNK_BUDGET
     );
-    const insufficient = agentChunks.length === 0;
     const relaxedPassUsed = perSource.some((entry) => entry.relaxedPassUsed);
     const cascadePassUsed = perSource.some((entry) => entry.cascadePassUsed);
+    const catalogQueries = [
+      ...new Set(
+        perSource.flatMap((entry) => entry.rewrite.catalogQueries ?? []),
+      ),
+    ];
+    const filtered = await maybeFilterRetrievedPages({
+      question,
+      chunks: agentChunks,
+      catalogQueries,
+      requestContext,
+      cascadePassUsed,
+      relaxedPassUsed,
+    });
+    agentChunks = filtered.kept;
+    const droppedPages = filtered.dropped;
+    const pageFilterUsed = filtered.usedFilter;
+
+    const insufficient = agentChunks.length === 0;
     const cascadeTopScore = perSource
       .map((entry) => entry.cascadeTopScore)
       .filter((score): score is number => typeof score === "number")
       .sort((a, b) => b - a)[0];
-    const { maxChunkScore, avgTop3Score } = scoreSummary(agentChunks);
+    // Expansion siblings carry a placeholder score, so score only real hits.
+    const evidenceChunks = agentChunks.filter(isDirectHit);
+    const { maxChunkScore, avgTop3Score } = scoreSummary(evidenceChunks);
     const coverage = await assessCoverage({
       question,
-      chunks: agentChunks,
+      chunks: evidenceChunks,
       insufficient,
       relaxedPassUsed,
       maxChunkScore,
@@ -1077,6 +1110,7 @@ ${catalogText}${platformNote}`
       question,
       rewrittenQueries:
         rewrittenQueries.length > 0 ? rewrittenQueries : [question],
+      catalogQueries,
       rewriteMethod,
       rewriteModelId,
       topicScope: picked.length > 1 || anyMulti ? "multi" : "single",
@@ -1115,6 +1149,8 @@ ${catalogText}${platformNote}`
         }))
       ),
       chunks: agentChunks.map(toRetrievalMetaChunk),
+      droppedPages,
+      pageFilterUsed,
       queries: rewrittenQueries.length > 0 ? rewrittenQueries : [question],
     };
     requestContext?.set?.(LEDGEINDEX_RETRIEVAL_META_KEY, meta);

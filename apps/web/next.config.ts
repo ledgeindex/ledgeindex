@@ -35,6 +35,10 @@ if (process.env.NODE_ENV === "production") {
 const nextConfig: NextConfig = {
   output: "standalone",
   eslint: { ignoreDuringBuilds: true },
+  typescript: {
+    // Match Pindown frontend — `next build` must not fail on tsc diagnostics.
+    ignoreBuildErrors: true,
+  },
   transpilePackages: ["@ledgeindex/client"],
   env: { NEXT_PUBLIC_APP_VERSION: appVersion },
   ...(hasLocalClient

@@ -63,6 +63,16 @@ export const PAGE_EXPANSION_CONCENTRATED_MAX_CHUNKS = 48;
 /** Min share of direct hits on one URL to trigger concentrated expansion. */
 export const PAGE_EXPANSION_CONCENTRATION_RATIO = 0.5;
 
+/**
+ * Chunk distance from a real hit that still counts as reading context, used when
+ * the anchor did not clear the strict threshold. A page that only won on the
+ * relaxed pass earns context around its hit, not a slice of the whole page.
+ */
+export const PAGE_EXPANSION_WEAK_NEIGHBOUR_RADIUS = 1;
+
+/** Max sibling chunks kept per page when the anchor is a relaxed-pass hit. */
+export const PAGE_EXPANSION_WEAK_MAX_CHUNKS = 3;
+
 /** Min catalog page score to scope Q2 vector search to a single URL. */
 export const CATALOG_URL_FILTER_THRESHOLD = 0.7;
 

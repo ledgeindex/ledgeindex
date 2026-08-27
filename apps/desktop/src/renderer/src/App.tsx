@@ -23,8 +23,10 @@ import SourceChatPage from '@/app/(app)/sources/[sourceId]/chat/page'
 import SourceSetsPage from '@/app/(app)/source-sets/page'
 import McpConnectPage from '@/app/(app)/mcp/connect/page'
 import ApiKeysPage from '@/app/(app)/api-keys/page'
+import BillingPage from '@/app/(app)/billing/page'
 import DesktopProviderKeysPage from '@/app/(app)/settings/providers/page'
 import ExploreChatPage from '@/app/(app)/chat/page'
+import UsagePage from '@/app/(app)/usage/page'
 import WebsiteWidgetPage from '@/app/(app)/widget/page'
 import AdminSourceUpdaterPage from '@/app/(app)/admin/source-updater/page'
 
@@ -57,6 +59,8 @@ function AuthenticatedApp(): React.JSX.Element {
                         element={<Navigate to="/widget" replace />}
                       />
                       <Route path="/api-keys" element={<ApiKeysPage />} />
+                      <Route path="/usage" element={<UsagePage />} />
+                      <Route path="/billing" element={<BillingPage />} />
                       <Route
                         path="/settings/providers"
                         element={<DesktopProviderKeysPage />}

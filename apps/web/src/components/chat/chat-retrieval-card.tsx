@@ -21,9 +21,17 @@ function shortModelLabel(modelId: string): string {
   return slash >= 0 ? modelId.slice(slash + 1) : modelId;
 }
 
+function isExpandedChunk(chunk: RetrievalMeta["chunks"][number]): boolean {
+  return chunk.retrievalKind === "expanded";
+}
+
 function chunkMeta(chunk: RetrievalMeta["chunks"][number]): string {
   const parts: string[] = [];
-  if (typeof chunk.score === "number" && Number.isFinite(chunk.score)) {
+  // An expanded chunk's score is copied from its page anchor, so showing it as a
+  // score would imply the reranker judged this text. It did not.
+  if (isExpandedChunk(chunk)) {
+    parts.push("page context");
+  } else if (typeof chunk.score === "number" && Number.isFinite(chunk.score)) {
     parts.push(`score ${chunk.score.toFixed(2)}`);
   }
   if (chunk.section?.trim()) parts.push(chunk.section.trim());
@@ -442,10 +450,12 @@ function QueryChip({
   query,
   index,
   skipped,
+  catalog,
 }: {
   query: string;
   index: number;
   skipped?: boolean;
+  catalog?: boolean;
 }) {
   return (
     <span
@@ -453,10 +463,20 @@ function QueryChip({
         "inline-flex max-w-full items-baseline gap-1 rounded-md px-1.5 py-0.5 text-[0.625rem]",
         skipped
           ? "bg-muted/20 text-muted line-through"
-          : "bg-muted/30 text-foreground",
+          : catalog
+            ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+            : "bg-muted/30 text-foreground",
       )}
     >
-      <span className="text-muted">{index + 1}.</span>
+      <span
+        className={cn(
+          catalog && !skipped
+            ? "text-amber-600/70 dark:text-amber-400/70"
+            : "text-muted",
+        )}
+      >
+        {index + 1}.
+      </span>
       <span className="truncate font-mono">{query}</span>
     </span>
   );
@@ -657,6 +677,9 @@ export function ChatRetrievalCard({
   const meterMeta = resolveMeterMeta(meta, retrievalStrictness);
   const rewrittenQueries = readRewrittenQueries(meta);
   const skippedSet = new Set(meta.skippedQueries ?? []);
+  const catalogSet = new Set(
+    (meta.catalogQueries ?? []).map((query) => query.trim().toLowerCase()),
+  );
   const attempts = meta.searchAttempts ?? [];
   const chunks = meta.chunks ?? [];
   const timings = meta.timings;
@@ -702,15 +725,23 @@ export function ChatRetrievalCard({
   const hasDetails =
     rewrittenQueries.length > 0 ||
     attempts.length > 0 ||
-    Boolean(meta.answerMode || meta.coverageTier || meta.coverageReason);
+    Boolean(meta.answerMode || meta.coverageTier || meta.coverageReason) ||
+    (meta.droppedPages?.length ?? 0) > 0;
+  const expandedCount = chunks.filter(isExpandedChunk).length;
+  const rankedCount = chunks.length - expandedCount;
   const summaryBits = [
     timings ? formatDurationMs(timings.totalMs) : null,
-    `${chunks.length} chunk${chunks.length === 1 ? "" : "s"}`,
+    expandedCount > 0
+      ? `${rankedCount} ranked + ${expandedCount} context`
+      : `${chunks.length} chunk${chunks.length === 1 ? "" : "s"}`,
     sourceCount > 0
       ? `${sourceCount} page${sourceCount === 1 ? "" : "s"}`
       : null,
     attempts.length > 1 ? `${attempts.length} queries` : null,
     meta.rerankDeviceLabel ? meta.rerankDeviceLabel : null,
+    (meta.droppedPages?.length ?? 0) > 0
+      ? `dropped ${meta.droppedPages?.length}`
+      : null,
     meta.insufficient ? "no valid sources" : null,
   ].filter(Boolean);
 
@@ -836,6 +867,9 @@ export function ChatRetrievalCard({
                   {meterMeta.retrievalStrictness}
                 </MetaBadge>
               ) : null}
+              {meta.pageFilterUsed ? (
+                <MetaBadge variant="info">page filter</MetaBadge>
+              ) : null}
             </div>
 
             {rewrittenQueries.length > 0 ? (
@@ -846,6 +880,7 @@ export function ChatRetrievalCard({
                     query={query}
                     index={index}
                     skipped={skippedSet.has(query)}
+                    catalog={catalogSet.has(query.trim().toLowerCase())}
                   />
                 ))}
               </div>
@@ -864,6 +899,22 @@ export function ChatRetrievalCard({
                   />
                 ))}
               </div>
+            ) : null}
+
+            {meta.droppedPages && meta.droppedPages.length > 0 ? (
+              <ul className="space-y-1">
+                {meta.droppedPages.map((page) => (
+                  <li
+                    key={page.url}
+                    className="text-[0.625rem] text-muted"
+                  >
+                    <span className="text-amber-700 dark:text-amber-400">
+                      dropped {page.title.trim() || shortUrlLabel(page.url)}
+                    </span>
+                    {page.reason ? ` · ${page.reason}` : ""}
+                  </li>
+                ))}
+              </ul>
             ) : null}
 
             {meta.answerMode || meta.coverageTier || meta.coverageReason ? (
@@ -896,7 +947,12 @@ export function ChatRetrievalCard({
               return (
                 <li
                   key={`${chunk.url}-${index}`}
-                  className="rounded-md border border-border/50 bg-background/60 p-2"
+                  className={cn(
+                    "rounded-md border p-2",
+                    isExpandedChunk(chunk)
+                      ? "border-border/30 bg-background/30"
+                      : "border-border/50 bg-background/60",
+                  )}
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-x-2 gap-y-0.5">
                     <p className="font-medium text-foreground">
@@ -908,9 +964,11 @@ export function ChatRetrievalCard({
                       <p
                         className={cn(
                           "shrink-0 font-mono text-[0.5625rem]",
-                          typeof chunk.score === "number"
-                            ? scoreColor(chunk.score, threshold)
-                            : "text-muted",
+                          isExpandedChunk(chunk)
+                            ? "text-muted"
+                            : typeof chunk.score === "number"
+                              ? scoreColor(chunk.score, threshold)
+                              : "text-muted",
                         )}
                       >
                         {metaLine}

@@ -1,3 +1,5 @@
+export type RetrievalMetaChunkKind = "direct" | "expanded";
+
 export type RetrievalMetaChunk = {
   text: string;
   url: string;
@@ -5,6 +7,8 @@ export type RetrievalMetaChunk = {
   score: number;
   category: string;
   section: string;
+  /** `expanded` chunks were pulled in as page context; their score is a placeholder. */
+  retrievalKind?: RetrievalMetaChunkKind;
 };
 
 export type RetrievalPickedSource = {
@@ -61,6 +65,8 @@ export type CoverageTier = "tier0" | "tier1_heuristic" | "tier2_llm";
 export type RetrievalMeta = {
   question: string;
   rewrittenQueries: string[];
+  /** Catalog page titles appended after LLM rewrite variants. */
+  catalogQueries?: string[];
   intentForRerank?: string;
   rerankQuery?: string;
   rewriteMethod?: "llm" | "catalog" | "fallback" | "cascade";
@@ -98,6 +104,9 @@ export type RetrievalMeta = {
   pickedSources?: RetrievalPickedSource[];
   searchAttempts: RetrievalSearchAttempt[];
   chunks: RetrievalMetaChunk[];
+  /** Pages retrieved then dropped before the answer agent saw them. */
+  droppedPages?: Array<{ url: string; title: string; reason: string }>;
+  pageFilterUsed?: boolean;
   /** Per-step latency (expandable on Retrieved sources). */
   timings?: RetrievalTimings;
   /** @deprecated use rewrittenQueries */

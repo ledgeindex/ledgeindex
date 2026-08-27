@@ -209,6 +209,10 @@ export function SourceBannerCard({
                   <SourceStartUrlsHint
                     urls={startUrls}
                     sourceId={activeSource.id}
+                    routing={{
+                      scope: activeSource.scope,
+                      hosting: activeSource.hosting,
+                    }}
                     variant="subtle"
                   />
                 </>

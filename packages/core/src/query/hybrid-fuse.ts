@@ -195,6 +195,33 @@ export function mergeFusedCandidatePoolsMany(
     }));
 }
 
+/**
+ * RRF across query variants rewards pages that match every phrasing. A catalog
+ * title that only wins its own list can fall out of a 20-slot pool. Keep each
+ * query's top hit so the cross-encoder still sees it; the reranker, not fusion,
+ * decides whether it survives the threshold.
+ */
+export function ensurePerQueryWinners(
+  pools: FusedQueryResult[][],
+  merged: FusedQueryResult[],
+  limit: number,
+): FusedQueryResult[] {
+  const idOf = (result: FusedQueryResult) => String(result.id ?? "");
+  const seen = new Set(merged.map(idOf).filter(Boolean));
+  const missing: FusedQueryResult[] = [];
+  for (const pool of pools) {
+    const winner = pool[0];
+    if (!winner) continue;
+    const id = idOf(winner);
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    missing.push(winner);
+  }
+  if (missing.length === 0) return merged.slice(0, limit);
+  const keep = Math.max(0, limit - missing.length);
+  return [...merged.slice(0, keep), ...missing];
+}
+
 /** Dual-path merge: RRF across Path A and Path B (LlamaIndex fusion pattern). */
 export function mergeFusedCandidatePools(
   a: FusedQueryResult[],

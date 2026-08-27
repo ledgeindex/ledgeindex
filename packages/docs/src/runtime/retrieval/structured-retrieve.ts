@@ -4,10 +4,11 @@ import {
   runWithRetrievalContext,
 } from "@ledgeindex/core/query/rerank-request-context.js";
 import type { RerankBackend } from "@ledgeindex/core/query/rerank-backend.js";
+import { kapaRetrieveMany, type KapaRetrievedChunk } from "./kapa-retrieve.js";
 import {
-  kapaRetrieveMany,
-  type KapaRetrievedChunk,
-} from "./kapa-retrieve.js";
+  maybeFilterRetrievedPages,
+  type DroppedRetrievedPage,
+} from "./filter-retrieved-pages.js";
 import { ensureCatalogHasPages } from "./page-catalog-rebuild.js";
 import { getMetadataCatalog } from "./metadata-catalog-store.js";
 import { formatCatalogForAgent } from "./search-query-planner.js";
@@ -20,6 +21,8 @@ export type StructuredRetrieveResult = {
   rerankBackendUsed?: RerankBackend;
   relaxedPassUsed: boolean;
   weakEvidenceUsed: boolean;
+  droppedPages?: DroppedRetrievedPage[];
+  pageFilterUsed?: boolean;
 };
 
 /**
@@ -47,6 +50,7 @@ export async function retrieveWithStructuredRewrite(input: {
     question: input.question,
     catalogText,
     history,
+    pages: catalogRecord?.pages,
     requestContext: input.requestContext,
   });
 
@@ -58,6 +62,7 @@ export async function retrieveWithStructuredRewrite(input: {
     question: input.question,
     sourceId: input.sourceId,
     filter: input.filter,
+    catalogQueries: rewrite.catalogQueries,
     relevanceThreshold: settings.relevanceThreshold,
     allowWeakEvidence: false,
     expandPages: input.expandPages !== false,
@@ -72,6 +77,7 @@ export async function retrieveWithStructuredRewrite(input: {
       question: input.question,
       sourceId: input.sourceId,
       filter: input.filter,
+      catalogQueries: rewrite.catalogQueries,
       relevanceThreshold: settings.relaxedThreshold,
       expandPages: input.expandPages !== false,
     });
@@ -84,6 +90,7 @@ export async function retrieveWithStructuredRewrite(input: {
       question: input.question,
       sourceId: input.sourceId,
       filter: input.filter,
+      catalogQueries: rewrite.catalogQueries,
       relevanceThreshold: settings.relevanceThreshold,
       allowWeakEvidence: true,
       expandPages: input.expandPages !== false,
@@ -91,15 +98,24 @@ export async function retrieveWithStructuredRewrite(input: {
     weakEvidenceUsed = retrieval.merged.length > 0;
   }
 
-  const chunks = retrieval.merged;
+  const filtered = await maybeFilterRetrievedPages({
+    question: input.question,
+    chunks: retrieval.merged,
+    catalogQueries: rewrite.catalogQueries,
+    requestContext: input.requestContext,
+    relaxedPassUsed,
+    weakEvidenceUsed,
+  });
 
   return {
-    chunks,
-    insufficient: retrieval.merged.length === 0,
+    chunks: filtered.kept,
+    insufficient: filtered.kept.length === 0,
     rewrite,
     rerankBackendUsed: retrieval.rerankBackendUsed,
     relaxedPassUsed,
     weakEvidenceUsed,
+    droppedPages: filtered.dropped,
+    pageFilterUsed: filtered.usedFilter,
   };
 }
 

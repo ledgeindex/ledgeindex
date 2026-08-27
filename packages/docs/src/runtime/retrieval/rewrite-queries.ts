@@ -1,6 +1,8 @@
 import { Agent } from "@mastra/core/agent";
 import { z } from "zod";
 import { cleanQuestionForRetrieve } from "@ledgeindex/core/query/query-intent.js";
+import { mergeRewriteWithCatalogPhrases } from "@ledgeindex/core/query/rank-catalog-pages.js";
+import type { MetadataCatalogPage } from "./metadata-catalog.js";
 import {
   primaryAuxiliaryModelId,
   resolveRewriteModelConfig,
@@ -19,17 +21,38 @@ export type RewriteTopicScope = "single" | "multi";
 const REWRITE_TEMPERATURE = 0;
 
 export type RewriteResult = {
-  /** Generated NL variants; the retrieve path always also includes the user question. */
+  /** Generated NL variants plus catalog title queries; retrieve also includes the user question. */
   queries: string[];
+  /** Catalog page titles appended after the LLM variants. */
+  catalogQueries: string[];
   topicScope: RewriteTopicScope;
   method: "llm" | "fallback";
   rewriteModelId: string;
 };
 
-function fallbackRewrite(question: string, rewriteModelId: string): RewriteResult {
+function attachCatalogQueries(
+  question: string,
+  rewriteQueries: string[],
+  topicScope: RewriteTopicScope,
+  pages: MetadataCatalogPage[] | null | undefined,
+): { queries: string[]; catalogQueries: string[] } {
+  return mergeRewriteWithCatalogPhrases({
+    question,
+    rewriteQueries,
+    pages,
+    topicScope,
+  });
+}
+
+function fallbackRewrite(
+  question: string,
+  rewriteModelId: string,
+  pages?: MetadataCatalogPage[] | null,
+): RewriteResult {
   const cleaned = cleanQuestionForRetrieve(question);
+  const seed = cleaned ? [cleaned] : [question.trim().slice(0, 120)];
   return {
-    queries: cleaned ? [cleaned] : [question.trim().slice(0, 120)],
+    ...attachCatalogQueries(question, seed, "single", pages),
     topicScope: "single",
     method: "fallback",
     rewriteModelId,
@@ -40,6 +63,7 @@ export async function rewriteQueries(input: {
   question: string;
   catalogText: string;
   history: string;
+  pages?: MetadataCatalogPage[] | null;
   requestContext?: { get?: (key: string) => unknown };
 }): Promise<RewriteResult> {
   const model = resolveRewriteModelConfig(input.requestContext);
@@ -62,6 +86,7 @@ Output:
 1. topicScope — "single" or "multi".
 2. queries — 1–3 complete natural-language questions or short phrases suitable for BOTH vector search and keyword search.
    - Use catalog terminology; prefer how the docs phrase the topic.
+   - When a catalog page title names the topic (e.g. "Get started", "Quickstart", "Installation"), include that exact title as one query.
    - Do NOT output keyword lists, coreGoal splits, or code dumps.
    - Do NOT repeat the user's exact wording if a catalog phrase is clearer.
    - For vague questions ("what are the primitives"), name the product concepts from the catalog.
@@ -78,13 +103,19 @@ The retrieve pipeline always runs the user's original question as well; your que
       { temperature: REWRITE_TEMPERATURE },
     );
     if (object && object.queries.length > 0) {
-      const queries = object.queries
-        .map((query) => query.trim())
-        .filter(Boolean)
-        .slice(0, 3);
+      const topicScope: RewriteTopicScope =
+        object.topicScope === "multi" ? "multi" : "single";
       return {
-        queries,
-        topicScope: object.topicScope === "multi" ? "multi" : "single",
+        ...attachCatalogQueries(
+          input.question,
+          object.queries
+            .map((query) => query.trim())
+            .filter(Boolean)
+            .slice(0, 3),
+          topicScope,
+          input.pages,
+        ),
+        topicScope,
         method: "llm",
         rewriteModelId,
       };
@@ -93,5 +124,5 @@ The retrieve pipeline always runs the user's original question as well; your que
     // use fallback below
   }
 
-  return fallbackRewrite(input.question, rewriteModelId);
+  return fallbackRewrite(input.question, rewriteModelId, input.pages);
 }

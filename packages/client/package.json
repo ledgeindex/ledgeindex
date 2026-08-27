@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/client",
-  "version": "0.1.17",
+  "version": "0.1.18",
   "description": "HTTP client helpers for LedgeIndex API (web, mobile, agents, AutomationGhost)",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
