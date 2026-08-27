@@ -101,29 +101,6 @@ function createId(prefix: string) {
   return `${prefix}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-function emptyMarkdownPage(input: {
-  pageId: string;
-  categoryId: string;
-  subcategoryId?: string | null;
-  title: string;
-  markdown: string;
-}): BuilderPage {
-  return {
-    id: input.pageId,
-    categoryId: input.categoryId,
-    subcategoryId: input.subcategoryId ?? null,
-    title: input.title,
-    pins: [
-      {
-        id: createId("pin"),
-        kind: "markdown",
-        title: "Overview",
-        markdown: input.markdown,
-      },
-    ],
-  };
-}
-
 function migrateDraft(raw: SourceBuilderDraft): SourceBuilderDraft {
   const familyId = raw.familyId?.trim() || raw.id;
   const versionNumber =
