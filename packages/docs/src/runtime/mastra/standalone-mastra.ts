@@ -8,6 +8,10 @@ import { docsAgent } from "./agents/docs-agent.js";
 import { modelTestAgent } from "./agents/model-test-agent.js";
 import { exploreAgent } from "./agents/explore-agent.js";
 import { ingestWebCrawlWorkflow } from "./workflows/ingest-web-crawl/index.js";
+import {
+  generateRetrievalGoldenSetWorkflow,
+  retrievalEvalWorkflow,
+} from "./workflows/retrieval-eval/index.js";
 import { getVectorStore } from "../vector/store.js";
 import { getPostgresConnectionString } from "../vector/config.js";
 import { ledgeindexChatRoute } from "./ledgeindex-chat-route.js";
@@ -40,6 +44,8 @@ export function createStandaloneDocsMastra(): Mastra {
     },
     workflows: {
       ingestWebCrawlWorkflow,
+      generateRetrievalGoldenSetWorkflow,
+      retrievalEvalWorkflow,
     },
     vectors: {
       ledgeindexVector: getVectorStore(),

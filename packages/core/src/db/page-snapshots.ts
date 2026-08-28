@@ -39,6 +39,42 @@ export function hashPageContent(markdown: string): string {
   return createHash("sha256").update(markdown.trim()).digest("hex");
 }
 
+/** Marks a hash as taken from indexed markdown, not an unapplied crawl. */
+export const INDEXED_CONTENT_HASH_PREFIX = "idx:";
+
+export function hashIndexedPageContent(markdown: string): string {
+  return `${INDEXED_CONTENT_HASH_PREFIX}${hashPageContent(markdown)}`;
+}
+
+export function isIndexedPageHash(hash: string): boolean {
+  return String(hash ?? "").startsWith(INDEXED_CONTENT_HASH_PREFIX);
+}
+
+/** Identity key for a page URL. Trailing slash, www, query, and hash do not count. */
+export function pageSnapshotUrlKey(url: string): string {
+  const trimmed = String(url ?? "").trim();
+  if (!trimmed) return "";
+  try {
+    const parsed = new URL(trimmed);
+    parsed.hash = "";
+    parsed.search = "";
+    const protocol = parsed.protocol.toLowerCase();
+    const host = parsed.hostname.replace(/^www\./i, "").toLowerCase();
+    const path = parsed.pathname.replace(/\/+$/, "") || "/";
+    const port =
+      parsed.port &&
+      !(
+        (protocol === "https:" && parsed.port === "443") ||
+        (protocol === "http:" && parsed.port === "80")
+      )
+        ? `:${parsed.port}`
+        : "";
+    return `${protocol}//${host}${port}${path === "/" ? "" : path}`;
+  } catch {
+    return trimmed.replace(/\/+$/, "").toLowerCase();
+  }
+}
+
 export function isPageSnapshotStoreAvailable(): boolean {
   return true;
 }
@@ -84,15 +120,19 @@ function compareSnapshots(
     (page) => page.contentHash && page.tombstonedAt == null,
   );
 
-  const existingByUrl = new Map(existing.map((page) => [page.url, page]));
-  const incomingByUrl = new Map(incoming.map((page) => [page.url, page]));
+  const existingByKey = new Map(
+    existing.map((page) => [pageSnapshotUrlKey(page.url), page]),
+  );
+  const incomingByKey = new Map(
+    incoming.map((page) => [pageSnapshotUrlKey(page.url), page]),
+  );
 
   const added: PageSnapshotInput[] = [];
   const updated: PageSnapshotInput[] = [];
   let unchangedCount = 0;
 
   for (const snapshot of incoming) {
-    const prior = existingByUrl.get(snapshot.url);
+    const prior = existingByKey.get(pageSnapshotUrlKey(snapshot.url));
     if (!prior || prior.tombstonedAt) {
       added.push(snapshot);
     } else if (prior.contentHash !== snapshot.contentHash) {
@@ -103,7 +143,9 @@ function compareSnapshots(
   }
 
   const removed = existing.filter(
-    (page) => page.tombstonedAt == null && !incomingByUrl.has(page.url),
+    (page) =>
+      page.tombstonedAt == null &&
+      !incomingByKey.has(pageSnapshotUrlKey(page.url)),
   );
 
   return {
@@ -119,11 +161,13 @@ function buildNextSnapshots(
   existing: PageSnapshot[],
   incoming: PageSnapshotInput[],
 ): PageSnapshot[] {
-  const incomingByUrl = new Map(incoming.map((page) => [page.url, page]));
-  const nextByUrl = new Map<string, PageSnapshot>();
+  const incomingByKey = new Map(
+    incoming.map((page) => [pageSnapshotUrlKey(page.url), page]),
+  );
+  const nextByKey = new Map<string, PageSnapshot>();
 
   for (const snapshot of incoming) {
-    nextByUrl.set(snapshot.url, {
+    nextByKey.set(pageSnapshotUrlKey(snapshot.url), {
       url: snapshot.url,
       title: snapshot.title,
       contentHash: snapshot.contentHash,
@@ -132,15 +176,16 @@ function buildNextSnapshots(
   }
 
   for (const page of existing) {
-    if (!incomingByUrl.has(page.url) && page.tombstonedAt == null) {
-      nextByUrl.set(page.url, {
+    const key = pageSnapshotUrlKey(page.url);
+    if (!incomingByKey.has(key) && page.tombstonedAt == null) {
+      nextByKey.set(key, {
         ...page,
         tombstonedAt: new Date().toISOString(),
       });
     }
   }
 
-  return [...nextByUrl.values()];
+  return [...nextByKey.values()];
 }
 
 export async function listPageSnapshots(
@@ -333,10 +378,12 @@ export async function syncPageSnapshotHashes(input: {
   }
 
   const existing = listPageSnapshotsFromFile(input.sourceId);
-  const byUrl = new Map(existing.map((page) => [page.url, page]));
+  const byKey = new Map(
+    existing.map((page) => [pageSnapshotUrlKey(page.url), page]),
+  );
 
   for (const snapshot of input.snapshots) {
-    byUrl.set(snapshot.url, {
+    byKey.set(pageSnapshotUrlKey(snapshot.url), {
       url: snapshot.url,
       title: snapshot.title,
       contentHash: snapshot.contentHash,
@@ -344,5 +391,44 @@ export async function syncPageSnapshotHashes(input: {
     });
   }
 
-  savePageSnapshotsToFile(input.sourceId, [...byUrl.values()]);
+  savePageSnapshotsToFile(input.sourceId, [...byKey.values()]);
+}
+
+export async function tombstonePageSnapshots(
+  sourceId: string,
+  urls: string[],
+): Promise<void> {
+  if (urls.length === 0) return;
+  const keys = new Set(urls.map((url) => pageSnapshotUrlKey(url)).filter(Boolean));
+  if (keys.size === 0) return;
+  const now = new Date().toISOString();
+
+  if (usePostgres()) {
+    const db = getPool();
+    if (!db) return;
+    const existing = await listPageSnapshots(sourceId);
+    const matchUrls = existing
+      .filter((page) => keys.has(pageSnapshotUrlKey(page.url)))
+      .map((page) => page.url);
+    if (matchUrls.length === 0) return;
+    await db.query(
+      `UPDATE pages
+       SET tombstoned_at = now(), updated_at = now()
+       WHERE source_id = $1
+         AND tombstoned_at IS NULL
+         AND url = ANY($2::text[])`,
+      [sourceId, matchUrls],
+    );
+    return;
+  }
+
+  const existing = listPageSnapshotsFromFile(sourceId);
+  savePageSnapshotsToFile(
+    sourceId,
+    existing.map((page) =>
+      keys.has(pageSnapshotUrlKey(page.url)) && page.tombstonedAt == null
+        ? { ...page, tombstonedAt: now }
+        : page,
+    ),
+  );
 }

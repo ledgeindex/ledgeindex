@@ -44,12 +44,15 @@ export default function SourceChatPage() {
           scope,
         });
         syncApiBaseForHosting({ scope, hosting });
+        const startUrls = source.config.startUrls ?? [];
         setSourceName(source.name);
-        setStartUrls(source.config.startUrls ?? []);
+        setStartUrls(startUrls);
         setActiveSource({
           sourceId,
           sourceName: source.name,
-          startUrls: source.config.startUrls ?? [],
+          startUrls,
+          startUrl: startUrls[0],
+          indexedAt: source.indexedAt ?? null,
           scope,
           hosting,
         });

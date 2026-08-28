@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/docs",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "LedgeIndex docs profile — sources, ingest, chat, MCP",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
@@ -28,16 +28,18 @@
     "prepublishOnly": "npm run clean && npm run build",
     "build": "tsup",
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\"",
-    "test:agent-readiness": "node --import tsx --test src/runtime/openapi/public-api-spec.test.ts",
-    "test:system-browser": "node --import tsx --test src/runtime/crawler/system-browser.test.ts"
+    "test:refresh": "node --import tsx --test src/runtime/services/refresh-changelog.test.ts",
+    "test:system-browser": "node --import tsx --test src/runtime/crawler/system-browser.test.ts",
+    "test:retrieval-eval": "node --import tsx --test src/runtime/mastra/workflows/retrieval-eval/evaluate.test.ts"
   },
   "dependencies": {
     "@ai-sdk/google": "2.0.86",
     "@ai-sdk/openai": "^2.0.114",
-    "@ledgeindex/core": "^0.1.18",
-    "@ledgeindex/repo": "^0.1.18",
+    "@ledgeindex/core": "^0.1.19",
+    "@ledgeindex/repo": "^0.1.19",
     "@mastra/ai-sdk": "^1.6.2",
     "@mastra/core": "^1.51.0",
+    "@mastra/evals": "^1.9.0",
     "@mastra/fastembed": "^1.2.0",
     "@mastra/fastify": "^1.4.7",
     "@mastra/libsql": "^1.16.0",

@@ -9,4 +9,11 @@ describe("markdown negotiation bodies", () => {
     assert.ok(md);
     assert.equal(md, buildLlmsTxt());
   });
+
+  it("serves LedgeIndex CLI markdown", () => {
+    const md = markdownForPath("/developers/cli");
+    assert.ok(md);
+    assert.match(md, /^# LedgeIndex CLI/m);
+    assert.match(md, /npm install -g ledgeindex/);
+  });
 });

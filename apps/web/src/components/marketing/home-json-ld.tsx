@@ -50,18 +50,19 @@ export function HomeJsonLd() {
       "@type": "Offer",
       price: "0",
       priceCurrency: "USD",
-      description: "Free tier with daily cloud chat limits; self-hosting available",
+      description: "Free tier with 25 cloud chat messages per day; self-hosting available",
     },
     documentation: docs,
     downloadUrl: `${site}/login`,
-    softwareHelp: `${docs}/guides/setup-cli`,
+    softwareHelp: `${site}/developers/cli`,
     featureList: [
       "Documentation indexing and RAG chat",
-      "MCP server for AI coding agents",
-      "REST API and OpenAPI spec",
+      "LedgeIndex MCP server for AI coding agents",
+      "LedgeIndex API and OpenAPI spec",
+      "LedgeIndex CLI (npm package ledgeindex)",
       "Embeddable website widget",
     ],
-    sameAs: [`${api}/mcp`, `${site}/openapi.json`],
+    sameAs: [`${api}/mcp`, `${site}/openapi.json`, `${site}/developers`],
   };
 
   return (

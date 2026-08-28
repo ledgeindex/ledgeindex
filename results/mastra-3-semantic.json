@@ -1,0 +1,349 @@
+{
+  "generatedAt": "2026-08-28T20:49:36.181Z",
+  "sourceId": "f730533e-dd3d-448b-9927-6c45854d1a1b",
+  "settings": {
+    "scope": "personal",
+    "hosting": "local",
+    "strictness": "strict",
+    "expandPages": true
+  },
+  "aggregate": {
+    "cases": 3,
+    "hitAt1Rate": 0,
+    "hitAt3Rate": 0,
+    "hitAt5Rate": 0.3333333333333333,
+    "meanReciprocalRank": 0.06666666666666667,
+    "rejectHitRate": 0,
+    "meanClaimCoverage": 0.611111111111111
+  },
+  "semanticAggregate": {
+    "cases": 3,
+    "meanPrecision": 0.6233333333333334,
+    "meanRecall": 0.4166666666666667,
+    "meanRelevance": 0
+  },
+  "byCategory": {
+    "getting-started/agents/confusable": {
+      "cases": 3,
+      "hitAt1Rate": 0,
+      "hitAt3Rate": 0,
+      "hitAt5Rate": 0.3333333333333333,
+      "meanReciprocalRank": 0.06666666666666667,
+      "rejectHitRate": 0,
+      "meanClaimCoverage": 0.611111111111111
+    }
+  },
+  "byDifficulty": {
+    "easy": {
+      "cases": 2,
+      "hitAt1Rate": 0,
+      "hitAt3Rate": 0,
+      "hitAt5Rate": 0.5,
+      "meanReciprocalRank": 0.1,
+      "rejectHitRate": 0,
+      "meanClaimCoverage": 0.75
+    },
+    "hard": {
+      "cases": 1,
+      "hitAt1Rate": 0,
+      "hitAt3Rate": 0,
+      "hitAt5Rate": 0,
+      "meanReciprocalRank": 0,
+      "rejectHitRate": 0,
+      "meanClaimCoverage": 0.3333333333333333
+    }
+  },
+  "cases": [
+    {
+      "id": "getting-started-build-with-mastra",
+      "question": "what are things you build with mastra",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": false,
+        "claimCoverage": 0.5,
+        "claimsCovered": 1,
+        "claimsTotal": 2,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 2644
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9288093954074901,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9388093954074901,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9288093954074901,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9288093954074901,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9141997998767315,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9141997998767315,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.7747277129727544,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9241997998767315,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9141997998767315,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9141997998767315,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": [],
+      "semantic": {
+        "precision": {
+          "score": 0.58,
+          "reason": "The score is 0.58 because contexts 1, 2, 4, 6, and 8 are relevant: they support building and deploying AI agents, coding agents, applications, and workflows with Mastra. Contexts 0, 3, 5, and 7 are not directly useful because they focus on configuration, deployment artifacts, middleware, or documentation links. The relevant contexts are interspersed rather than consistently ranked at the beginning, which lowers the MAP score."
+        },
+        "recall": {
+          "score": 0,
+          "reason": "The score is 0 because none of the ground-truth claims are supported by the retrieval context. The context mentions Mastra’s build configuration, CLI commands, deployment, middleware, coding agents, and workflows, but it does not describe Mastra as a TypeScript framework for AI agents and applications or mention any of the listed use cases: embedded agents, customer-facing assistants, internal copilots, data analysis agents, or content automation."
+        },
+        "relevance": {
+          "score": 0,
+          "reason": "The score is 0 because most of the context concerns Mastra’s build, deployment, and configuration details rather than what users can build with it. Although the workflow and coding-agent contexts were relevant, neither was used in the response, and key information about Mastra’s main use cases—such as assistants, chatbots, research agents, report generators, and business automations—was missing."
+        }
+      }
+    },
+    {
+      "id": "getting-started-primitives",
+      "question": "what are the primitives",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": false,
+        "claimCoverage": 0.3333333333333333,
+        "claimsCovered": 1,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 2211
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "title": "Mastra class",
+          "score": 0.8101871822550248,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "title": "Mastra class",
+          "score": 0.8101871822550248,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "title": "Mastra class",
+          "score": 0.8201871822550248,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7670112290688065,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7670112290688065,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7670112290688065,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7670112290688065,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7670112290688065,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7670112290688065,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7670112290688065,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": [],
+      "semantic": {
+        "precision": {
+          "score": 1,
+          "reason": "The score is 1 because the first context is directly relevant and well-positioned, describing Mastra primitives such as agents and workflows and their registration through the Mastra instance. The second context is unrelated to the expected output, but the relevant context appears first, yielding perfect context precision."
+        },
+        "recall": {
+          "score": 0.25,
+          "reason": "The score is 0.25 because only the claim that `Mastra` serves as a registry for primitives such as agents, workflows, and tools is partially supported by context [0], which shows Mastra methods for listing agents and workflows and registering or retrieving tools. The context does not explicitly describe `Mastra` as the central orchestrator, nor does it mention that applications typically create one instance or that it coordinates shared services."
+        },
+        "relevance": {
+          "score": 0,
+          "reason": "The score is 0 because, although one context item was highly relevant and used, it mainly covered Mastra API migrations rather than directly defining or comprehensively listing its primitives. The other context was unrelated Amazon S3 data types. Missing a clear definition, complete primitive list, and clarification of the user’s intended meaning prevented the context from adequately supporting the answer."
+        }
+      }
+    },
+    {
+      "id": "getting-started-project-bootstrap",
+      "question": "How do I bootstrap a new Mastra project?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": true,
+        "reciprocalRank": 0.2,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1628
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9014510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9014510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8529856616735058,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9014510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8831115274951826,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9014510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9014510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9014510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9114510240160757,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9014510240160757,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": [],
+      "semantic": {
+        "precision": {
+          "score": 0.29,
+          "reason": "The score is 0.29 because contexts 2, 7, and 9 are relevant: context 7 directly provides the bootstrap command, Studio instruction, and framework integrations, while contexts 2 and 9 support integration with existing projects or frameworks. However, most retrieved contexts focus on deployment, templates, or unrelated details. Since the strongest context appears relatively late at position 7, the earlier irrelevant contexts reduce the MAP score."
+        },
+        "recall": {
+          "score": 1,
+          "reason": "The score is 1 because all claims in the ground-truth answer are supported by retrieval context [7]. It provides the command `npm create mastra@latest`, states that Studio can be opened immediately, and explains that Mastra can be integrated into an existing project using supported frameworks."
+        },
+        "relevance": {
+          "score": 0,
+          "reason": "The score is 0 because, although context [7] was highly relevant and used to support the `npm create mastra@latest` command, another highly relevant piece—`mastra init` for existing projects—was omitted. Medium-relevance context about templates and alternative package managers was also unused, while several deployment-focused passages were irrelevant. Missing guidance on initializing existing projects, template-based setup, package-manager alternatives, and opening Studio locally further reduced completeness."
+        }
+      }
+    }
+  ]
+}

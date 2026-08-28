@@ -36,3 +36,20 @@ export function formatIndexedAt(value: string | null) {
     return value;
   }
 }
+
+/** Compact "2d ago" for tight chrome. Falls back to {@link formatIndexedAt}. */
+export function formatIndexedAtRelative(value: string | null): string {
+  if (!value) return "Not indexed";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const deltaMs = Date.now() - date.getTime();
+  if (deltaMs < 0) return formatIndexedAt(value);
+  const minutes = Math.round(deltaMs / 60_000);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.round(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.round(hours / 24);
+  if (days < 14) return `${days}d ago`;
+  return formatIndexedAt(value);
+}

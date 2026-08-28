@@ -8,6 +8,7 @@ import {
   verifyFirebaseIdToken,
 } from "../lib/firebase-admin.js";
 import { validateApiKey } from "../services/api-key-store.js";
+import { sendProblem } from "../lib/problem-details.js";
 
 function isPublicPath(url: string): boolean {
   const path = url.split("?")[0] ?? url;
@@ -166,8 +167,10 @@ const firebaseAuthMiddleware: FastifyPluginAsync = async (fastify) => {
     }
 
     if (isApiAuthRequired()) {
-      return reply.code(401).send({
-        error: hasBearer
+      return sendProblem(reply, {
+        status: 401,
+        code: "UNAUTHORIZED",
+        detail: hasBearer
           ? "Invalid or expired token"
           : "Authentication required",
       });

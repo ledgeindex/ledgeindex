@@ -36,6 +36,9 @@ build/
 coverage/
 .nyc_output/
 
+# Generated evaluation corpus snapshots
+evals/corpora/
+
 # OS / editor
 .DS_Store
 Thumbs.db

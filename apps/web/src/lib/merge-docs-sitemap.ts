@@ -85,6 +85,14 @@ export const PUBLIC_MARKETING_PATHS: readonly string[] = [
   "/login",
   "/llms.txt",
   "/openapi.json",
+  "/developers",
+  "/developers/api",
+  "/developers/auth",
+  "/developers/cli",
+  "/developers/mcp",
+  "/developers/sdk",
+  "/developers/openapi",
+  "/developers/onboarding",
 ];
 
 export function marketingSitemapEntries(

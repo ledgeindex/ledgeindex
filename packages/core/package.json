@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/core",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "LedgeIndex primitives — crawl, extract, chunk, embed, persist, query",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
@@ -25,6 +25,7 @@
     "./enrich": "./dist/enrich/index.js",
     "./enrich/*": "./dist/enrich/*",
     "./extract/parser/*": "./dist/extract/parser/*",
+    "./export/*": "./dist/export/*",
     "./ingest/*": "./dist/ingest/*",
     "./query/*": "./dist/query/*",
     "./vector/*": "./dist/vector/*",

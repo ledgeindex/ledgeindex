@@ -13,8 +13,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
-    "@ledgeindex/docs": "^0.1.18",
-    "@ledgeindex/server": "^0.1.18",
+    "@ledgeindex/docs": "^0.1.19",
+    "@ledgeindex/server": "^0.1.19",
     "playwright-core": "^1.55.1"
   },
   "devDependencies": {

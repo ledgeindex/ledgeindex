@@ -46,6 +46,22 @@ export type LexicalHit = {
   metadata: Record<string, unknown>;
 };
 
+function parseLexicalMetadata(value: unknown): Record<string, unknown> {
+  if (typeof value === "string") {
+    try {
+      const parsed: unknown = JSON.parse(value);
+      return parsed && typeof parsed === "object"
+        ? (parsed as Record<string, unknown>)
+        : {};
+    } catch {
+      return {};
+    }
+  }
+  return value && typeof value === "object"
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
 function lexicalEnabled(): boolean {
   const raw = process.env.LEDGEINDEX_LEXICAL_SEARCH?.trim().toLowerCase();
   if (!raw) return true;
@@ -290,22 +306,96 @@ export async function upsertLexicalChunks(
   }
 }
 
+/**
+ * Deterministically enumerate the indexed chunk mirror for a source.
+ * Returns an empty array when the lexical mirror is unavailable.
+ */
+export async function listLexicalChunksForSource(
+  sourceId: string,
+): Promise<LexicalChunkRow[]> {
+  const normalizedSourceId = sourceId.trim();
+  if (!normalizedSourceId || !(await ensureLexicalIndex())) return [];
+
+  try {
+    if (getVectorBackend() === "pgvector") {
+      const pool = getPgPool();
+      if (!pool) return [];
+      const { rows } = await pool.query<{
+        vector_id: string;
+        source_id: string;
+        url: string;
+        metadata: unknown;
+      }>(
+        `SELECT vector_id, source_id, url, metadata
+           FROM ${LEXICAL_TABLE}
+          WHERE source_id = $1
+          ORDER BY url, vector_id`,
+        [normalizedSourceId],
+      );
+      return rows.map((row) => {
+        const metadata = parseLexicalMetadata(row.metadata);
+        return {
+          id: row.vector_id,
+          sourceId: row.source_id,
+          url: row.url,
+          text: String(metadata.text ?? ""),
+          metadata,
+        };
+      });
+    }
+
+    const result = await getLibsqlClient().execute({
+      sql: `SELECT vector_id, source_id, url, metadata
+              FROM ${LEXICAL_TABLE}
+             WHERE source_id = ?
+             ORDER BY url, vector_id`,
+      args: [normalizedSourceId],
+    });
+    return result.rows.map((row) => {
+      const metadata = parseLexicalMetadata(row.metadata);
+      return {
+        id: String(row.vector_id ?? ""),
+        sourceId: String(row.source_id ?? normalizedSourceId),
+        url: String(row.url ?? ""),
+        text: String(metadata.text ?? ""),
+        metadata,
+      };
+    });
+  } catch (error) {
+    disable(error, "list-source");
+    return [];
+  }
+}
+
 export async function deleteLexicalChunks(input: {
   sourceId: string;
   /** Limit the delete to one page; omit to drop the whole source. */
   url?: string;
+  /** Limit the delete to many pages (batched). */
+  urls?: string[];
 }): Promise<void> {
   if (!(await ensureLexicalIndex())) return;
   if (getVectorBackend() === "pgvector" && isCloudPostgresReadOnly()) return;
+
+  const urls = [
+    ...new Set(
+      [...(input.urls ?? []), ...(input.url ? [input.url] : [])].filter(Boolean),
+    ),
+  ];
 
   try {
     if (getVectorBackend() === "pgvector") {
       const pool = getPgPool();
       if (!pool) return;
-      if (input.url) {
+      if (urls.length === 1) {
         await pool.query(
           `DELETE FROM ${LEXICAL_TABLE} WHERE source_id = $1 AND url = $2`,
-          [input.sourceId, input.url],
+          [input.sourceId, urls[0]],
+        );
+      } else if (urls.length > 1) {
+        await pool.query(
+          `DELETE FROM ${LEXICAL_TABLE} WHERE source_id = $1 AND url = ANY($2::text[])`,
+          [input.sourceId, urls],
         );
       } else {
         await pool.query(`DELETE FROM ${LEXICAL_TABLE} WHERE source_id = $1`, [
@@ -316,11 +406,16 @@ export async function deleteLexicalChunks(input: {
     }
 
     const client = getLibsqlClient();
-    if (input.url) {
-      await client.execute({
-        sql: `DELETE FROM ${LEXICAL_TABLE} WHERE source_id = ? AND url = ?`,
-        args: [input.sourceId, input.url],
-      });
+    if (urls.length > 0) {
+      const batchSize = 80;
+      for (let offset = 0; offset < urls.length; offset += batchSize) {
+        const batch = urls.slice(offset, offset + batchSize);
+        const placeholders = batch.map(() => "?").join(", ");
+        await client.execute({
+          sql: `DELETE FROM ${LEXICAL_TABLE} WHERE source_id = ? AND url IN (${placeholders})`,
+          args: [input.sourceId, ...batch],
+        });
+      }
     } else {
       await client.execute({
         sql: `DELETE FROM ${LEXICAL_TABLE} WHERE source_id = ?`,

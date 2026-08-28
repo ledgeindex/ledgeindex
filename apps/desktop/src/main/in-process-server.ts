@@ -192,7 +192,7 @@ export async function ensureInProcessServerListening(): Promise<{
 }> {
   const origin = resolveApiOrigin()
 
-  if (apiWorker && listening && (await probeServerReady())) {
+  if (apiWorker && listening) {
     status = 'ready'
     return { spawned: false, origin }
   }
@@ -207,17 +207,19 @@ export async function ensureInProcessServerListening(): Promise<{
 
   startPromise = (async () => {
     try {
+      // A live listener on :3015 is the API, even if /health is slow because
+      // apply/index is blocking the worker. Waiting for the port to free just
+      // throws "still in use" while that work is running.
+      if (apiWorker && listening) {
+        status = 'ready'
+        return
+      }
+
       if (await isPortListening(DESKTOP_SERVER_PORT)) {
-        if (await probeServerReady()) {
-          listening = true
-          status = 'ready'
-          console.log(`[desktop] local API already listening on ${origin}`)
-          return
-        }
-        console.warn(
-          `[desktop] port ${DESKTOP_SERVER_PORT} held by unknown process — waiting…`
-        )
-        await waitUntilPortFree()
+        listening = true
+        status = 'ready'
+        console.log(`[desktop] local API already listening on ${origin}`)
+        return
       }
 
       if (apiWorker) {
@@ -258,13 +260,16 @@ export function setRuntimeStatus(next: SidecarStatus): void {
 export async function getInProcessServerHealth(): Promise<SidecarHealth> {
   const origin = resolveApiOrigin()
   const managedStatus = status
+  const portOpen = await isPortListening(DESKTOP_SERVER_PORT)
   const reachable = await probeServerReady()
 
   let effective: SidecarStatus
-  if (reachable) {
+  if (reachable || portOpen) {
+    // FastEmbed / LibSQL can stall /health for a few seconds without the
+    // worker dying. Port still bound means the API is busy, not crashed.
     effective = 'ready'
     listening = true
-    if (status !== 'ready') status = 'ready'
+    if (status !== 'starting') status = 'ready'
   } else if (managedStatus === 'starting') {
     effective = 'starting'
   } else if (managedStatus === 'error') {
@@ -280,7 +285,7 @@ export async function getInProcessServerHealth(): Promise<SidecarHealth> {
   return {
     status: effective,
     managedStatus,
-    reachable,
+    reachable: reachable || portOpen,
     origin,
     port: DESKTOP_SERVER_PORT,
     setupProgress: null,
@@ -292,7 +297,11 @@ export async function getInProcessServerHealth(): Promise<SidecarHealth> {
 export async function restartInProcessServer(): Promise<SidecarHealth> {
   await stopInProcessServer()
   status = 'idle'
-  await new Promise((r) => setTimeout(r, 300))
+  try {
+    await waitUntilPortFree(5_000)
+  } catch {
+    await new Promise((r) => setTimeout(r, 300))
+  }
   try {
     await ensureInProcessServerListening()
   } catch (error) {

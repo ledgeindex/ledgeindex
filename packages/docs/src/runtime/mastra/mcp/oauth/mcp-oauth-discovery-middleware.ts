@@ -183,7 +183,7 @@ export async function mcpOAuthDiscoveryMiddleware(
   }
 
   if (!token) {
-    unauthorizedResponse(context, "Authentication required.");
+    await next();
     return;
   }
 

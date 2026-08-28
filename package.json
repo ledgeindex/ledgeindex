@@ -31,7 +31,11 @@
     "publish:packages": "node scripts/publish-packages.mjs",
     "release:packages": "node scripts/release-packages.mjs",
     "release:packages:check": "node scripts/release-packages.mjs --check",
-    "eval:golden": "node scripts/golden-retrieve.mjs --golden scripts/golden/mastra.json"
+    "eval:golden": "node --env-file=../.env scripts/run-retrieval-eval.mjs --golden scripts/golden/mastra-50.json",
+    "eval:golden:pr": "node --env-file=../.env scripts/run-retrieval-eval.mjs --golden scripts/golden/mastra-50.json --profile pr --out results/mastra-pr-current.json",
+    "eval:golden:full": "node --env-file=../.env scripts/run-retrieval-eval.mjs --golden scripts/golden/mastra-50.json --profile full --out results/mastra-full-current.json",
+    "eval:golden:smoke": "node scripts/golden-retrieve.mjs --golden scripts/golden/mastra.json",
+    "eval:golden:generate": "node scripts/generate-retrieval-golden.mjs"
   },
   "devDependencies": {
     "prettier": "^3.7.4"

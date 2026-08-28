@@ -9,6 +9,7 @@ import { AppHeaderSourceChatControls } from "@/components/app/app-header-source-
 import { AppHeaderSourceBuilderControls } from "@/components/app/app-header-source-builder-controls";
 import { AppHeaderWebCrawlControls } from "@/components/app/app-header-web-crawl-controls";
 import { AppHeaderIndexedNotice } from "@/components/app/app-header-indexed-notice";
+import { SourceRefreshJobsButton } from "@/components/sources/source-refresh-jobs-button";
 import { AppSidebar } from "@/components/app/app-sidebar";
 import { DesktopHeaderTrailing } from "@/components/desktop/desktop-chrome";
 import { DesktopSidecarBadge } from "@/components/desktop/desktop-sidecar-badge";
@@ -180,6 +181,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
               )}
               onDoubleClick={(event) => event.stopPropagation()}
             >
+              <SourceRefreshJobsButton />
               <ThemeToggle />
             </div>
             <DesktopHeaderTrailing />

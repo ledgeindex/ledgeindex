@@ -5,6 +5,7 @@ import {
   isAiAgentUserAgent,
   MARKDOWN_NEGOTIATION_PATHS,
   PUBLIC_MARKETING_PATHS,
+  shouldServeMarkdownNotFound,
 } from "@/lib/agent-readiness/constants";
 import {
   markdownForPath,
@@ -32,20 +33,22 @@ function markdownResponse(body: string, status = 200): NextResponse {
     status,
     headers: {
       "Content-Type": "text/markdown; charset=utf-8",
-      Vary: "Accept, Accept-Encoding",
+      Vary: "Accept, Accept-Encoding, User-Agent",
       "Cache-Control": status === 404 ? "no-store" : "public, max-age=300",
+      "X-LedgeIndex-Agent-Crawler": "allowed",
     },
   });
 }
 
 function withNegotiationVary(response: NextResponse): NextResponse {
-  response.headers.set("Vary", "Accept, Accept-Encoding");
+  response.headers.set("Vary", "Accept, Accept-Encoding, User-Agent");
   return response;
 }
 
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const accept = request.headers.get("accept");
+  const userAgent = request.headers.get("user-agent");
   const extra = agentFriendlyHeaders(request);
 
   if (pathname.startsWith("/_next") || /\.[a-z0-9]+$/i.test(pathname)) {
@@ -70,7 +73,7 @@ export function middleware(request: NextRequest) {
     return response;
   }
 
-  if (acceptsMarkdown(accept)) {
+  if (shouldServeMarkdownNotFound(accept, userAgent)) {
     return markdownResponse(notFoundMarkdown(pathname), 404);
   }
 

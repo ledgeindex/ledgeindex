@@ -4,13 +4,36 @@ import {
   cancelSourceRefresh,
   dismissSourceRefresh,
   getSourceRefreshStatus,
+  listSourceRefreshRuns,
   startSourceRefreshCheck,
+  toClientRefreshSnapshot,
 } from "../services/source-refresh.js";
 import { logError } from "../lib/logger.js";
 import { getRequestUserRole, getSourceForUser, getSourceForWrite, requireUser } from "../lib/resource-access.js";
 import type { RefreshMode } from "../refresh/active-refresh-runs.js";
 
 export async function refreshRoutes(fastify: FastifyInstance) {
+  fastify.get("/api/refresh/runs", async (request, reply) => {
+    const userId = await requireUser(request, reply);
+    if (!userId) return;
+
+    const role = await getRequestUserRole(request);
+    const runs = [];
+    for (const snapshot of listSourceRefreshRuns()) {
+      const source = await getSourceForWrite(snapshot.sourceId, userId, role);
+      if (!source) continue;
+      runs.push({
+        sourceId: source.id,
+        sourceName: source.name,
+        sourceStartUrl: source.config.startUrls?.[0] ?? "",
+        sourceScope: source.scope === "global" ? "global" : "personal",
+        hosting: source.hosting,
+        snapshot: toClientRefreshSnapshot(snapshot),
+      });
+    }
+    return { runs };
+  });
+
   fastify.post("/api/sources/:id/refresh/start", async (request, reply) => {
     const userId = await requireUser(request, reply);
     if (!userId) return;
@@ -31,7 +54,7 @@ export async function refreshRoutes(fastify: FastifyInstance) {
             ? "probe"
             : "discover";
       const snapshot = await startSourceRefreshCheck(id, { mode });
-      return { snapshot };
+      return { snapshot: toClientRefreshSnapshot(snapshot) };
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to start refresh";
@@ -53,7 +76,7 @@ export async function refreshRoutes(fastify: FastifyInstance) {
     }
 
     const snapshot = getSourceRefreshStatus(id);
-    return { snapshot };
+    return { snapshot: snapshot ? toClientRefreshSnapshot(snapshot) : null };
   });
 
   fastify.post("/api/sources/:id/refresh/cancel", async (request, reply) => {
@@ -84,7 +107,7 @@ export async function refreshRoutes(fastify: FastifyInstance) {
 
     try {
       const snapshot = await applySourceRefresh(id);
-      return { snapshot };
+      return { snapshot: toClientRefreshSnapshot(snapshot) };
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to apply refresh";

@@ -14,6 +14,86 @@ type DocsMastraContribution = {
   server?: unknown;
 };
 
+declare module "@ledgeindex/core/export/source-corpus.js" {
+  export type SourceCorpusChunk = {
+    id: string;
+    chunkIndex: number;
+    text: string;
+    title: string;
+    url: string;
+    category: string;
+    section: string;
+    headingPath: string[];
+    chunkKind: string;
+    contentType?: string;
+    language?: string;
+    crawlRoot?: string;
+    filePath?: string;
+    startLine?: number;
+    endLine?: number;
+    symbolName?: string;
+    symbolKind?: string;
+    pageKind?: string;
+  };
+
+  export type SourceCorpusPage = {
+    url: string;
+    title: string;
+    contentHash: string | null;
+    category: string;
+    crawlRoot: string | null;
+    chunkCount: number;
+    markdown: string;
+    chunks: SourceCorpusChunk[];
+  };
+
+  export type SourceCorpusExport = {
+    format: "ledgeindex.source-corpus";
+    formatVersion: 1;
+    exportedAt: string;
+    source: {
+      id: string;
+      slug: string;
+      name: string;
+      scope: "personal" | "global";
+      hosting: "local" | "cloud";
+      canonicalUrl: string | null;
+      indexedAt: string | null;
+      versionNumber: number;
+      versionLabel: string;
+      startUrls: string[];
+    };
+    index: {
+      vectorBackend: string;
+      catalogUpdatedAt: string;
+      pageCount: number;
+      chunkCount: number;
+    };
+    pages: SourceCorpusPage[];
+  };
+
+  export type SourceCorpusExportOptions = {
+    includeContent?: boolean;
+    includeChunks?: boolean;
+  };
+
+  export type WrittenSourceCorpus = {
+    outputDirectory: string;
+    manifestPath: string;
+    pageFiles: string[];
+  };
+
+  export function exportSourceCorpus(
+    sourceId: string,
+    options?: SourceCorpusExportOptions,
+  ): Promise<SourceCorpusExport>;
+
+  export function writeSourceCorpusToDirectory(
+    corpus: SourceCorpusExport,
+    outputDirectory: string,
+  ): Promise<WrittenSourceCorpus>;
+}
+
 declare module "@ledgeindex/docs/runtime/mastra/instance.js" {
   import type { Mastra } from "@mastra/core/mastra";
   export function setMastraInstance(mastra: Mastra): void;
@@ -355,7 +435,11 @@ declare module "@ledgeindex/core/vector/config.js" {
 }
 
 declare module "@ledgeindex/docs/runtime/refresh/active-refresh-runs.js" {
-  export type RefreshPageRef = { url: string; title: string };
+  export type RefreshPageRef = {
+    url: string;
+    title: string;
+    indexedUrl?: string;
+  };
 
   export type RefreshChangelog = {
     baselineCaptured: boolean;
@@ -381,6 +465,8 @@ declare module "@ledgeindex/docs/runtime/refresh/active-refresh-runs.js" {
     | "discovering"
     | "parsing"
     | "comparing"
+    | "deleting"
+    | "chunking"
     | "embedding"
     | "storing"
     | "done";

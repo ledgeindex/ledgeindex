@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { logInfo, logVerbose } from "../lib/logger.js";
 import { getStore } from "../db/index.js";
 import { assertIngestNotCancelled } from "../ingest/ingest-cancel.js";
@@ -31,6 +32,10 @@ import {
   getVectorStore,
 } from "../vector/store.js";
 import { markSourceIndexed } from "./source-index-status.js";
+import {
+  hashIndexedPageContent,
+  syncPageSnapshotHashes,
+} from "../db/page-snapshots.js";
 
 export type IndexPageInput = {
   url: string;
@@ -180,6 +185,7 @@ export async function prepareChunksForPages(input: {
           chunkKind,
           tokenCount: part.tokenCount,
           charCount: part.charCount,
+          contentHash: hashIndexedPageContent(page.markdown),
           ...(page.pageKind ? { pageKind: page.pageKind } : {}),
         },
       });
@@ -306,20 +312,38 @@ export async function storePreparedChunks(input: {
     );
   }
 
+  const pageSnapshots = new Map<
+    string,
+    { url: string; title: string; contentHash: string }
+  >();
+  const storedMetadata = prepared.map((item) => {
+    const contentHash = String(item.metadata.contentHash ?? "");
+    const url = String(item.metadata.url ?? "");
+    if (url && contentHash.startsWith("idx:") && !pageSnapshots.has(url)) {
+      pageSnapshots.set(url, {
+        url,
+        title: String(item.metadata.title ?? url),
+        contentHash,
+      });
+    }
+    const { contentHash: _contentHash, ...metadata } = item.metadata;
+    return metadata;
+  });
+
   await store.upsert({
     indexName: LEDGEINDEX_CHUNKS_INDEX,
     vectors: prepared.map((item) => item.vector),
-    metadata: prepared.map((item) => item.metadata),
+    metadata: storedMetadata,
     ids: prepared.map((item) => item.id),
   });
 
   const lexicalWritten = await upsertLexicalChunks(
-    prepared.map((item) => ({
+    prepared.map((item, index) => ({
       id: item.id,
       sourceId,
       url: String(item.metadata.url ?? ""),
       text: item.text,
-      metadata: item.metadata,
+      metadata: storedMetadata[index] ?? item.metadata,
     })),
   );
   if (lexicalWritten > 0) {
@@ -335,10 +359,7 @@ export async function storePreparedChunks(input: {
     total: chunkTotal,
   });
 
-  let catalog = buildMetadataCatalog(
-    sourceId,
-    prepared.map((item) => item.metadata),
-  );
+  let catalog = buildMetadataCatalog(sourceId, storedMetadata);
 
   if (replaceMode === "incremental") {
     const rebuilt = await import("../query/page-catalog-rebuild.js").then(
@@ -351,9 +372,24 @@ export async function storePreparedChunks(input: {
 
   await saveMetadataCatalog(sourceId, catalog);
 
+  if (pageSnapshots.size > 0) {
+    try {
+      await syncPageSnapshotHashes({
+        sourceId,
+        crawlRunId: randomUUID(),
+        snapshots: [...pageSnapshots.values()],
+      });
+    } catch (error) {
+      logVerbose("Could not persist page content hashes", "IndexChunks", {
+        sourceId,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
   const exampleCatalog = buildExampleCatalogFromMetadata(
     sourceId,
-    prepared.map((item) => item.metadata),
+    storedMetadata,
   );
   await saveExampleCatalog(sourceId, exampleCatalog);
 

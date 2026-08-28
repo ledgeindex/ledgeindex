@@ -34,6 +34,9 @@ type ActiveSource = {
   sourceId: string;
   sourceName: string;
   startUrls?: string[];
+  /** First crawl root — used by refresh review-selection links. */
+  startUrl?: string;
+  indexedAt?: string | null;
   scope?: "personal" | "global";
   hosting?: "local" | "cloud";
 };

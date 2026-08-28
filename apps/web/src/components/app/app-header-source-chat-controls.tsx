@@ -7,6 +7,7 @@ import { MessageSquarePlus } from "lucide-react";
 import { ChatTestPromptsSheet } from "@/components/chat/chat-test-prompts-sheet";
 import { HeaderSelect } from "@/components/ui/header-select";
 import { SourceCatalogButton } from "@/components/sources/source-catalog-dialog";
+import { SourceChatUpdateControls } from "@/components/sources/source-chat-update-controls";
 import { useOptionalSourceChatToolbar } from "@/contexts/source-chat-toolbar-context";
 import { useAuth } from "@/lib/auth-context";
 import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
@@ -63,9 +64,12 @@ export function AppHeaderSourceChatControls() {
           <span className="sm:hidden">←</span>
           <span className="hidden sm:inline">← Sources</span>
         </Link>
-        <h1 className="min-w-0 max-w-[10rem] truncate text-sm font-semibold text-foreground sm:max-w-[16rem] sm:text-base">
-          {sourceName}
-        </h1>
+        <div className="min-w-0">
+          <h1 className="min-w-0 max-w-[10rem] truncate text-sm font-semibold text-foreground sm:max-w-[16rem] sm:text-base">
+            {sourceName}
+          </h1>
+          <SourceChatUpdateControls variant="header-date" />
+        </div>
       </div>
 
       {/* Flex gap inherits header drag — this is the window move handle */}
@@ -139,6 +143,8 @@ export function AppHeaderSourceChatControls() {
             sourceId={sourceId}
             sourceName={sourceName}
             startUrls={sourceStartUrls}
+            sourceScope={activeSource?.scope}
+            sourceHosting={activeSource?.hosting}
             className="h-8 shrink-0 px-2.5 py-0"
           />
         ) : null}

@@ -6,6 +6,7 @@ import { IndexedFlashProvider } from "@/contexts/indexed-flash-context";
 import { DashboardToolbarProvider } from "@/contexts/dashboard-toolbar-context";
 import { SourceChatToolbarProvider } from "@/contexts/source-chat-toolbar-context";
 import { SourceBuilderToolbarProvider } from "@/contexts/source-builder-toolbar-context";
+import { SourceRefreshJobsProvider } from "@/contexts/source-refresh-jobs-context";
 
 function AppShellFallback() {
   return (
@@ -24,7 +25,9 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             <DashboardToolbarProvider>
               <SourceChatToolbarProvider>
                 <SourceBuilderToolbarProvider>
-                  <AppShell>{children}</AppShell>
+                  <SourceRefreshJobsProvider>
+                    <AppShell>{children}</AppShell>
+                  </SourceRefreshJobsProvider>
                 </SourceBuilderToolbarProvider>
               </SourceChatToolbarProvider>
             </DashboardToolbarProvider>

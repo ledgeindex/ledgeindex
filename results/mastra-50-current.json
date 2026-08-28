@@ -1,0 +1,4103 @@
+{
+  "generatedAt": "2026-08-28T20:40:34.029Z",
+  "sourceId": "f730533e-dd3d-448b-9927-6c45854d1a1b",
+  "settings": {
+    "scope": "personal",
+    "hosting": "local",
+    "strictness": "strict",
+    "expandPages": true
+  },
+  "aggregate": {
+    "cases": 50,
+    "hitAt1Rate": 0.5,
+    "hitAt3Rate": 0.7,
+    "hitAt5Rate": 0.8,
+    "meanReciprocalRank": 0.6223419913419912,
+    "rejectHitRate": 0.14,
+    "meanClaimCoverage": 0.9049999999999997
+  },
+  "byCategory": {
+    "getting-started/agents/confusable": {
+      "cases": 11,
+      "hitAt1Rate": 0.2727272727272727,
+      "hitAt3Rate": 0.45454545454545453,
+      "hitAt5Rate": 0.45454545454545453,
+      "meanReciprocalRank": 0.371900826446281,
+      "rejectHitRate": 0.18181818181818182,
+      "meanClaimCoverage": 0.8030303030303029
+    },
+    "workflows/tools": {
+      "cases": 10,
+      "hitAt1Rate": 0.5,
+      "hitAt3Rate": 0.9,
+      "hitAt5Rate": 1,
+      "meanReciprocalRank": 0.725,
+      "rejectHitRate": 0.2,
+      "meanClaimCoverage": 1
+    },
+    "memory/MCP": {
+      "cases": 10,
+      "hitAt1Rate": 0.7,
+      "hitAt3Rate": 0.9,
+      "hitAt5Rate": 1,
+      "meanReciprocalRank": 0.8033333333333333,
+      "rejectHitRate": 0.1,
+      "meanClaimCoverage": 0.975
+    },
+    "RAG/evals": {
+      "cases": 9,
+      "hitAt1Rate": 0.5555555555555556,
+      "hitAt3Rate": 0.7777777777777778,
+      "hitAt5Rate": 0.7777777777777778,
+      "meanReciprocalRank": 0.6555555555555556,
+      "rejectHitRate": 0.1111111111111111,
+      "meanClaimCoverage": 0.8148148148148148
+    },
+    "reference/auth/deploy/migration/confusable": {
+      "cases": 10,
+      "hitAt1Rate": 0.5,
+      "hitAt3Rate": 0.5,
+      "hitAt5Rate": 0.8,
+      "meanReciprocalRank": 0.5842857142857143,
+      "rejectHitRate": 0.1,
+      "meanClaimCoverage": 0.9333333333333332
+    }
+  },
+  "byDifficulty": {
+    "easy": {
+      "cases": 14,
+      "hitAt1Rate": 0.35714285714285715,
+      "hitAt3Rate": 0.6428571428571429,
+      "hitAt5Rate": 0.6428571428571429,
+      "meanReciprocalRank": 0.5047928262213977,
+      "rejectHitRate": 0.14285714285714285,
+      "meanClaimCoverage": 0.8928571428571429
+    },
+    "hard": {
+      "cases": 17,
+      "hitAt1Rate": 0.47058823529411764,
+      "hitAt3Rate": 0.6470588235294118,
+      "hitAt5Rate": 0.8235294117647058,
+      "meanReciprocalRank": 0.5941176470588234,
+      "rejectHitRate": 0.17647058823529413,
+      "meanClaimCoverage": 0.9068627450980391
+    },
+    "medium": {
+      "cases": 19,
+      "hitAt1Rate": 0.631578947368421,
+      "hitAt3Rate": 0.7894736842105263,
+      "hitAt5Rate": 0.8947368421052632,
+      "meanReciprocalRank": 0.7342105263157894,
+      "rejectHitRate": 0.10526315789473684,
+      "meanClaimCoverage": 0.9122807017543859
+    }
+  },
+  "cases": [
+    {
+      "id": "getting-started-build-with-mastra",
+      "question": "what are things you build with mastra",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0.16666666666666666,
+        "rejectHit": true,
+        "claimCoverage": 0.5,
+        "claimsCovered": 1,
+        "claimsTotal": 2,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 2017
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.8751185223290356,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9481045434467053,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.7721603650897011,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9381045434467052,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9021758952215644,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9021758952215644,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8751457214936696,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9121758952215644,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9021758952215644,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9021758952215644,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "getting-started-primitives",
+      "question": "what are the primitives",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": false,
+        "claimCoverage": 0.3333333333333333,
+        "claimsCovered": 1,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1870
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "title": "Mastra class",
+          "score": 0.8493422185091519,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "title": "Mastra class",
+          "score": 0.8493422185091519,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "title": "Mastra class",
+          "score": 0.8593422185091519,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7428875052056156,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7428875052056156,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7428875052056156,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7428875052056156,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7428875052056156,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7428875052056156,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "score": 0.7428875052056156,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "getting-started-project-bootstrap",
+      "question": "How do I bootstrap a new Mastra project?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0.09090909090909091,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 813
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.921334871188259,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.921334871188259,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8717195137481534,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.921334871188259,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9031381887785722,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.921334871188259,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.921334871188259,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.921334871188259,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.931334871188259,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.921334871188259,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "agents-create-minimal",
+      "question": "What fields are required for a minimal Mastra Agent?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 916
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/client-js/responses",
+          "title": "OpenAI Responses API",
+          "score": 0.7994864679966281,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/client-js/responses",
+          "title": "OpenAI Responses API",
+          "score": 0.7994864679966281,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/client-js/responses",
+          "title": "OpenAI Responses API",
+          "score": 0.7994864679966281,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/client-js/responses",
+          "title": "OpenAI Responses API",
+          "score": 0.7994864679966281,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/client-js/responses",
+          "title": "OpenAI Responses API",
+          "score": 0.8094864679966282,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/overview",
+          "title": "Connections",
+          "score": 0.7105931604147189,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/overview",
+          "title": "Connections",
+          "score": 0.7005931604147189,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/acp",
+          "title": "Agent Client Protocol",
+          "score": 0.6951834203088488,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/tools",
+          "title": "Tools",
+          "score": 0.6912932154744965,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/agents/createSkill",
+          "title": "`createSkill()`",
+          "score": 0.6625295592093302,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "agents-when-to-use",
+      "question": "When should I use an agent instead of a workflow?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": true,
+        "claimCoverage": 0.6666666666666666,
+        "claimsCovered": 2,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1095
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/workflows/agents-and-tools",
+          "title": "Agents and tools",
+          "score": 0.8958981608628245,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/agents-and-tools",
+          "title": "Agents and tools",
+          "score": 0.9058981608628245,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/agents-and-tools",
+          "title": "Agents and tools",
+          "score": 0.7310535720820447,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/agents-and-tools",
+          "title": "Agents and tools",
+          "score": 0.8958981608628245,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/agents-and-tools",
+          "title": "Agents and tools",
+          "score": 0.8958981608628245,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/workflow-methods/agent",
+          "title": "Workflow\\.agent()",
+          "score": 0.893023896472728,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/workflow-methods/agent",
+          "title": "Workflow\\.agent()",
+          "score": 0.8830238964727279,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8428498079383181,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8575343703704577,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/guides/multi-agent-systems",
+          "title": "Multi-agent systems",
+          "score": 0.7609224115878548,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "agents-generate-versus-stream",
+      "question": "What is the difference between Agent.generate and Agent.stream?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": false,
+        "claimCoverage": 0.6666666666666666,
+        "claimsCovered": 2,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1098
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/migrations/network-to-supervisor",
+          "title": "Migrate from `.network()` to supervisor agents",
+          "score": 0.9134776216592477,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/network-to-supervisor",
+          "title": "Migrate from `.network()` to supervisor agents",
+          "score": 0.9034776216592477,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/network-to-supervisor",
+          "title": "Migrate from `.network()` to supervisor agents",
+          "score": 0.9034776216592477,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/network-to-supervisor",
+          "title": "Migrate from `.network()` to supervisor agents",
+          "score": 0.9034776216592477,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/network-to-supervisor",
+          "title": "Migrate from `.network()` to supervisor agents",
+          "score": 0.9034776216592477,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/network-to-supervisor",
+          "title": "Migrate from `.network()` to supervisor agents",
+          "score": 0.9034776216592477,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/agents/generate",
+          "title": "Agent.generate()",
+          "score": 0.9068194906834777,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/agents/generate",
+          "title": "Agent.generate()",
+          "score": 0.8968194906834777,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/agents/generate",
+          "title": "Agent.generate()",
+          "score": 0.8968194906834777,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/agents/generate",
+          "title": "Agent.generate()",
+          "score": 0.8968194906834777,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "agents-registration-benefits",
+      "question": "Why retrieve a registered agent with getAgentById instead of importing it directly?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 0.5,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1044
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/core/getAgentById",
+          "title": "Mastra.getAgentById()",
+          "score": 0.9338199517679167,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/core/getAgentById",
+          "title": "Mastra.getAgentById()",
+          "score": 0.9438199517679167,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/overview",
+          "title": "Agents",
+          "score": 0.8794995385809644,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/overview",
+          "title": "Agents",
+          "score": 0.8794995385809644,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/overview",
+          "title": "Agents",
+          "score": 0.8794995385809644,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/overview",
+          "title": "Agents",
+          "score": 0.8894995385809644,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/overview",
+          "title": "Agents",
+          "score": 0.8794995385809644,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/agent",
+          "title": "Agent class",
+          "score": 0.8393308905115755,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/workflow-methods/agent",
+          "title": "Workflow\\.agent()",
+          "score": 0.8059911442294613,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "develop-local-studio",
+      "question": "How do I run Mastra locally and where do I open Studio?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 0.3333333333333333,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1027
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/studio/deployment",
+          "title": "Studio deployment",
+          "score": 0.880628725968707,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/studio/deployment",
+          "title": "Studio deployment",
+          "score": 0.9529785694310429,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/studio/deployment",
+          "title": "Studio deployment",
+          "score": 0.8316449878693072,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/studio/deployment",
+          "title": "Studio deployment",
+          "score": 0.9429785694310429,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/studio/overview",
+          "title": "Studio",
+          "score": 0.9257894166403364,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/studio/overview",
+          "title": "Studio",
+          "score": 0.9157894166403364,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/studio/overview",
+          "title": "Studio",
+          "score": 0.9157894166403364,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/studio/overview",
+          "title": "Studio",
+          "score": 0.9157894166403364,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/studio/overview",
+          "title": "Studio",
+          "score": 0.9157894166403364,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.917816100876891,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "develop-file-based-discovery",
+      "question": "When does Mastra discover file-based agents?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1069
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.9410909986122018,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.9410909986122018,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.9410909986122018,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.9510909986122018,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.8734608689952935,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/file-based-agents/workspace",
+          "title": "Workspace",
+          "score": 0.9284841834010082,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/file-based-agents/workspace",
+          "title": "Workspace",
+          "score": 0.9184841834010082,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/file-based-agents/workspace",
+          "title": "Workspace",
+          "score": 0.9184841834010082,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/sandbox/overview",
+          "title": "Sandboxes and filesystems",
+          "score": 0.8979246711846379,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/browser",
+          "title": "Browser",
+          "score": 0.8566158880014189,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "develop-project-structure",
+      "question": "What project structure does Mastra recommend for framework code?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1069
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.9458626203649947,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.9458626203649947,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.9558626203649947,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.7773879102273394,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/develop",
+          "title": "Develop",
+          "score": 0.9458626203649947,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/project-structure",
+          "title": "Project structure",
+          "score": 0.9400797866293871,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/project-structure",
+          "title": "Project structure",
+          "score": 0.9110905693466226,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/project-structure",
+          "title": "Project structure",
+          "score": 0.9300797866293871,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/overview",
+          "title": "Deploy",
+          "score": 0.8308448608911072,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/templates/overview",
+          "title": "Templates",
+          "score": 0.8224570862224093,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "workflows-core-principles",
+      "question": "What are the core building blocks of a Mastra workflow?",
+      "category": "workflows/tools",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 980
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.9264657772602753,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.9195852323965691,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.9164657772602753,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.9164657772602753,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.9164657772602753,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.9164657772602753,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.9164657772602753,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.9164657772602753,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.9164657772602753,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.9164657772602753,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "workflows-create-step",
+      "question": "How is a workflow step defined and what does execute receive?",
+      "category": "workflows/tools",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 981
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.909727121691593,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.919727121691593,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.909727121691593,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.909727121691593,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.909727121691593,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.909727121691593,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.909727121691593,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.909727121691593,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.909727121691593,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.909727121691593,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "workflows-create-and-commit",
+      "question": "How do I compose and finalize a Mastra workflow?",
+      "category": "workflows/tools",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 0.5,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 911
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/datasets/running-experiments",
+          "title": "Running experiments",
+          "score": 0.9204521448647058,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/datasets/running-experiments",
+          "title": "Running experiments",
+          "score": 0.9204521448647058,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/datasets/running-experiments",
+          "title": "Running experiments",
+          "score": 0.9204521448647058,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/datasets/running-experiments",
+          "title": "Running experiments",
+          "score": 0.7371768251019347,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/datasets/running-experiments",
+          "title": "Running experiments",
+          "score": 0.9204521448647058,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/datasets/running-experiments",
+          "title": "Running experiments",
+          "score": 0.9204521448647058,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/datasets/running-experiments",
+          "title": "Running experiments",
+          "score": 0.9204521448647058,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/datasets/running-experiments",
+          "title": "Running experiments",
+          "score": 0.9204521448647058,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/datasets/running-experiments",
+          "title": "Running experiments",
+          "score": 0.9304521448647058,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/datasets/running-experiments",
+          "title": "Running experiments",
+          "score": 0.9204521448647058,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "workflows-start-versus-stream",
+      "question": "When should I use workflow start versus stream?",
+      "category": "workflows/tools",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 916
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8727931533156128,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8727931533156128,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8727931533156128,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8727931533156128,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8727931533156128,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8827931533156128,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8727931533156128,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8727931533156128,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8727931533156128,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/overview",
+          "title": "Workflows",
+          "score": 0.8727931533156128,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "workflows-result-statuses",
+      "question": "Which status values can a Mastra workflow result have?",
+      "category": "workflows/tools",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": true,
+        "reciprocalRank": 0.25,
+        "rejectHit": true,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 963
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/workflows/run-methods/startAsync",
+          "title": "Run.startAsync()",
+          "score": 0.9189667432273987,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/run-methods/startAsync",
+          "title": "Run.startAsync()",
+          "score": 0.9189667432273987,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/run-methods/startAsync",
+          "title": "Run.startAsync()",
+          "score": 0.9289667432273987,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/error-handling",
+          "title": "Error handling",
+          "score": 0.8899086791588348,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/error-handling",
+          "title": "Error handling",
+          "score": 0.8831650329264668,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/error-handling",
+          "title": "Error handling",
+          "score": 0.8799086791588348,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/error-handling",
+          "title": "Error handling",
+          "score": 0.8799086791588348,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/error-handling",
+          "title": "Error handling",
+          "score": 0.8799086791588348,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/error-handling",
+          "title": "Error handling",
+          "score": 0.8799086791588348,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/error-handling",
+          "title": "Error handling",
+          "score": 0.8799086791588348,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "workflow-control-parallel",
+      "question": "How does parallel workflow execution shape its output?",
+      "category": "workflows/tools",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 956
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8767387855934121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8081229171087851,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.844700756870091,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8767387855934121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8767387855934121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8867387855934121,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8767387855934121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8767387855934121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8767387855934121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8767387855934121,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "workflow-control-branch",
+      "question": "What schema and execution rules apply to workflow branch?",
+      "category": "workflows/tools",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 0.5,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 931
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/workflows",
+          "title": "Workflows",
+          "score": 0.8584209543841335,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/workflows",
+          "title": "Workflows",
+          "score": 0.8584209543841335,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/workflows",
+          "title": "Workflows",
+          "score": 0.8584209543841335,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/workflows",
+          "title": "Workflows",
+          "score": 0.8684209543841335,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/workflows",
+          "title": "Workflows",
+          "score": 0.8584209543841335,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/workflows",
+          "title": "Workflows",
+          "score": 0.8584209543841335,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/workflows",
+          "title": "Workflows",
+          "score": 0.8584209543841335,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/workflows",
+          "title": "Workflows",
+          "score": 0.8584209543841335,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8226237943707425,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.8326237943707425,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "workflow-control-foreach",
+      "question": "How does foreach handle arrays and concurrency?",
+      "category": "workflows/tools",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 0.5,
+        "rejectHit": true,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 917
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/workflows/workflow-methods/foreach",
+          "title": "Workflow\\.foreach()",
+          "score": 0.8034789847507887,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/workflow-methods/foreach",
+          "title": "Workflow\\.foreach()",
+          "score": 0.9258365493830536,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/workflow-methods/foreach",
+          "title": "Workflow\\.foreach()",
+          "score": 0.8914714568485934,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/workflow-methods/foreach",
+          "title": "Workflow\\.foreach()",
+          "score": 0.9158365493830536,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/workflow-methods/foreach",
+          "title": "Workflow\\.foreach()",
+          "score": 0.9158365493830536,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.9034286114018535,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.9034286114018535,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.9034286114018535,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.9034286114018535,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/control-flow",
+          "title": "Control flow",
+          "score": 0.876295027238245,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "workflow-suspend-resume",
+      "question": "How do suspend and resume preserve a workflow run?",
+      "category": "workflows/tools",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 960
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/workflows/suspend-and-resume",
+          "title": "Suspend and resume",
+          "score": 0.848054601416996,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/suspend-and-resume",
+          "title": "Suspend and resume",
+          "score": 0.9332329391759875,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/suspend-and-resume",
+          "title": "Suspend and resume",
+          "score": 0.9232329391759875,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/suspend-and-resume",
+          "title": "Suspend and resume",
+          "score": 0.9104704969904966,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/suspend-and-resume",
+          "title": "Suspend and resume",
+          "score": 0.9232329391759875,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/run-methods/resume",
+          "title": "Run.resume()",
+          "score": 0.7348672875441444,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/run-methods/resume",
+          "title": "Run.resume()",
+          "score": 0.9050718216244755,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/run-methods/resume",
+          "title": "Run.resume()",
+          "score": 0.8522899060963011,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/run-methods/resume",
+          "title": "Run.resume()",
+          "score": 0.9150718216244755,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/client-js/workflows",
+          "title": "Workflows API",
+          "score": 0.9014440682959836,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "tools-create-signature",
+      "question": "What is the current createTool execute signature?",
+      "category": "workflows/tools",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 0.5,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 989
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/tools",
+          "title": "Tools",
+          "score": 0.9203344997268168,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/tools",
+          "title": "Tools",
+          "score": 0.9103344997268168,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/tools",
+          "title": "Tools",
+          "score": 0.9103344997268168,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/tools",
+          "title": "Tools",
+          "score": 0.9103344997268168,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/tools",
+          "title": "Tools",
+          "score": 0.9069437007570149,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/tools",
+          "title": "Tools",
+          "score": 0.8969437007570149,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/tools",
+          "title": "Tools",
+          "score": 0.8969437007570149,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/tools",
+          "title": "Tools",
+          "score": 0.8969437007570149,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/tools",
+          "title": "Tools",
+          "score": 0.8969437007570149,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/tools",
+          "title": "Tools",
+          "score": 0.8969437007570149,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "memory-feature-layers",
+      "question": "Which memory features can a Mastra agent enable?",
+      "category": "memory/MCP",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 0.5,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1014
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/memory/memory-class",
+          "title": "Memory class",
+          "score": 0.9453467025624165,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/memory/memory-class",
+          "title": "Memory class",
+          "score": 0.9353467025624165,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/memory/memory-class",
+          "title": "Memory class",
+          "score": 0.9353467025624165,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/memory/memory-class",
+          "title": "Memory class",
+          "score": 0.9353467025624165,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/memory/memory-class",
+          "title": "Memory class",
+          "score": 0.9353467025624165,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.8851071943154022,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9240236176575745,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9140236176575744,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9140236176575744,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9140236176575744,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "memory-quickstart-storage",
+      "question": "What does the basic Mastra memory setup require?",
+      "category": "memory/MCP",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1017
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9092076668639202,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9192076668639202,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9092076668639202,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9092076668639202,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9092076668639202,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9092076668639202,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9092076668639202,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/message-history",
+          "title": "Message history",
+          "score": 0.8910814174578725,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/message-history",
+          "title": "Message history",
+          "score": 0.9010814174578725,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/message-history",
+          "title": "Message history",
+          "score": 0.8910814174578725,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "memory-thread-resource",
+      "question": "What do resource and thread mean in Mastra message history?",
+      "category": "memory/MCP",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": true,
+        "reciprocalRank": 0.2,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1093
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/memory/message-history",
+          "title": "Message history",
+          "score": 0.9553033985146386,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/message-history",
+          "title": "Message history",
+          "score": 0.9453033985146386,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/message-history",
+          "title": "Message history",
+          "score": 0.9453033985146386,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/message-history",
+          "title": "Message history",
+          "score": 0.9037328823940869,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/message-history",
+          "title": "Message history",
+          "score": 0.8130382507616856,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/message-history",
+          "title": "Message history",
+          "score": 0.9453033985146386,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/message-history",
+          "title": "Message history",
+          "score": 0.9453033985146386,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/client-js/memory",
+          "title": "Memory API",
+          "score": 0.8911287958950739,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/client-js/memory",
+          "title": "Memory API",
+          "score": 0.8811287958950739,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/client-js/memory",
+          "title": "Memory API",
+          "score": 0.8811287958950739,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "memory-model-context-placement",
+      "question": "Where do message history and cross-thread semantic recall appear in model context?",
+      "category": "memory/MCP",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1118
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.8523224443799058,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9344770818185348,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9344770818185348,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9444770818185348,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9344770818185348,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9344770818185348,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9344770818185348,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/semantic-recall-processor",
+          "title": "SemanticRecall",
+          "score": 0.741666489593194,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/semantic-recall-processor",
+          "title": "SemanticRecall",
+          "score": 0.8787639938777809,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/semantic-recall-processor",
+          "title": "SemanticRecall",
+          "score": 0.8887639938777809,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "memory-subagent-isolation",
+      "question": "How is memory scoped when a supervisor delegates to a subagent?",
+      "category": "memory/MCP",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1006
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9329234822747441,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9329234822747441,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9329234822747441,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9329234822747441,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9429234822747441,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.7350204298099511,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/overview",
+          "title": "Memory",
+          "score": 0.9329234822747441,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/human-in-the-loop",
+          "title": "Human-in-the-loop",
+          "score": 0.8917722168619275,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/human-in-the-loop",
+          "title": "Human-in-the-loop",
+          "score": 0.8917722168619275,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/agents/human-in-the-loop",
+          "title": "Human-in-the-loop",
+          "score": 0.8917722168619275,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "memory-semantic-recall-mechanics",
+      "question": "How does semantic recall retrieve old messages?",
+      "category": "memory/MCP",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 978
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9394584920574782,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9294584920574782,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9160998885026399,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9294584920574782,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.8965508703093747,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9294584920574782,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9294584920574782,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9294584920574782,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9294584920574782,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/semantic-recall-processor",
+          "title": "SemanticRecall",
+          "score": 0.8269805121011399,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "memory-semantic-recall-options",
+      "question": "Which options tune Mastra semantic recall?",
+      "category": "memory/MCP",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 0.75,
+        "claimsCovered": 3,
+        "claimsTotal": 4,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1034
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9245665245954606,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9145665245954606,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.8830851960416389,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9145665245954606,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9145665245954606,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9145665245954606,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9145665245954606,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9145665245954606,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/memory/semantic-recall",
+          "title": "Semantic recall",
+          "score": 0.9015876946691315,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/semantic-recall-processor",
+          "title": "SemanticRecall",
+          "score": 0.9225042371045609,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "mcp-client-server-roles",
+      "question": "What are MCPClient and MCPServer used for in Mastra?",
+      "category": "memory/MCP",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1047
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9155796700260057,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9255796700260057,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9155796700260057,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9155796700260057,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9155796700260057,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9155796700260057,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.6720251056401466,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9155796700260057,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9155796700260057,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.8945745817546975,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "mcp-static-runtime-tools",
+      "question": "When should MCP tools be loaded with listTools versus listToolsets?",
+      "category": "memory/MCP",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 0.3333333333333333,
+        "rejectHit": true,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 961
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/tools/mcp-client",
+          "title": "MCPClient",
+          "score": 0.9058940940341789,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/mcp-client",
+          "title": "MCPClient",
+          "score": 0.9058940940341789,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/mcp-client",
+          "title": "MCPClient",
+          "score": 0.9058940940341789,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/mcp-client",
+          "title": "MCPClient",
+          "score": 0.8955468874409076,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/mcp-client",
+          "title": "MCPClient",
+          "score": 0.9018878184406566,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/mcp-client",
+          "title": "MCPClient",
+          "score": 0.9058940940341789,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/mcp-client",
+          "title": "MCPClient",
+          "score": 0.9158940940341789,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/mcp-client",
+          "title": "MCPClient",
+          "score": 0.9058940940341789,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/mcp-client",
+          "title": "MCPClient",
+          "score": 0.9058940940341789,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/mcp-client",
+          "title": "MCPClient",
+          "score": 0.9058940940341789,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "mcp-security-controls",
+      "question": "What security controls does Mastra recommend for MCP connections?",
+      "category": "memory/MCP",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 4,
+        "claimsTotal": 4,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 949
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9169660624360931,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9269660624360931,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9169660624360931,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.8609245871805014,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9169660624360931,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9169660624360931,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9169660624360931,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9169660624360931,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.7258583354590615,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/connections/mcp",
+          "title": "MCP",
+          "score": 0.9169660624360931,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "rag-pipeline-stages",
+      "question": "What are the stages of a basic Mastra RAG pipeline?",
+      "category": "RAG/evals",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": false,
+        "claimCoverage": 0,
+        "claimsCovered": 0,
+        "claimsTotal": 4,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1062
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/processors/processor-interface",
+          "title": "Processor interface",
+          "score": 0.671340019447827,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/processor-interface",
+          "title": "Processor interface",
+          "score": 0.666340019447827,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/processor-interface",
+          "title": "Processor interface",
+          "score": 0.666340019447827,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/processor-interface",
+          "title": "Processor interface",
+          "score": 0.666340019447827,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/processor-interface",
+          "title": "Processor interface",
+          "score": 0.666340019447827,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/processor-interface",
+          "title": "Processor interface",
+          "score": 0.666340019447827,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/processor-interface",
+          "title": "Processor interface",
+          "score": 0.6613400194478269,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/processor-interface",
+          "title": "Processor interface",
+          "score": 0.6613400194478269,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/processor-interface",
+          "title": "Processor interface",
+          "score": 0.666340019447827,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/processors/processor-interface",
+          "title": "Processor interface",
+          "score": 0.6613400194478269,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "rag-system-capabilities",
+      "question": "What does Mastra's RAG system provide?",
+      "category": "RAG/evals",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1060
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/rag/overview",
+          "title": "RAG (Retrieval-Augmented Generation) in Mastra",
+          "score": 0.9283792350035691,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/overview",
+          "title": "RAG (Retrieval-Augmented Generation) in Mastra",
+          "score": 0.9383792350035691,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/overview",
+          "title": "RAG (Retrieval-Augmented Generation) in Mastra",
+          "score": 0.9030240732888498,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/graph-rag-tool",
+          "title": "createGraphRAGTool()",
+          "score": 0.9187607476637571,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/graph-rag-tool",
+          "title": "createGraphRAGTool()",
+          "score": 0.9087607476637571,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/graph-rag-tool",
+          "title": "createGraphRAGTool()",
+          "score": 0.9087607476637571,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/graph-rag-tool",
+          "title": "createGraphRAGTool()",
+          "score": 0.9087607476637571,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/guides/context-engineering",
+          "title": "Context engineering",
+          "score": 0.8332591738628441,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/guides/context-engineering",
+          "title": "Context engineering",
+          "score": 0.9187252482628036,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/retrieval",
+          "title": "Retrieval in RAG systems",
+          "score": 0.87715729403363,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "rag-document-input-formats",
+      "question": "Which content formats can initialize an MDocument?",
+      "category": "RAG/evals",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 0.6666666666666666,
+        "claimsCovered": 2,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 855
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/rag/chunking-and-embedding",
+          "title": "Chunking and embedding documents",
+          "score": 0.9185878929693518,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/chunking-and-embedding",
+          "title": "Chunking and embedding documents",
+          "score": 0.9285878929693518,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/chunking-and-embedding",
+          "title": "Chunking and embedding documents",
+          "score": 0.9185878929693518,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/chunking-and-embedding",
+          "title": "Chunking and embedding documents",
+          "score": 0.9185878929693518,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/document",
+          "title": "MDocument",
+          "score": 0.9002870362004681,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/document",
+          "title": "MDocument",
+          "score": 0.8996820669972878,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/document-chunker-tool",
+          "title": "createDocumentChunkerTool()",
+          "score": 0.8869721229224085,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/chunk",
+          "title": ".chunk()",
+          "score": 0.8587185626950334,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/graph-rag-guide",
+          "title": "GraphRAG",
+          "score": 0.8087203518265697,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/extract-params",
+          "title": "ExtractParams",
+          "score": 0.7185787005606336,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "rag-chunk-strategies",
+      "question": "Which chunking strategies does MDocument support?",
+      "category": "RAG/evals",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 0.5,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 853
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/tools/document-chunker-tool",
+          "title": "createDocumentChunkerTool()",
+          "score": 0.9314318455146042,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/document-chunker-tool",
+          "title": "createDocumentChunkerTool()",
+          "score": 0.9414318455146042,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/tools/document-chunker-tool",
+          "title": "createDocumentChunkerTool()",
+          "score": 0.8095233250335396,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/chunking-and-embedding",
+          "title": "Chunking and embedding documents",
+          "score": 0.918733041714805,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/chunking-and-embedding",
+          "title": "Chunking and embedding documents",
+          "score": 0.928733041714805,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/chunking-and-embedding",
+          "title": "Chunking and embedding documents",
+          "score": 0.918733041714805,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/chunking-and-embedding",
+          "title": "Chunking and embedding documents",
+          "score": 0.8128788696334567,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/chunk",
+          "title": ".chunk()",
+          "score": 0.8839881814806538,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/chunk",
+          "title": ".chunk()",
+          "score": 0.8655272211674758,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/overview",
+          "title": "RAG (Retrieval-Augmented Generation) in Mastra",
+          "score": 0.8687175052528723,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "rag-embedding-dimensions",
+      "question": "What must match when reducing embedding dimensions?",
+      "category": "RAG/evals",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0.06666666666666667,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 937
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/rag/vector-databases",
+          "title": "Storing embeddings in a vector database",
+          "score": 0.9130761046100919,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/vector-databases",
+          "title": "Storing embeddings in a vector database",
+          "score": 0.9130761046100919,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/vector-databases",
+          "title": "Storing embeddings in a vector database",
+          "score": 0.9130761046100919,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/vector-databases",
+          "title": "Storing embeddings in a vector database",
+          "score": 0.9130761046100919,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/vector-databases",
+          "title": "Storing embeddings in a vector database",
+          "score": 0.9230761046100919,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/vector-databases",
+          "title": "Storing embeddings in a vector database",
+          "score": 0.9130761046100919,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/vector-databases",
+          "title": "Storing embeddings in a vector database",
+          "score": 0.9130761046100919,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/vector-databases",
+          "title": "Storing embeddings in a vector database",
+          "score": 0.9130761046100919,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/rag/vector-databases",
+          "title": "Storing embeddings in a vector database",
+          "score": 0.9130761046100919,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/vectors/turbopuffer",
+          "title": "Turbopuffer vector store",
+          "score": 0.8933741628222486,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "evals-scorer-purpose",
+      "question": "Why does Mastra use scorers for AI evaluations?",
+      "category": "RAG/evals",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 0.3333333333333333,
+        "rejectHit": true,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 950
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/evals/custom-scorers",
+          "title": "Custom scorers",
+          "score": 0.9414545900430678,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/custom-scorers",
+          "title": "Custom scorers",
+          "score": 0.9314545900430677,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/custom-scorers",
+          "title": "Custom scorers",
+          "score": 0.9314545900430677,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/custom-scorers",
+          "title": "Custom scorers",
+          "score": 0.9314545900430677,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/custom-scorers",
+          "title": "Custom scorers",
+          "score": 0.9314545900430677,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/custom-scorers",
+          "title": "Custom scorers",
+          "score": 0.9314545900430677,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/custom-scorers",
+          "title": "Custom scorers",
+          "score": 0.9314545900430677,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/custom-scorers",
+          "title": "Custom scorers",
+          "score": 0.9314545900430677,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/custom-scorers",
+          "title": "Custom scorers",
+          "score": 0.9314545900430677,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/custom-scorers",
+          "title": "Custom scorers",
+          "score": 0.9314545900430677,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "evals-live-sampling",
+      "question": "How does live evaluation sampling work in Mastra?",
+      "category": "RAG/evals",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 4,
+        "claimsTotal": 4,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 943
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9192550835107518,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.917172934781836,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9192550835107518,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9292550835107518,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9192550835107518,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.8487485268356247,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9192550835107518,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/observability/tracing/overview",
+          "title": "Traces",
+          "score": 0.8782919809273899,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/observability/tracing/overview",
+          "title": "Traces",
+          "score": 0.8882919809273899,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/observability/tracing/overview",
+          "title": "Traces",
+          "score": 0.8782919809273899,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "evals-score-persistence",
+      "question": "What is required for Mastra scorer results to persist?",
+      "category": "RAG/evals",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 927
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9226375655348951,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9226375655348951,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9226375655348951,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9226375655348951,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9277041965811599,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9326375655348951,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.9226375655348951,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/evals/answer-relevancy",
+          "title": "Answer relevancy scorer",
+          "score": 0.8549550394283466,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/evals/answer-relevancy",
+          "title": "Answer relevancy scorer",
+          "score": 0.8449550394283466,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/evals/answer-relevancy",
+          "title": "Answer relevancy scorer",
+          "score": 0.8449550394283466,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "getting-started-basic-setup-confusable",
+      "question": "what is the basic setup",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 0.6666666666666666,
+        "claimsCovered": 2,
+        "claimsTotal": 3,
+        "relaxedPassUsed": true,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1736
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs",
+          "title": "Get started",
+          "score": 0.3773831083686373,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs",
+          "title": "Get started",
+          "score": 0.3673831083686373,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "evals-run-evals-data-results",
+      "question": "What data does runEvals accept and what aggregate results does it return?",
+      "category": "RAG/evals",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 0.6666666666666666,
+        "claimsCovered": 2,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 803
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/evals/running-in-ci",
+          "title": "Running scorers in CI",
+          "score": 0.8652548823224817,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/running-in-ci",
+          "title": "Running scorers in CI",
+          "score": 0.8752548823224817,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/running-in-ci",
+          "title": "Running scorers in CI",
+          "score": 0.8652548823224817,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/evals-with-memory",
+          "title": "Evals with memory",
+          "score": 0.7834931049777999,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/evals-with-memory",
+          "title": "Evals with memory",
+          "score": 0.7834931049777999,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/evals-with-memory",
+          "title": "Evals with memory",
+          "score": 0.7934931049777999,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/evals-with-memory",
+          "title": "Evals with memory",
+          "score": 0.7834931049777999,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/evals-with-memory",
+          "title": "Evals with memory",
+          "score": 0.7834931049777999,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "reference-mastra-registry",
+      "question": "What can be registered on the Mastra class?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 939
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/core/mastra-class",
+          "title": "Mastra class",
+          "score": 0.9381070170818679,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/core/mastra-class",
+          "title": "Mastra class",
+          "score": 0.9281070170818679,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/core/mastra-class",
+          "title": "Mastra class",
+          "score": 0.9281070170818679,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/editor/processor-provider",
+          "title": "ProcessorProvider",
+          "score": 0.8815409655937103,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/editor/processor-provider",
+          "title": "ProcessorProvider",
+          "score": 0.8815409655937103,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/editor/processor-provider",
+          "title": "ProcessorProvider",
+          "score": 0.8915409655937103,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/auth/okta",
+          "title": "MastraAuthOkta and MastraRBACOkta class",
+          "score": 0.8860790295707694,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/custom-api-routes",
+          "title": "Custom API routes",
+          "score": 0.8735720601035938,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/evals/overview",
+          "title": "Evals",
+          "score": 0.860594594999617,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/signals/signal-provider",
+          "title": "SignalProvider",
+          "score": 0.8467947963287784,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "reference-tool-id-lookups",
+      "question": "How do Mastra tool registration keys differ from intrinsic tool IDs?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": true,
+        "reciprocalRank": 0.25,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 4,
+        "claimsTotal": 4,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 927
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/core/getToolById",
+          "title": "Mastra.getToolById()",
+          "score": 0.9409624992422547,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/core/getGatewayById",
+          "title": "Mastra.getGatewayById()",
+          "score": 0.9188741667091849,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "title": "Mastra class",
+          "score": 0.9032665751483367,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/core/mastra-class",
+          "title": "Mastra class",
+          "score": 0.8985896533125205,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/core/listTools",
+          "title": "Mastra.listTools()",
+          "score": 0.8754014928536348,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/workflows/dynamic-workflows",
+          "title": "Dynamic workflows",
+          "score": 0.8623442195651371,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/core/getMCPServer",
+          "title": "Mastra.getMCPServer()",
+          "score": 0.857671032164428,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/core/listMCPServers",
+          "title": "Mastra.listMCPServers()",
+          "score": 0.8087760578096072,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/workflows/dynamic-workflow-definition",
+          "title": "Dynamic workflow definition",
+          "score": 0.7508232784660057,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/editor/tools",
+          "title": "Tool configuration",
+          "score": 0.7486302150492873,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "auth-protected-surfaces",
+      "question": "What does configuring Mastra authentication secure?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 930
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/auth/overview",
+          "title": "Auth",
+          "score": 0.9419362035724785,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/auth/overview",
+          "title": "Auth",
+          "score": 0.9319362035724785,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/custom-api-routes",
+          "title": "Custom API routes",
+          "score": 0.9034760740731685,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/custom-api-routes",
+          "title": "Custom API routes",
+          "score": 0.9034760740731685,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/custom-api-routes",
+          "title": "Custom API routes",
+          "score": 0.9034760740731685,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/custom-api-routes",
+          "title": "Custom API routes",
+          "score": 0.9034760740731685,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/custom-api-routes",
+          "title": "Custom API routes",
+          "score": 0.9134760740731686,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/custom-api-routes",
+          "title": "Custom API routes",
+          "score": 0.9034760740731685,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/custom-api-routes",
+          "title": "Custom API routes",
+          "score": 0.9034760740731685,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/auth/custom-auth-provider",
+          "title": "Custom auth provider",
+          "score": 0.9048757745685982,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "auth-custom-prefix-warning",
+      "question": "What auth change is needed after setting a custom server.apiPrefix?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": true,
+        "reciprocalRank": 0.2,
+        "rejectHit": true,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1033
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/guides/authentication-identity",
+          "title": "Authentication and identity",
+          "score": 0.910621860534911,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/guides/authentication-identity",
+          "title": "Authentication and identity",
+          "score": 0.920621860534911,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/guides/authentication-identity",
+          "title": "Authentication and identity",
+          "score": 0.910621860534911,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/guides/authentication-identity",
+          "title": "Authentication and identity",
+          "score": 0.910621860534911,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/guides/authentication-identity",
+          "title": "Authentication and identity",
+          "score": 0.910621860534911,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/guides/authentication-identity",
+          "title": "Authentication and identity",
+          "score": 0.910621860534911,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/guides/authentication-identity",
+          "title": "Authentication and identity",
+          "score": 0.910621860534911,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/guides/authentication-identity",
+          "title": "Authentication and identity",
+          "score": 0.910621860534911,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/custom-api-routes",
+          "title": "Custom API routes",
+          "score": 0.8347065793358777,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/custom-api-routes",
+          "title": "Custom API routes",
+          "score": 0.8347065793358777,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "auth-simple-headers",
+      "question": "Which headers does SimpleAuth check by default?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 4,
+        "claimsTotal": 4,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1027
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/auth/simple-auth",
+          "title": "Simple Auth",
+          "score": 0.868440494222928,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/auth/simple-auth",
+          "title": "Simple Auth",
+          "score": 0.878440494222928,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/auth/simple-auth",
+          "title": "Simple Auth",
+          "score": 0.868440494222928,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/auth/auth0",
+          "title": "MastraAuthAuth0 class",
+          "score": 0.7525568415710787,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/auth/auth0",
+          "title": "MastraAuthAuth0 class",
+          "score": 0.7625568415710787,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "auth-simple-limitations",
+      "question": "Why is SimpleAuth not intended as full production security?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": true,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1760
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/auth/simple-auth",
+          "title": "Simple Auth",
+          "score": 0.5310729334073243,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/auth/simple-auth",
+          "title": "Simple Auth",
+          "score": 0.5410729334073243,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "deploy-runtime-support",
+      "question": "Which runtimes can host a Mastra application?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0.14285714285714285,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 811
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/mastra-platform/server",
+          "title": "Server on Mastra platform",
+          "score": 0.931939269200549,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/mastra-platform/server",
+          "title": "Server on Mastra platform",
+          "score": 0.921939269200549,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/mastra-platform/server",
+          "title": "Server on Mastra platform",
+          "score": 0.921939269200549,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/mastra-platform/server",
+          "title": "Server on Mastra platform",
+          "score": 0.921939269200549,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/mastra-platform/server",
+          "title": "Server on Mastra platform",
+          "score": 0.921939269200549,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/mastra-platform/server",
+          "title": "Server on Mastra platform",
+          "score": 0.921939269200549,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/mastra-platform/server",
+          "title": "Server on Mastra platform",
+          "score": 0.921939269200549,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/mastra-platform/server",
+          "title": "Server on Mastra platform",
+          "score": 0.921939269200549,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/configuration",
+          "title": "Configuration",
+          "score": 0.9058007201004596,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/configuration",
+          "title": "Configuration",
+          "score": 0.9058007201004596,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "deploy-server-versus-framework",
+      "question": "How does deploying a Mastra server differ from integrating Mastra into a web framework?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": true,
+        "reciprocalRank": 0.25,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 957
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/server/server-adapters",
+          "title": "Server adapters",
+          "score": 0.9496496234799121,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/server-adapters",
+          "title": "Server adapters",
+          "score": 0.9396496234799121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/server-adapters",
+          "title": "Server adapters",
+          "score": 0.9396496234799121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/server-adapters",
+          "title": "Server adapters",
+          "score": 0.9396496234799121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/server-adapters",
+          "title": "Server adapters",
+          "score": 0.7978255103064521,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/server-adapters",
+          "title": "Server adapters",
+          "score": 0.9396496234799121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/server-adapters",
+          "title": "Server adapters",
+          "score": 0.9396496234799121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/server-adapters",
+          "title": "Server adapters",
+          "score": 0.9396496234799121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/server-adapters",
+          "title": "Server adapters",
+          "score": 0.9396496234799121,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/server-adapters",
+          "title": "Server adapters",
+          "score": 0.9396496234799121,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "migration-agent-context-and-list",
+      "question": "Which v1 agent API names replace RuntimeContext and getAgents?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "medium",
+      "metrics": {
+        "hitAt1": true,
+        "hitAt3": true,
+        "hitAt5": true,
+        "reciprocalRank": 1,
+        "rejectHit": false,
+        "claimCoverage": 0.6666666666666666,
+        "claimsCovered": 2,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 948
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/agent",
+          "title": "Agent class",
+          "score": 0.9261279360625365,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/agent",
+          "title": "Agent class",
+          "score": 0.9361279360625365,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/agent",
+          "title": "Agent class",
+          "score": 0.8936388501311243,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/agent",
+          "title": "Agent class",
+          "score": 0.9092148259723383,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/agent",
+          "title": "Agent class",
+          "score": 0.9261279360625365,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/agent",
+          "title": "Agent class",
+          "score": 0.9261279360625365,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/agent",
+          "title": "Agent class",
+          "score": 0.9261279360625365,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/agent",
+          "title": "Agent class",
+          "score": 0.9261279360625365,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/agent",
+          "title": "Agent class",
+          "score": 0.9261279360625365,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/workflows",
+          "title": "Workflows",
+          "score": 0.8692140466741685,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": []
+    },
+    {
+      "id": "migration-agent-memory-options",
+      "question": "How did agent memory call options change in Mastra v1?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": false,
+        "claimCoverage": 0.6666666666666666,
+        "claimsCovered": 2,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 927
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/memory",
+          "title": "Memory",
+          "score": 0.8643478772834184,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/memory",
+          "title": "Memory",
+          "score": 0.8643478772834184,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/memory",
+          "title": "Memory",
+          "score": 0.8743478772834185,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/memory",
+          "title": "Memory",
+          "score": 0.8643478772834184,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/memory",
+          "title": "Memory",
+          "score": 0.8643478772834184,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/memory",
+          "title": "Memory",
+          "score": 0.7552055351998114,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/memory",
+          "title": "Memory",
+          "score": 0.8643478772834184,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/client",
+          "title": "Client SDK",
+          "score": 0.8513517821515524,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/client",
+          "title": "Client SDK",
+          "score": 0.8513517821515524,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/client",
+          "title": "Client SDK",
+          "score": 0.8613517821515524,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": []
+    }
+  ]
+}

@@ -519,6 +519,8 @@ export function SourceActionsMenu({
       <SourceCatalogDialog
         sourceId={source.id}
         sourceName={source.name}
+        sourceScope={source.scope ?? "personal"}
+        sourceHosting={source.hosting}
         open={catalogOpen}
         onOpenChange={setCatalogOpen}
       />
@@ -537,6 +539,7 @@ export function SourceActionsMenu({
           sourceName={source.name}
           sourceStartUrl={source.startUrl}
           sourceScope={source.scope ?? "personal"}
+          sourceHosting={source.hosting}
           open={refreshOpen}
           onOpenChange={setRefreshOpen}
           onApplied={onRefreshApplied}

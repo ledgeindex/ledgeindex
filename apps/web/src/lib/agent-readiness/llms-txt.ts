@@ -24,19 +24,22 @@ LedgeIndex helps teams turn documentation into grounded answers. Use it when you
 
 ## Developer resources
 
+- [LedgeIndex developer portal](${site}/developers): index of API, CLI, MCP, SDK, auth, and onboarding
+- [LedgeIndex API](${site}/developers/api): REST at ${api}/v1 (unversioned ${api} is the v1 alias)
+- [LedgeIndex OpenAPI spec](${site}/openapi.json): OpenAPI 3.1, also at ${api}/openapi.json
+- [LedgeIndex authentication](${site}/developers/auth): Firebase ID tokens and live_ API keys
+- [LedgeIndex MCP server](${site}/developers/mcp): Streamable HTTP at ${api}/mcp ; manifest at ${site}/.well-known/mcp.json
+- [LedgeIndex CLI](${site}/developers/cli): npm package \`ledgeindex\` (\`npx ledgeindex\`, \`npm install -g ledgeindex\`)
+- [LedgeIndex SDK](${site}/developers/sdk): \`@ledgeindex/sdk\` and \`@ledgeindex/client\`
 - [Documentation](${docs}): guides for web, desktop, SDK, CLI, and Docker
 - [API reference](${docs}/reference/api): REST endpoints for sources, chat, ingest, and widget
-- [OpenAPI spec](${site}/openapi.json): machine-readable API surface (also at ${api}/openapi.json)
-- [MCP server](${api}/mcp): Streamable HTTP transport; OAuth at ${api}/.well-known/oauth-authorization-server
-- [Authentication](${docs}/reference/api/auth): Firebase ID tokens and \`live_\` API keys
-- [SDK](${docs}/reference/sdk): \`@ledgeindex/sdk\` for crawl, ask, and MCP workflows
-- [CLI](${docs}/guides/setup-cli): \`npx @ledgeindex/cli\` for crawl and index from the terminal
 
 ## Onboarding
 
-- Free tier: daily cloud chat limits apply; self-host is unlimited on your machine
-- Self-serve API keys: sign in at ${site}/login → API keys in the app
-- Sandbox: run \`npm run dev:api\` locally or Docker Compose for a full local stack
+- [LedgeIndex onboarding](${site}/developers/onboarding)
+- Free tier: sign in at ${site}/login — 1 source set, 3 sources, 25 cloud chat messages per UTC day. Self-host is unmetered.
+- Self-serve API keys: ${site}/api-keys after sign-in. A Playground live_ key is created automatically.
+- Sandbox: \`npm run dev:api\` (http://localhost:3010) or \`docker compose -f docker-compose.oss.yml up --build\`
 
 ## Optional
 

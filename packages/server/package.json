@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/server",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "LedgeIndex HTTP server — createLedgeIndexServer, profiles docs + profile",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
@@ -25,6 +25,7 @@
   ],
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/http/api-conventions.test.ts",
     "dev:sidecar": "tsx src/start.ts",
     "build": "tsup",
     "start": "node dist/start.js",
@@ -34,10 +35,10 @@
   "dependencies": {
     "@fastify/cors": "^11.3.0",
     "@fastify/rate-limit": "^10.3.0",
-    "@ledgeindex/ag": "^0.1.18",
-    "@ledgeindex/core": "^0.1.18",
-    "@ledgeindex/docs": "^0.1.18",
-    "@ledgeindex/profile": "^0.1.18",
+    "@ledgeindex/ag": "^0.1.19",
+    "@ledgeindex/core": "^0.1.19",
+    "@ledgeindex/docs": "^0.1.19",
+    "@ledgeindex/profile": "^0.1.19",
     "@mastra/core": "^1.51.0",
     "@mastra/fastify": "^1.4.7",
     "fastify": "^5.10.0",

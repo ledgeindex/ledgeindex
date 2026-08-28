@@ -4,6 +4,7 @@ import type { Project, Source } from "../db/types.js";
 import { isApiAuthRequired } from "./firebase-admin.js";
 import { getUserRole, isAdminRole, type UserRole } from "../services/user-role.js";
 import { resolveSourceRefForUser } from "../services/source-resolve.js";
+import { sendProblem } from "./problem-details.js";
 
 export function getRequestUserId(request: FastifyRequest): string | null {
   return request.user?.uid ?? null;
@@ -15,7 +16,11 @@ export async function requireUser(
 ): Promise<string | null> {
   const userId = getRequestUserId(request);
   if (!userId) {
-    reply.code(401).send({ error: "Authentication required" });
+    sendProblem(reply, {
+      status: 401,
+      code: "UNAUTHORIZED",
+      detail: "Authentication required",
+    });
     return null;
   }
   return userId;
@@ -35,7 +40,11 @@ export async function requireAdmin(
 ): Promise<boolean> {
   const role = await getRequestUserRole(request);
   if (!isAdminRole(role)) {
-    reply.code(403).send({ error: "Admin access required" });
+    sendProblem(reply, {
+      status: 403,
+      code: "FORBIDDEN",
+      detail: "Admin access required",
+    });
     return false;
   }
   return true;

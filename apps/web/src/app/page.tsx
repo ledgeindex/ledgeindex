@@ -31,8 +31,8 @@ export default async function Home() {
       <HeroAnnouncementStrip />
       <SiteHeader />
       <main className="flex-1">
-        <HomeOutlineSection />
         <HeroSection />
+        <HomeOutlineSection />
         <RegistrySection />
         <UseCaseFocusSection />
         <IndexShowcaseSection />

@@ -1,6 +1,11 @@
 import { getSiteUrl } from "@/lib/site-url";
 import { docsSiteHref } from "@/lib/docs-site-url";
 import { getPublicApiBaseUrl } from "./api-base";
+import { buildLlmsTxt } from "./llms-txt";
+import {
+  developerPageByPath,
+  developerPageMarkdown,
+} from "./developer-content";
 
 function docsUrl(path: string): string {
   const base = docsSiteHref();
@@ -27,6 +32,10 @@ Point LedgeIndex at your docs. Users get replies with links back to the pages th
 ## Developer links
 
 - Docs: ${docsUrl("/docs")}
+- Developer portal: ${site}/developers
+- LedgeIndex API: ${site}/developers/api
+- LedgeIndex CLI: ${site}/developers/cli
+- LedgeIndex MCP server: ${site}/developers/mcp
 - OpenAPI: ${site}/openapi.json
 - llms.txt: ${site}/llms.txt
 - MCP: ${getPublicApiBaseUrl()}/mcp
@@ -136,8 +145,6 @@ See also [About](${site}/about) and [Contact](${site}/contact).
 `;
 }
 
-import { buildLlmsTxt } from "./llms-txt";
-
 export function markdownForPath(pathname: string): string | null {
   switch (pathname) {
     case "/":
@@ -150,7 +157,9 @@ export function markdownForPath(pathname: string): string | null {
       return privacyMarkdown();
     case "/llms.txt":
       return buildLlmsTxt();
-    default:
-      return null;
+    default: {
+      const page = developerPageByPath(pathname);
+      return page ? developerPageMarkdown(page) : null;
+    }
   }
 }

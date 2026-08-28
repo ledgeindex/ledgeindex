@@ -1,0 +1,173 @@
+{
+  "generatedAt": "2026-08-28T21:11:22.226Z",
+  "sourceId": "f730533e-dd3d-448b-9927-6c45854d1a1b",
+  "settings": {
+    "scope": "personal",
+    "hosting": "local",
+    "strictness": "strict",
+    "expandPages": true,
+    "profile": "pr",
+    "scorerModel": "openai/gpt-5.6-luna"
+  },
+  "aggregate": {
+    "cases": 1,
+    "hitAt1Rate": 0,
+    "hitAt3Rate": 0,
+    "hitAt5Rate": 0,
+    "meanReciprocalRank": 0,
+    "rejectHitRate": 0,
+    "meanClaimCoverage": 0.5
+  },
+  "retrievalScoreAggregate": {
+    "cases": 1,
+    "meanPrecision": 0.24,
+    "meanRecall": 0
+  },
+  "answerScoreAggregate": {
+    "cases": 1,
+    "meanFaithfulness": 1,
+    "meanRelevancy": 0.46,
+    "meanSimilarity": 0,
+    "meanContextRelevance": 0.14
+  },
+  "byCategory": {
+    "getting-started/agents/confusable": {
+      "cases": 1,
+      "hitAt1Rate": 0,
+      "hitAt3Rate": 0,
+      "hitAt5Rate": 0,
+      "meanReciprocalRank": 0,
+      "rejectHitRate": 0,
+      "meanClaimCoverage": 0.5
+    }
+  },
+  "byDifficulty": {
+    "easy": {
+      "cases": 1,
+      "hitAt1Rate": 0,
+      "hitAt3Rate": 0,
+      "hitAt5Rate": 0,
+      "meanReciprocalRank": 0,
+      "rejectHitRate": 0,
+      "meanClaimCoverage": 0.5
+    }
+  },
+  "cases": [
+    {
+      "id": "getting-started-build-with-mastra",
+      "question": "what are things you build with mastra",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": false,
+        "claimCoverage": 0.5,
+        "claimsCovered": 1,
+        "claimsTotal": 2,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 2727
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9284492482448801,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9384492482448801,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9284492482448801,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9284492482448801,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9123528422307989,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9123528422307989,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.7742010712042044,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9223528422307989,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9123528422307989,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9123528422307989,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": [],
+      "retrievalScores": {
+        "precision": {
+          "score": 0.24,
+          "reason": "The score is 0.24 because only context pieces 4 and 6 are relevant: they mention building applications with agents, tools, workflows, and HTTP endpoints. The other contexts focus on configuration, build processes, deployment, or server operation and do not support the expected list of Mastra use cases. Since the relevant contexts appear relatively late—positions 4 and 6—their contribution is discounted by MAP’s position weighting, resulting in low context precision."
+        },
+        "recall": {
+          "score": 0,
+          "reason": "The score is 0 because none of the ground-truth claims are supported by the retrieval context. The context discusses Mastra’s server, build process, CLI commands, deployment, and configuration, but it does not identify Mastra as a TypeScript framework for AI agents and applications or mention the documented use cases of embedded agents, customer-facing assistants, internal copilots, data analysis agents, or content automation."
+        }
+      },
+      "answer": {
+        "text": "Based on the provided documentation, Mastra compiles your application into a standalone Node.js server (a production-ready Hono server) that can run on any platform supporting Node.js, Bun, or Deno [1, 7]. \n\nWhen you build with Mastra (`mastra build`), it creates a self-contained `.mastra` output directory containing:\n- A server entry point and bundled Mastra configuration (`index.mjs`, `mastra.mjs`) [1]\n- Aggregated tool exports and individual tool bundles (`tools.mjs`, `tools/`) [1]\n- Production dependencies and node modules (`package.json`, `node_modules/`) [1]\n- Copied static assets and optional Studio UI / playground if requested (`public/`, `playground/`) [1, 7]\n\nSources:\n- [Mastra server](https://mastra.ai/docs/deployment/mastra-server)\n- [CLI commands](https://mastra.ai/reference/cli/mastra)",
+        "model": "google/gemini-3.5-flash-lite",
+        "contextChunkCount": 10,
+        "scores": {
+          "faithfulness": {
+            "score": 1,
+            "reason": "The score is 1.0 because all claims made in the output are explicitly supported by the provided context. The response accurately describes Mastra’s standalone Node.js/Hono server, supported runtimes, `mastra build` output, bundled tools and dependencies, copied public assets, and optional Studio playground. No claims contradict or go beyond the context."
+          },
+          "relevancy": {
+            "score": 0.46,
+            "reason": "The score is 0.46 because the response directly identifies a standalone Node.js/Hono server and the `.mastra` build output as things built with Mastra, but much of the remaining content describes build artifacts, dependencies, tools, and assets rather than clearly listing what you can build with Mastra."
+          },
+          "similarity": {
+            "score": 0,
+            "reason": "The score is 0/1 because the answer has low similarity to the ground truth. It correctly mentions Mastra applications and deployment capabilities, but omits that Mastra is a TypeScript framework for AI agents and applications and fails to mention all five documented use cases. It should explicitly include embedded agents, customer-facing assistants, internal copilots, data analysis agents, and content automation."
+          },
+          "contextRelevance": {
+            "score": 0.14,
+            "reason": "The score is 0.14 because the used context mainly describes Mastra’s build and deployment process—standalone servers, Hono output, bundled assets, and production startup—rather than directly answering what users build with Mastra. Although several high-relevance items were used, a highly relevant unused context item about agents, tools, and workflows was omitted. The score was further reduced by missing core examples such as chatbots, research agents, customer-support assistants, RAG apps, automation workflows, Studio, and API-based applications."
+          }
+        }
+      }
+    }
+  ]
+}

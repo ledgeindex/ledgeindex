@@ -84,12 +84,18 @@ export function SiteHeader() {
                 aria-hidden
                 className="hidden h-5 w-px shrink-0 bg-border sm:block"
               />
-              <nav aria-label="Site" className="flex items-center">
+              <nav aria-label="Site" className="flex items-center gap-1">
                 <a
                   href={DOCS_HREF}
                   className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-foreground/90 transition-colors hover:bg-surface-raised hover:text-accent"
                 >
                   Docs
+                </a>
+                <a
+                  href="/developers"
+                  className="rounded-lg px-2.5 py-1.5 text-sm font-medium text-foreground/90 transition-colors hover:bg-surface-raised hover:text-accent"
+                >
+                  Developers
                 </a>
               </nav>
             </div>

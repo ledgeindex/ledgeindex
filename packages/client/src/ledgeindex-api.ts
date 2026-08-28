@@ -129,6 +129,22 @@ export function shouldRouteSourceToRemoteApi(source: SourceRoutingHint): boolean
   return source.hosting === "cloud";
 }
 
+/** Whether catalog chunk inspection should be shown for this source. */
+export function canInspectPageChunks(
+  source: SourceRoutingHint,
+  options: { isAdmin: boolean },
+): boolean {
+  if (source.scope === "global" || source.hosting === "cloud") {
+    return options.isAdmin;
+  }
+  return source.hosting === "local";
+}
+
+/** @deprecated Use {@link canInspectPageChunks} */
+export function canInspectLocalPageChunks(source: SourceRoutingHint): boolean {
+  return canInspectPageChunks(source, { isAdmin: false });
+}
+
 function apiBaseOptionsForSource(
   source?: SourceRoutingHint,
 ): { baseUrl: string } | undefined {
@@ -1561,12 +1577,93 @@ export type PageChunksResult = {
   vectorBackend?: string;
 };
 
-/** Indexed chunk text for one page (debug / MD preview). */
-export async function getPageChunks(sourceId: string, url: string) {
-  const params = new URLSearchParams({ url });
-  return api<PageChunksResult>(
-    `/api/sources/${sourceId}/page-chunks?${params.toString()}`,
+export type SourceCorpusChunk = PageChunk & {
+  chunkKind: string;
+  contentType?: string;
+  language?: string;
+  crawlRoot?: string;
+  filePath?: string;
+  startLine?: number;
+  endLine?: number;
+  symbolName?: string;
+  symbolKind?: string;
+  pageKind?: string;
+};
+
+export type SourceCorpusPage = {
+  url: string;
+  title: string;
+  contentHash: string | null;
+  category: string;
+  crawlRoot: string | null;
+  chunkCount: number;
+  markdown: string;
+  chunks: SourceCorpusChunk[];
+};
+
+export type SourceCorpusExport = {
+  format: "ledgeindex.source-corpus";
+  formatVersion: 1;
+  exportedAt: string;
+  source: {
+    id: string;
+    slug: string;
+    name: string;
+    scope: SourceScope;
+    hosting: SourceHosting;
+    canonicalUrl: string | null;
+    indexedAt: string | null;
+    versionNumber: number;
+    versionLabel: string;
+    startUrls: string[];
+  };
+  index: {
+    vectorBackend: string;
+    catalogUpdatedAt: string;
+    pageCount: number;
+    chunkCount: number;
+  };
+  pages: SourceCorpusPage[];
+};
+
+export type SourceCorpusExportOptions = {
+  includeContent?: boolean;
+  includeChunks?: boolean;
+};
+
+/** Export the indexed corpus through the active local or remote API. */
+export async function exportSourceCorpus(
+  sourceId: string,
+  options: SourceCorpusExportOptions = {},
+  routing?: SourceRoutingHint,
+): Promise<SourceCorpusExport> {
+  const params = new URLSearchParams({
+    content: String(options.includeContent ?? true),
+    chunks: String(options.includeChunks ?? true),
+  });
+  return apiWithRemoteSourceFallback<SourceCorpusExport>(
+    `/api/sources/${sourceId}/corpus-export?${params.toString()}`,
+    undefined,
+    routing,
   );
+}
+
+/** Indexed chunk text for one page (local LibSQL or cloud when permitted). */
+export async function getPageChunks(
+  sourceId: string,
+  url: string,
+  routing?: SourceRoutingHint,
+) {
+  const params = new URLSearchParams({ url });
+  const path = `/api/sources/${sourceId}/page-chunks?${params.toString()}`;
+  if (routing && shouldRouteSourceToRemoteApi(routing)) {
+    return apiWithRemoteSourceFallback<PageChunksResult>(
+      path,
+      undefined,
+      routing,
+    );
+  }
+  return api<PageChunksResult>(path);
 }
 
 export type PageExample = {
@@ -1772,8 +1869,15 @@ export type CrawlProgress = {
   httpErrorCount?: number;
 };
 
-export async function getCrawlProgress(sourceId: string) {
-  return api<CrawlProgress>(`/api/sources/${sourceId}/crawl-progress`);
+export async function getCrawlProgress(
+  sourceId: string,
+  options?: { baseUrl?: string },
+) {
+  return api<CrawlProgress>(
+    `/api/sources/${sourceId}/crawl-progress`,
+    undefined,
+    options,
+  );
 }
 
 export async function resumeIngestWorkflow(
@@ -1846,6 +1950,7 @@ export async function tryGetIngestWorkflowStatus(
 export type RefreshPageRef = {
   url: string;
   title: string;
+  indexedUrl?: string;
 };
 
 export type RefreshChangelog = {
@@ -1872,6 +1977,8 @@ export type RefreshRunPhase =
   | "discovering"
   | "parsing"
   | "comparing"
+  | "deleting"
+  | "chunking"
   | "embedding"
   | "storing"
   | "done";
@@ -1893,11 +2000,13 @@ export type RefreshRunSnapshot = {
   pathTotal?: number;
   changelog?: RefreshChangelog;
   error?: string;
+  updatedAt?: string;
 };
 
 export async function startSourceRefreshCheck(
   sourceId: string,
   mode: RefreshMode = "discover",
+  options?: { baseUrl?: string },
 ) {
   return api<{ snapshot: RefreshRunSnapshot }>(
     `/api/sources/${sourceId}/refresh/start`,
@@ -1905,33 +2014,68 @@ export async function startSourceRefreshCheck(
       method: "POST",
       body: JSON.stringify({ mode }),
     },
+    options,
   );
 }
 
-export async function getSourceRefreshStatus(sourceId: string) {
+export async function getSourceRefreshStatus(
+  sourceId: string,
+  options?: { baseUrl?: string },
+) {
   return api<{ snapshot: RefreshRunSnapshot | null }>(
     `/api/sources/${sourceId}/refresh/status`,
+    undefined,
+    options,
   );
 }
 
-export async function cancelSourceRefresh(sourceId: string) {
+export async function cancelSourceRefresh(
+  sourceId: string,
+  options?: { baseUrl?: string },
+) {
   return api<{ cancelled: boolean }>(
     `/api/sources/${sourceId}/refresh/cancel`,
     { method: "POST" },
+    options,
   );
 }
 
-export async function applySourceRefresh(sourceId: string) {
+export async function applySourceRefresh(
+  sourceId: string,
+  options?: { baseUrl?: string },
+) {
   return api<{ snapshot: RefreshRunSnapshot }>(
     `/api/sources/${sourceId}/refresh/apply`,
     { method: "POST" },
+    options,
   );
 }
 
-export async function dismissSourceRefresh(sourceId: string) {
+export async function dismissSourceRefresh(
+  sourceId: string,
+  options?: { baseUrl?: string },
+) {
   return api<{ dismissed: boolean }>(
     `/api/sources/${sourceId}/refresh/dismiss`,
     { method: "POST" },
+    options,
+  );
+}
+
+export type SourceRefreshRunSummary = {
+  sourceId: string;
+  sourceName: string;
+  sourceStartUrl: string;
+  sourceScope: "personal" | "global";
+  hosting?: "local" | "cloud";
+  snapshot: RefreshRunSnapshot;
+};
+
+export async function listSourceRefreshRuns(options?: { baseUrl?: string }) {
+  return api<{ runs: SourceRefreshRunSummary[] }>(
+    "/api/refresh/runs",
+    undefined,
+    options,
   );
 }
 

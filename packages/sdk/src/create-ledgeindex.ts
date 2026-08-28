@@ -2,6 +2,10 @@ import { askAcrossSources } from "./ask-across.js";
 import { askQuestion } from "./ask.js";
 import { runWebCrawl } from "./crawl.js";
 import { deleteSource } from "./delete-source.js";
+import {
+  exportCorpus,
+  exportCorpusToDirectory,
+} from "./export-corpus.js";
 import { indexRepository } from "./index-repo.js";
 import { profileWithResolvedOptions } from "./profile.js";
 import { resolveOptions } from "./resolve-options.js";
@@ -46,5 +50,13 @@ export async function createLedgeIndex(
     checkForUpdates: (options) => checkForUpdates(options),
     applyUpdates: (options) => applyUpdates(options),
     deleteSource: (sourceIdOrSlug) => deleteSource(sourceIdOrSlug),
+    exportCorpus: (sourceIdOrSlug, exportOptions) =>
+      exportCorpus(sourceIdOrSlug, exportOptions),
+    exportCorpusToDirectory: (sourceIdOrSlug, outputDirectory, exportOptions) =>
+      exportCorpusToDirectory(
+        sourceIdOrSlug,
+        outputDirectory,
+        exportOptions,
+      ),
   };
 }

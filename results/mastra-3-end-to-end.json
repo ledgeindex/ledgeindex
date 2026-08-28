@@ -1,0 +1,378 @@
+{
+  "generatedAt": "2026-08-28T21:07:46.008Z",
+  "sourceId": "f730533e-dd3d-448b-9927-6c45854d1a1b",
+  "settings": {
+    "scope": "personal",
+    "hosting": "local",
+    "strictness": "strict",
+    "expandPages": true,
+    "profile": "pr",
+    "scorerModel": "openai/gpt-5.6-luna"
+  },
+  "aggregate": {
+    "cases": 3,
+    "hitAt1Rate": 0,
+    "hitAt3Rate": 0,
+    "hitAt5Rate": 0.3333333333333333,
+    "meanReciprocalRank": 0.06666666666666667,
+    "rejectHitRate": 0,
+    "meanClaimCoverage": 0.611111111111111
+  },
+  "retrievalScoreAggregate": {
+    "cases": 3,
+    "meanPrecision": 0.48666666666666664,
+    "meanRecall": 0.45999999999999996
+  },
+  "answerScoreAggregate": {
+    "cases": 3,
+    "meanFaithfulness": 0.9433333333333334,
+    "meanRelevancy": 0.7466666666666667,
+    "meanSimilarity": 0.06666666666666667,
+    "meanContextRelevance": 0.19000000000000003
+  },
+  "byCategory": {
+    "getting-started/agents/confusable": {
+      "cases": 3,
+      "hitAt1Rate": 0,
+      "hitAt3Rate": 0,
+      "hitAt5Rate": 0.3333333333333333,
+      "meanReciprocalRank": 0.06666666666666667,
+      "rejectHitRate": 0,
+      "meanClaimCoverage": 0.611111111111111
+    }
+  },
+  "byDifficulty": {
+    "easy": {
+      "cases": 2,
+      "hitAt1Rate": 0,
+      "hitAt3Rate": 0,
+      "hitAt5Rate": 0.5,
+      "meanReciprocalRank": 0.1,
+      "rejectHitRate": 0,
+      "meanClaimCoverage": 0.75
+    },
+    "hard": {
+      "cases": 1,
+      "hitAt1Rate": 0,
+      "hitAt3Rate": 0,
+      "hitAt5Rate": 0,
+      "meanReciprocalRank": 0,
+      "rejectHitRate": 0,
+      "meanClaimCoverage": 0.3333333333333333
+    }
+  },
+  "cases": [
+    {
+      "id": "getting-started-build-with-mastra",
+      "question": "what are things you build with mastra",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": false,
+        "claimCoverage": 0.5,
+        "claimsCovered": 1,
+        "claimsTotal": 2,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 3261
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9179292976540575,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9279292976540575,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.8282915600142812,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/deployment/mastra-server",
+          "title": "Mastra server",
+          "score": 0.9179292976540575,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/overview",
+          "title": "Server",
+          "score": 0.9215831656812641,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/overview",
+          "title": "Server",
+          "score": 0.9115831656812641,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/overview",
+          "title": "Server",
+          "score": 0.9115831656812641,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/docs/server/overview",
+          "title": "Server",
+          "score": 0.9115831656812641,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.7759487675826398,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.9129105470934731,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": [],
+      "retrievalScores": {
+        "precision": {
+          "score": 0.33,
+          "reason": "The score is 0.33 because only contexts 2 and 5 are relevant: they mention building applications with agents, tools, and workflows. However, most contexts focus on configuration, building, deployment, or middleware rather than Mastra’s documented application types and use cases. Since the relevant contexts appear relatively late in the sequence, the MAP score is reduced."
+        },
+        "recall": {
+          "score": 0.13,
+          "reason": "The score is 0.13 because the retrieval context supports only the claim that Mastra is for AI agents: context [2] says it exposes agents through API endpoints, and context [6] discusses AI and coding agents. It does not establish that Mastra is a TypeScript framework or explicitly describe it as being for AI applications. None of the documented use cases—embedded agents, customer-facing assistants, internal copilots, data analysis agents, or content automation—are mentioned."
+        }
+      },
+      "answer": {
+        "text": "Based on the provided documentation, the context does not specify what kinds of things you build with Mastra. It only details how to build and configure Mastra applications, servers, deployment outputs, and components like agents, workflows, and tools via its build process and CLI.",
+        "model": "google/gemini-3.5-flash-lite",
+        "contextChunkCount": 10,
+        "scores": {
+          "faithfulness": {
+            "score": 0.83,
+            "reason": "The score is 0.83 because most claims are supported by the context: it does describe building and configuring Mastra applications, servers, deployment outputs, and components such as agents, workflows, and tools through the build process and CLI. However, the opening claim that the documentation does not specify what can be built with Mastra contradicts the context, which explicitly mentions these components and applications."
+          },
+          "relevancy": {
+            "score": 0.65,
+            "reason": "The score is 0.65 because the response is partially relevant: it identifies Mastra applications, servers, deployment outputs, agents, workflows, and tools as related things built or configured with Mastra, but it also says the documentation does not specify what can be built and does not give a direct, clear answer."
+          },
+          "similarity": {
+            "score": 0,
+            "reason": "The score is 0/1 because the answer only partially mentions applications and agents while incorrectly denying that the documentation specifies Mastra’s use cases. It should identify Mastra as a TypeScript framework for AI agents and applications and explicitly mention embedded agents, customer-facing assistants, internal copilots, data analysis agents, and content automation."
+          },
+          "contextRelevance": {
+            "score": 0.02,
+            "reason": "The score is 0.02 because most of the context focused on Mastra’s build process, server configuration, deployment, and project structure rather than directly answering what users can build with Mastra. Although the used high-relevance context mentioned agents, workflows, tools, and APIs, it did not provide concrete use cases such as chatbots, RAG apps, autonomous agents, or workflow automations. The unused context was low relevance, so no major unused-relevant-context penalty applied; the very low score primarily reflects substantial missing information about Mastra’s purpose, building blocks, integrations, and real-world applications."
+          }
+        }
+      }
+    },
+    {
+      "id": "getting-started-primitives",
+      "question": "what are the primitives",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "hard",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": false,
+        "reciprocalRank": 0,
+        "rejectHit": false,
+        "claimCoverage": 0.3333333333333333,
+        "claimsCovered": 1,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": true,
+        "elapsedMs": 2946
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "title": "Mastra class",
+          "score": 0.7969957137170938,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "title": "Mastra class",
+          "score": 0.7969957137170938,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+          "title": "Mastra class",
+          "score": 0.8069957137170938,
+          "retrievalKind": "direct"
+        }
+      ],
+      "droppedPages": [
+        {
+          "url": "https://mastra.ai/reference/rag/metadata-filters",
+          "title": "Metadata filters",
+          "reason": "This page discusses metadata filter types for vector databases rather than Mastra primitives."
+        }
+      ],
+      "retrievalScores": {
+        "precision": {
+          "score": 1,
+          "reason": "The score is 1 because the only context piece is relevant, directly identifying Mastra’s primitive registries and providing examples such as agents, workflows, and tools that support the expected output. Since this relevant context appears first—and is the only context—the positioning is optimal, yielding perfect context precision."
+        },
+        "recall": {
+          "score": 0.25,
+          "reason": "The score is 0.25 because only the claim that `Mastra` serves as a top-level registry for primitives is supported. Context [0] shows agents, workflows, tools, and other primitives being listed, retrieved, and auto-registered through a Mastra instance. However, it does not establish that `Mastra` is a central orchestrator, that applications typically create one instance, or that the instance coordinates shared services."
+        }
+      },
+      "answer": {
+        "text": "Based on the provided context, the primitives referenced are:\n\n* Agents\n* Vectors\n* Workflows\n* Scorers\n* MCP Servers\n\nSource: https://mastra.ai/reference/migrations/upgrade-to-v1/mastra",
+        "model": "google/gemini-3.5-flash-lite",
+        "contextChunkCount": 1,
+        "scores": {
+          "faithfulness": {
+            "score": 1,
+            "reason": "The score is 1 because all five claims—Agents, Vectors, Workflows, Scorers, and MCP Servers—are explicitly supported by the provided context, with no contradictions."
+          },
+          "relevancy": {
+            "score": 0.8,
+            "reason": "The score is 0.8 because the response directly answers the question by listing the primitives, while the introductory wording and source reference provide related context but are not themselves part of the answer."
+          },
+          "similarity": {
+            "score": 0,
+            "reason": "The score is 0/1 because the answer only partially overlaps by mentioning agents and workflows. It incorrectly lists unrelated or unsupported primitives and omits that Mastra is the central orchestrator/top-level registry, that tools are included, and that applications typically create one Mastra instance to coordinate shared services."
+          },
+          "contextRelevance": {
+            "score": 0.55,
+            "reason": "The score is 0.55 because the context was highly relevant and used to identify Mastra primitives—agents, vectors, workflows, scorers, and MCP servers—but much of the additional API, ID, and tool-registration detail was unnecessary for the brief question. The score also reflects missing clarification about what “primitive” means, whether logs and tools qualify as primitives, and which Mastra version applies."
+          }
+        }
+      }
+    },
+    {
+      "id": "getting-started-project-bootstrap",
+      "question": "How do I bootstrap a new Mastra project?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "metrics": {
+        "hitAt1": false,
+        "hitAt3": false,
+        "hitAt5": true,
+        "reciprocalRank": 0.2,
+        "rejectHit": false,
+        "claimCoverage": 1,
+        "claimsCovered": 3,
+        "claimsTotal": 3,
+        "relaxedPassUsed": false,
+        "weakEvidenceUsed": false,
+        "pageFilterUsed": false,
+        "elapsedMs": 1945
+      },
+      "topChunks": [
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8814510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8814510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8429856616735057,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8814510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8631115274951826,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8814510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8814510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8814510240160757,
+          "retrievalKind": "expanded"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8914510240160757,
+          "retrievalKind": "direct"
+        },
+        {
+          "url": "https://mastra.ai/reference/cli/mastra",
+          "title": "CLI commands",
+          "score": 0.8814510240160757,
+          "retrievalKind": "expanded"
+        }
+      ],
+      "droppedPages": [],
+      "retrievalScores": {
+        "precision": {
+          "score": 0.13,
+          "reason": "The score is 0.13 because only context 7 directly supports the expected output by providing the `npm create mastra@latest` command, Studio guidance, and framework integration options. The other contexts discuss deployment, templates, repository linking, or framework-specific setup rather than bootstrapping a project. Since the sole relevant context appears late in the sequence, the MAP score is low."
+        },
+        "recall": {
+          "score": 1,
+          "reason": "The score is 1 because all claims in the ground-truth answer are supported by retrieval context [7]. It provides the command `npm create mastra@latest`, states that Studio can be opened immediately, and explains that Mastra can be added to existing projects or used with supported frameworks, listing examples such as Next.js, React + Vite, Astro, Express, SvelteKit, and Hono."
+        }
+      },
+      "answer": {
+        "text": "To bootstrap a new Mastra project, you can use the quickstart command with your preferred package manager:\n\n* **npm:** `npm create mastra@latest` [8]\n* **pnpm:** `pnpm create mastra@latest` [8]\n* **Yarn:** `yarn create mastra` [8]\n* **Bun:** `bunx create-mastra` [8]\n\nThis creates a general-purpose agent harness with a local workspace, shell tools, memory, task tracking, web access, and recurring schedules, and installs Mastra skills for your coding agent [8]. \n\nAlternatively, you can initialize Mastra in an existing project using `mastra init` [3], or start from a pre-built template via the Mastra platform dashboard [4] or the templates reference [9].",
+        "model": "google/gemini-3.5-flash-lite",
+        "contextChunkCount": 10,
+        "scores": {
+          "faithfulness": {
+            "score": 1,
+            "reason": "The score is 1 because all claims made in the output are explicitly supported by the provided context, including the package-manager quickstart commands, the features and skills installed by the quickstart, initializing an existing project with `mastra init`, and using dashboard templates to bootstrap a project. No claims contradict the context."
+          },
+          "relevancy": {
+            "score": 0.79,
+            "reason": "The score is 0.79 because the response directly answers how to bootstrap a new Mastra project by providing commands for several package managers. It also includes relevant alternatives such as `mastra init` and templates, though some additional details only describe what the setup creates or mention resources without explaining the bootstrapping steps."
+          },
+          "similarity": {
+            "score": 0.2,
+            "reason": "The score is 0.2/1 because the answer has low similarity despite correctly giving the primary `npm create mastra@latest` command. It omits the required next step of opening the project in Mastra Studio and only partially reflects integration with an existing supported web framework; remove or de-emphasize unrelated package-manager options and extra features."
+          },
+          "contextRelevance": {
+            "score": 0,
+            "reason": "The score is 0 because the result appears inconsistent with the evaluations: the key quickstart context ([7]) and supporting initialization/template context ([2], [3], [8]) were relevant and used, while irrelevant deployment and NestJS context was correctly excluded. No unused high-relevance penalty applies. The main deductions would be for missing post-bootstrap steps, unclear distinction between `create-mastra` and `mastra init`, and citation-number mismatches, but these gaps do not explain a score of zero."
+          }
+        }
+      }
+    }
+  ]
+}

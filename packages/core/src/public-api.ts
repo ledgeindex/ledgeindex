@@ -2,6 +2,18 @@ export const LEDGEINDEX_CORE_VERSION = "0.0.0" as const;
 
 export type { MastraContribution } from "./mastra/contribution.js";
 
+export {
+  exportSourceCorpus,
+  writeSourceCorpusToDirectory,
+  SOURCE_CORPUS_EXPORT_FORMAT,
+  SOURCE_CORPUS_EXPORT_VERSION,
+  type SourceCorpusChunk,
+  type SourceCorpusPage,
+  type SourceCorpusExport,
+  type SourceCorpusExportOptions,
+  type WrittenSourceCorpus,
+} from "./export/source-corpus.js";
+
 
 
 export {

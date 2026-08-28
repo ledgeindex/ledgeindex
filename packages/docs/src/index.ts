@@ -13,3 +13,11 @@ export {
 export { registerHostedInngest } from "./runtime/register-docs-profile.js";
 
 export { createDocsMastraContribution } from "./runtime/mastra/contribution.js";
+export {
+  evaluateRetrievalCases,
+  generateGoldenSet,
+  generateRetrievalGoldenSetWorkflow,
+  retrievalEvalWorkflow,
+  retrievalGoldenCaseSchema,
+} from "./runtime/mastra/workflows/retrieval-eval/index.js";
+export type { RetrievalGoldenCase } from "./runtime/mastra/workflows/retrieval-eval/index.js";

@@ -7,6 +7,8 @@ const REFRESH_RUNS_FILE = dataPath("refresh-runs.json");
 export type RefreshPageRef = {
   url: string;
   title: string;
+  /** URL stored on existing chunks when it differs from the live crawl URL. */
+  indexedUrl?: string;
 };
 
 export type RefreshChangelog = {
@@ -33,6 +35,8 @@ export type RefreshRunPhase =
   | "discovering"
   | "parsing"
   | "comparing"
+  | "deleting"
+  | "chunking"
   | "embedding"
   | "storing"
   | "done";
@@ -63,6 +67,7 @@ export type RefreshRunSnapshot = {
   /** Parsed markdown from check for added/updated URLs — reused on apply. */
   parsedPagesCache?: Record<string, RefreshParsedPageCache>;
   error?: string;
+  updatedAt?: string;
 };
 
 type PersistedRefreshRuns = Record<string, RefreshRunSnapshot>;
@@ -84,7 +89,8 @@ function persistRuns(snapshot: PersistedRefreshRuns) {
 
 function persistRefreshRun(run: RefreshRunSnapshot) {
   const snapshot = loadPersistedRuns();
-  snapshot[run.sourceId] = run;
+  const { parsedPagesCache: _cache, ...rest } = run;
+  snapshot[run.sourceId] = rest;
   persistRuns(snapshot);
 }
 
@@ -130,6 +136,9 @@ export function createRefreshRun(
   return run;
 }
 
+const lastPersistAt = new Map<string, number>();
+const PERSIST_MS = 1500;
+
 export function patchRefreshRun(
   sourceId: string,
   patch: Partial<RefreshRunSnapshot>,
@@ -137,15 +146,28 @@ export function patchRefreshRun(
   const current =
     activeBySource.get(sourceId) ?? loadPersistedRefreshRun(sourceId);
   if (!current) return null;
-  const next = { ...current, ...patch };
+  const next = {
+    ...current,
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
   activeBySource.set(sourceId, next);
-  persistRefreshRun(next);
+
+  const statusChanged = Boolean(patch.status && patch.status !== current.status);
+  const phaseChanged = Boolean(patch.phase && patch.phase !== current.phase);
+  const now = Date.now();
+  const last = lastPersistAt.get(sourceId) ?? 0;
+  if (statusChanged || phaseChanged || now - last >= PERSIST_MS) {
+    persistRefreshRun(next);
+    lastPersistAt.set(sourceId, now);
+  }
   return next;
 }
 
 export function clearRefreshRun(sourceId: string) {
   activeBySource.delete(sourceId);
   cancelRequested.delete(sourceId);
+  lastPersistAt.delete(sourceId);
   deletePersistedRefreshRun(sourceId);
 }
 
@@ -174,4 +196,15 @@ export function isRefreshRunInProgress(status: RefreshRunStatus): boolean {
 
 export function canReuseRefreshRun(run: RefreshRunSnapshot): boolean {
   return isRefreshRunInProgress(run.status);
+}
+
+export function listRefreshRuns(): RefreshRunSnapshot[] {
+  const persisted = loadPersistedRuns();
+  const ids = new Set([...activeBySource.keys(), ...Object.keys(persisted)]);
+  const runs: RefreshRunSnapshot[] = [];
+  for (const id of ids) {
+    const run = activeBySource.get(id) ?? persisted[id];
+    if (run) runs.push(run);
+  }
+  return runs;
 }

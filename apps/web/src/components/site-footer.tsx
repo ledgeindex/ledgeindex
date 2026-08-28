@@ -9,10 +9,13 @@ const FOOTER_LINKS = {
     { href: "/login", label: "Sign in" },
   ],
   Developers: [
+    { href: "/developers", label: "Developer portal" },
+    { href: "/developers/api", label: "LedgeIndex API" },
+    { href: "/developers/cli", label: "LedgeIndex CLI" },
+    { href: "/developers/mcp", label: "LedgeIndex MCP" },
     { href: docsSiteHref(), label: "Documentation" },
     { href: "/openapi.json", label: "OpenAPI spec" },
     { href: "/llms.txt", label: "llms.txt" },
-    { href: "/.well-known/mcp.json", label: "MCP manifest" },
   ],
   Company: [
     { href: "/about", label: "About" },

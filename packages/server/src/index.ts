@@ -11,6 +11,13 @@ import {
   type MastraContribution,
 } from "./mastra-contribution.js";
 import { registerLedgeIndexRateLimit } from "./rate-limit/plugin.js";
+import { LEDGEINDEX_API_RATE_LIMIT } from "./rate-limit/default-config.js";
+import {
+  API_MAJOR_VERSION,
+  formatRateLimitHeader,
+  formatRateLimitPolicyHeader,
+  stripV1Prefix,
+} from "./http/api-conventions.js";
 
 export const LEDGEINDEX_SERVER_VERSION = "0.1.0" as const;
 
@@ -72,12 +79,63 @@ export async function createLedgeIndexServer(
     logger: false,
     // Chat attachments (images / PDF page rasters) travel as base64 in JSON.
     bodyLimit: 32 * 1024 * 1024,
+    rewriteUrl: (req) => stripV1Prefix(req.url ?? "/"),
   });
 
   await app.register(cors, {
     origin: true,
     methods: ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allowedHeaders: ["Content-Type", "Authorization", "ApiKey"],
+    allowedHeaders: [
+      "Content-Type",
+      "Authorization",
+      "ApiKey",
+      "API-Version",
+      "MCP-Protocol-Version",
+      "Mcp-Method",
+      "Mcp-Name",
+    ],
+    exposedHeaders: [
+      "RateLimit",
+      "RateLimit-Policy",
+      "Retry-After",
+      "API-Version",
+      "Deprecation",
+      "Sunset",
+    ],
+  });
+
+  const rateWindow = LEDGEINDEX_API_RATE_LIMIT.windowSeconds;
+  app.addHook("onSend", async (request, reply, payload) => {
+    if (!reply.hasHeader("API-Version")) {
+      reply.header("API-Version", API_MAJOR_VERSION);
+    }
+    const isRead =
+      request.method === "GET" ||
+      request.method === "HEAD" ||
+      request.method === "OPTIONS";
+    const limit = isRead
+      ? LEDGEINDEX_API_RATE_LIMIT.fallback.readMaxPerWindow
+      : LEDGEINDEX_API_RATE_LIMIT.fallback.writeMaxPerWindow;
+    if (!reply.hasHeader("RateLimit")) {
+      reply.header(
+        "RateLimit",
+        formatRateLimitHeader({
+          limit,
+          remaining: limit,
+          resetSeconds: rateWindow,
+        }),
+      );
+    }
+    if (!reply.hasHeader("RateLimit-Policy")) {
+      reply.header(
+        "RateLimit-Policy",
+        formatRateLimitPolicyHeader({ limit, windowSeconds: rateWindow }),
+      );
+    }
+    if (reply.statusCode === 429 && !reply.hasHeader("Retry-After")) {
+      reply.header("Retry-After", String(rateWindow));
+    }
+    return payload;
   });
 
   // Same pattern as backend-api legacy scopes: @fastify/rate-limit + onRoute

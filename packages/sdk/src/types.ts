@@ -1,5 +1,10 @@
 import type { RerankBackend } from "@ledgeindex/core/query/rerank-backend.js";
 import type { VectorBackend } from "@ledgeindex/core/vector/config.js";
+import type {
+  SourceCorpusExport,
+  SourceCorpusExportOptions,
+  WrittenSourceCorpus,
+} from "@ledgeindex/core/export/source-corpus.js";
 import type { RepoIndexProgress } from "@ledgeindex/repo";
 import type { CompanyProfileResult } from "./profile.js";
 import type { SourceAskResult } from "@ledgeindex/docs/runtime/services/source-ask.js";
@@ -223,6 +228,17 @@ export type LedgeIndex = {
   deleteSource(
     sourceIdOrSlug: string,
   ): Promise<{ deleted: boolean; sourceId: string }>;
+  /** Export the exact indexed corpus as a versioned JSON structure. */
+  exportCorpus(
+    sourceIdOrSlug: string,
+    options?: SourceCorpusExportOptions,
+  ): Promise<SourceCorpusExport>;
+  /** Export one Markdown file per indexed page plus manifest.json. */
+  exportCorpusToDirectory(
+    sourceIdOrSlug: string,
+    outputDirectory: string,
+    options?: SourceCorpusExportOptions,
+  ): Promise<WrittenSourceCorpus>;
 };
 
 export type ResolvedLedgeIndexOptions = {

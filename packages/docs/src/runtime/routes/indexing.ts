@@ -25,8 +25,11 @@ import {
   getSourceForWrite,
   requireUser,
 } from "../lib/resource-access.js";
+import { isAdminRole } from "../services/user-role.js";
 import { indexRepoCheckout } from "@ledgeindex/repo";
 import { markSourceAsRepository } from "../services/source-kind.js";
+import { resolveSourceHosting } from "../db/types.js";
+import { exportSourceCorpus } from "@ledgeindex/core/export/source-corpus.js";
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
@@ -166,6 +169,19 @@ export async function indexingRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: "url query param is required" });
     }
 
+    const hosting = resolveSourceHosting({
+      hosting: source.hosting,
+      scope: source.scope,
+    });
+    if (hosting !== "local") {
+      const role = await getRequestUserRole(request);
+      if (!isAdminRole(role)) {
+        return reply.status(403).send({
+          error: "Chunk inspection for cloud sources requires admin access",
+        });
+      }
+    }
+
     try {
       const result = await getPageChunks({ sourceId: id, url });
       return {
@@ -178,6 +194,52 @@ export async function indexingRoutes(fastify: FastifyInstance) {
       logError(error instanceof Error ? error : message, "PageChunks", {
         sourceId: id,
         url,
+      });
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  /** Versioned export of the exact indexed corpus for SDK and evaluation use. */
+  fastify.get("/api/sources/:id/corpus-export", async (request, reply) => {
+    const userId = await requireUser(request, reply);
+    if (!userId) return;
+
+    const { id } = request.params as { id: string };
+    const source = await getSourceForUser(id, userId);
+    if (!source) {
+      return reply.status(404).send({ error: "Source not found" });
+    }
+
+    const query = request.query as {
+      content?: string;
+      chunks?: string;
+    };
+    const includeContent = query.content !== "false";
+    const includeChunks = query.chunks !== "false";
+    const hosting = resolveSourceHosting({
+      hosting: source.hosting,
+      scope: source.scope,
+    });
+
+    if (includeContent && hosting !== "local") {
+      const role = await getRequestUserRole(request);
+      if (!isAdminRole(role)) {
+        return reply.status(403).send({
+          error: "Full corpus export for cloud sources requires admin access",
+        });
+      }
+    }
+
+    try {
+      return await exportSourceCorpus(id, {
+        includeContent,
+        includeChunks,
+      });
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Failed to export corpus";
+      logError(error instanceof Error ? error : message, "CorpusExport", {
+        sourceId: id,
       });
       return reply.status(500).send({ error: message });
     }

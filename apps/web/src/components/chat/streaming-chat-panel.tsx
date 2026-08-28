@@ -78,6 +78,7 @@ import {
   DocsIdentityDialog,
   docsIdentitySummaryText,
 } from "@/components/sources/docs-identity-dialog";
+import { SourceChatUpdateControls } from "@/components/sources/source-chat-update-controls";
 
 function reasoningText(parts: Array<{ type: string; text?: string }>): string {
   return parts
@@ -686,15 +687,20 @@ export function StreamingChatPanel({
               <p className="font-mono text-[0.5625rem] font-semibold tracking-[0.12em] text-muted uppercase">
                 Retrieved sources
               </p>
-              {showDocsIdentityAdmin && sourceId ? (
-                <button
-                  type="button"
-                  onClick={() => setDocsIdentityOpen(true)}
-                  className="inline-flex shrink-0 items-center rounded-md border border-border bg-card-solid px-2 py-1 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-muted uppercase transition-colors hover:border-foreground/15 hover:text-foreground"
-                >
-                  {hasDocsIdentity ? "Edit about" : "Add about"}
-                </button>
-              ) : null}
+              <div className="flex shrink-0 items-center gap-1.5">
+                {sourceId ? (
+                  <SourceChatUpdateControls variant="panel" />
+                ) : null}
+                {showDocsIdentityAdmin && sourceId ? (
+                  <button
+                    type="button"
+                    onClick={() => setDocsIdentityOpen(true)}
+                    className="inline-flex shrink-0 items-center rounded-md border border-border bg-card-solid px-2 py-1 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-muted uppercase transition-colors hover:border-foreground/15 hover:text-foreground"
+                  >
+                    {hasDocsIdentity ? "Edit about" : "Add about"}
+                  </button>
+                ) : null}
+              </div>
             </div>
             {showDocsIdentityAdmin && hasDocsIdentity ? (
               <div className="shrink-0 border-b border-border bg-card-solid/60 px-3 py-2.5">

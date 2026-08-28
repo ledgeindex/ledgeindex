@@ -1,14 +1,20 @@
 import type { Source } from "@ledgeindex/core/db/types.js";
-import { normalizeCanonicalUrl } from "@ledgeindex/core/lib/canonical-url.js";
 import { discoverUrls, getCrawlProgress } from "../crawler/discover.js";
 import { getStore } from "../db/index.js";
 import {
-  applyPageSnapshotRefresh,
-  comparePageSnapshotRefresh,
   hashPageContent,
+  listPageSnapshots,
+  syncPageSnapshotHashes,
+  tombstonePageSnapshots,
   type PageSnapshotInput,
 } from "../db/page-snapshots.js";
 import { runProbeRefreshCheck } from "./source-refresh-probe.js";
+import {
+  INDEXED_CONTENT_HASH_PREFIX,
+  buildRefreshChangelog,
+  pageRefreshUrlKey,
+  refreshDeleteUrls,
+} from "./refresh-changelog.js";
 import { cancelIngestForSource } from "../ingest/ingest-cancel.js";
 import {
   prepareChunksForPages,
@@ -31,10 +37,10 @@ import {
   clearRefreshRun,
   createRefreshRun,
   getActiveRefreshRun,
+  listRefreshRuns,
   patchRefreshRun,
   requestRefreshCancellation,
   canReuseRefreshRun,
-  type RefreshChangelog,
   type RefreshMode,
   type RefreshRunSnapshot,
 } from "../refresh/active-refresh-runs.js";
@@ -43,6 +49,10 @@ const REFRESH_PARSE_CONCURRENCY = Math.max(
   1,
   Number(process.env.LEDGEINDEX_EXTRACT_CONCURRENCY ?? 8) || 8,
 );
+
+function hashForRefresh(markdown: string): string {
+  return `${INDEXED_CONTENT_HASH_PREFIX}${hashPageContent(markdown)}`;
+}
 
 function pathLabelFromStartUrl(url: string): string {
   try {
@@ -83,40 +93,22 @@ function startRefreshDiscoverProgressSync(
   return () => clearInterval(timer);
 }
 
-function toChangelog(result: {
-  baselineCaptured: boolean;
-  unchangedCount: number;
-  added: PageSnapshotInput[];
-  updated: PageSnapshotInput[];
-  removed: Array<{ url: string; title: string }>;
-}): RefreshChangelog {
-  return {
-    baselineCaptured: result.baselineCaptured,
-    unchangedCount: result.unchangedCount,
-    added: result.added.map((page) => ({ url: page.url, title: page.title })),
-    updated: result.updated.map((page) => ({ url: page.url, title: page.title })),
-    removed: result.removed.map((page) => ({ url: page.url, title: page.title })),
+function urlDeleteVariants(url: string): string[] {
+  const variants = new Set<string>();
+  const add = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed) return;
+    variants.add(trimmed);
+    const stripped = trimmed.replace(/\/+$/, "");
+    if (stripped) variants.add(stripped);
+    if (!trimmed.endsWith("/")) variants.add(`${trimmed}/`);
   };
-}
-
-function resolveRefreshUrl(raw: string, origin: string): string {
-  const trimmed = String(raw ?? "").trim();
-  if (!trimmed) return "";
-  if (trimmed.startsWith("/") && origin) {
-    try {
-      return new URL(trimmed, origin).href;
-    } catch {
-      // fall through
-    }
-  }
-  return trimmed;
-}
-
-function refreshUrlKey(url: string, origin = ""): string {
-  const resolved = resolveRefreshUrl(url, origin);
-  const normalized = normalizeCanonicalUrl(resolved);
-  const base = normalized || resolved.toLowerCase();
-  return base.replace(/^(https?:\/\/)www\./i, "$1");
+  add(url);
+  add(url.replace(/^(https?:\/\/)www\./i, "$1"));
+  add(url.replace(/^(https?:\/\/)/i, "$1www."));
+  const keyed = pageRefreshUrlKey(url);
+  if (keyed) add(keyed);
+  return [...variants];
 }
 
 /**
@@ -133,7 +125,7 @@ async function loadIndexedPagesForRefreshDiff(sourceId: string) {
   ) => {
     for (const page of pages) {
       if (!page.url) continue;
-      const key = refreshUrlKey(page.url);
+      const key = pageRefreshUrlKey(page.url);
       if (!byKey.has(key)) {
         byKey.set(key, {
           url: page.url,
@@ -156,114 +148,41 @@ async function loadIndexedPagesForRefreshDiff(sourceId: string) {
   return [...byKey.values()];
 }
 
-/**
- * Diff live discovery against indexed catalog — not snapshot baseline noise.
- */
-function buildStructuralChangelog(
-  catalogPages: Array<{ url: string; title?: string }>,
-  incoming: PageSnapshotInput[],
-  comparison: {
-    baselineCaptured: boolean;
-    unchangedCount: number;
-    added: PageSnapshotInput[];
-    updated: PageSnapshotInput[];
-    removed: Array<{ url: string; title: string }>;
-  },
-  urlOrigin: string,
-): RefreshChangelog {
-  if (catalogPages.length === 0) {
-    if (comparison.baselineCaptured) {
-      return {
-        baselineCaptured: true,
-        unchangedCount: 0,
-        added: incoming.map((page) => ({ url: page.url, title: page.title })),
-        updated: [],
-        removed: [],
-      };
-    }
-    return toChangelog(comparison);
-  }
+const REFRESH_DELETE_CONCURRENCY = 4;
 
-  const incomingUrls = new Set(
-    incoming.map((snapshot) => refreshUrlKey(snapshot.url, urlOrigin)),
-  );
-  const catalogByKey = new Map<string, { url: string; title: string }>();
-  for (const page of catalogPages) {
-    if (!page.url) continue;
-    const key = refreshUrlKey(page.url, urlOrigin);
-    if (!catalogByKey.has(key)) {
-      catalogByKey.set(key, {
-        url: page.url,
-        title: page.title?.trim() || page.url,
-      });
-    }
-  }
-
-  const added: Array<{ url: string; title: string }> = [];
-  const addedKeys = new Set<string>();
-  for (const snapshot of incoming) {
-    const key = refreshUrlKey(snapshot.url, urlOrigin);
-    if (catalogByKey.has(key) || addedKeys.has(key)) continue;
-    added.push({ url: snapshot.url, title: snapshot.title });
-    addedKeys.add(key);
-  }
-
-  const removedKeys = new Set<string>();
-  const removed: Array<{ url: string; title: string }> = [];
-  for (const [key, entry] of catalogByKey) {
-    if (incomingUrls.has(key) || removedKeys.has(key)) continue;
-    removed.push({ url: entry.url, title: entry.title });
-    removedKeys.add(key);
-  }
-
-  const updatedKeys = new Set(
-    comparison.baselineCaptured
-      ? []
-      : comparison.updated.map((page) => refreshUrlKey(page.url, urlOrigin)),
-  );
-  const updated = comparison.baselineCaptured
-    ? []
-    : comparison.updated
-        .filter((page) =>
-          catalogByKey.has(refreshUrlKey(page.url, urlOrigin)),
-        )
-        .map((page) => ({ url: page.url, title: page.title }));
-
-  const unchangedCount = incoming.filter((snapshot) => {
-    const key = refreshUrlKey(snapshot.url, urlOrigin);
-    return (
-      catalogByKey.has(key) &&
-      !addedKeys.has(key) &&
-      !updatedKeys.has(key)
-    );
-  }).length;
-
-  return {
-    baselineCaptured: false,
-    added,
-    updated,
-    removed,
-    unchangedCount,
-  };
-}
-
-async function deleteVectorsForUrls(sourceId: string, urls: string[]) {
+async function deleteVectorsForUrls(
+  sourceId: string,
+  urls: string[],
+  onProgress?: (current: number, total: number) => void,
+) {
   if (urls.length === 0) return;
 
+  const uniqueUrls = [...new Set(urls.flatMap((url) => urlDeleteVariants(url)))];
   await ensureChunksIndex();
   const store = getVectorStore();
 
-  for (const url of urls) {
-    try {
-      await store.deleteVectors({
-        indexName: LEDGEINDEX_CHUNKS_INDEX,
-        filter: { sourceId, url },
-      });
-    } catch {
-      // Fallback: ignore per-url delete failures; upsert still adds fresh chunks.
-    }
-    await deleteLexicalChunks({ sourceId, url });
-  }
+  await deleteLexicalChunks({ sourceId, urls: uniqueUrls });
+
+  await mapWithConcurrency(
+    uniqueUrls,
+    REFRESH_DELETE_CONCURRENCY,
+    async (url) => {
+      assertRefreshNotCancelled(sourceId);
+      try {
+        await store.deleteVectors({
+          indexName: LEDGEINDEX_CHUNKS_INDEX,
+          filter: { sourceId, url },
+        });
+      } catch {
+        // Fallback: ignore per-url delete failures; upsert still adds fresh chunks.
+      }
+    },
+    {
+      onItemComplete: (completed, total) => {
+        onProgress?.(completed, total);
+      },
+    },
+  );
 }
 
 async function parseUrlsForRefresh(
@@ -326,36 +245,38 @@ async function finalizeRefreshComparison(
     total,
   });
 
-  const comparison = await comparePageSnapshotRefresh({
-    sourceId,
-    snapshots,
-  });
+  const existingSnapshots = await listPageSnapshots(sourceId);
 
   const source = await getStore().getSource(sourceId);
   const urlOrigin = source?.config?.startUrls?.find(Boolean) ?? "";
   const indexedPages = await loadIndexedPagesForRefreshDiff(sourceId);
 
-  const changelog = buildStructuralChangelog(
-    indexedPages,
-    snapshots,
-    comparison,
+  const changelog = buildRefreshChangelog({
+    catalogPages: indexedPages,
+    incoming: snapshots,
+    existingSnapshots,
     urlOrigin,
-  );
+  });
 
-  const changedUrls = new Set([
-    ...changelog.added.map((page) => page.url),
-    ...changelog.updated.map((page) => page.url),
-  ]);
+  const parsedByKey = new Map<
+    string,
+    { url: string; title: string; markdown: string }
+  >();
+  for (const page of parsed) {
+    parsedByKey.set(pageRefreshUrlKey(page.url, urlOrigin), page);
+  }
 
   const parsedPagesCache: Record<string, { title: string; markdown: string }> =
     {};
-  for (const page of parsed) {
-    if (changedUrls.has(page.url) && page.markdown.trim().length > 0) {
-      parsedPagesCache[page.url] = {
-        title: page.title,
-        markdown: page.markdown,
-      };
-    }
+  for (const ref of [...changelog.added, ...changelog.updated]) {
+    const page =
+      parsedByKey.get(pageRefreshUrlKey(ref.url, urlOrigin)) ??
+      parsed.find((entry) => entry.url === ref.url);
+    if (!page?.markdown.trim()) continue;
+    parsedPagesCache[ref.url] = {
+      title: page.title,
+      markdown: page.markdown,
+    };
   }
 
   patchRefreshRun(sourceId, {
@@ -415,7 +336,7 @@ async function runSelectedRefreshCheck(
     .map((page) => ({
       url: page.url,
       title: page.title,
-      contentHash: hashPageContent(page.markdown),
+      contentHash: hashForRefresh(page.markdown),
     }));
 
   await finalizeRefreshComparison(sourceId, run, snapshots, parsed, urls.length);
@@ -515,7 +436,7 @@ async function runDiscoverRefreshCheck(
     .map((page) => ({
       url: page.url,
       title: page.title,
-      contentHash: hashPageContent(page.markdown),
+      contentHash: hashForRefresh(page.markdown),
     }));
 
   await finalizeRefreshComparison(
@@ -564,6 +485,8 @@ async function runRefreshApply(sourceId: string, run: RefreshRunSnapshot) {
     throw new Error("Source not found");
   }
 
+  const urlOrigin = source.config.startUrls.find(Boolean) ?? "";
+
   patchRefreshRun(sourceId, {
     status: "applying",
     phase: "parsing",
@@ -572,7 +495,18 @@ async function runRefreshApply(sourceId: string, run: RefreshRunSnapshot) {
   });
 
   const cache = run.parsedPagesCache ?? {};
-  const missingUrls = urlsToApply.filter((url) => !cache[url]?.markdown.trim());
+  const cachedPage = (url: string) => {
+    const direct = cache[url];
+    if (direct?.markdown.trim()) return direct;
+    const key = pageRefreshUrlKey(url, urlOrigin);
+    for (const [cachedUrl, page] of Object.entries(cache)) {
+      if (pageRefreshUrlKey(cachedUrl, urlOrigin) === key && page.markdown.trim()) {
+        return page;
+      }
+    }
+    return null;
+  };
+  const missingUrls = urlsToApply.filter((url) => !cachedPage(url));
 
   let parsedFromFetch: Array<{ url: string; title: string; markdown: string }> =
     [];
@@ -605,55 +539,69 @@ async function runRefreshApply(sourceId: string, run: RefreshRunSnapshot) {
         },
       },
     );
-  } else {
-    patchRefreshRun(sourceId, {
-      status: "applying",
-      phase: "embedding",
-      current: 0,
-      total: urlsToApply.length,
-    });
   }
 
   const pagesToIndex = urlsToApply
     .map((url) => {
-      const cached = cache[url];
+      const cached = cachedPage(url);
       if (cached?.markdown.trim()) {
         return { url, title: cached.title, markdown: cached.markdown };
       }
-      return parsedFromFetch.find((page) => page.url === url);
+      return (
+        parsedFromFetch.find(
+          (page) =>
+            page.url === url ||
+            pageRefreshUrlKey(page.url, urlOrigin) ===
+              pageRefreshUrlKey(url, urlOrigin),
+        ) ?? null
+      );
     })
     .filter(
       (page): page is { url: string; title: string; markdown: string } =>
         Boolean(page && page.markdown.trim().length > 0),
     );
   let indexedChunkCount = 0;
+  const replaceAll =
+    pagesToIndex.length > 0 && changelog.unchangedCount === 0;
 
   if (pagesToIndex.length > 0) {
     patchRefreshRun(sourceId, {
       status: "applying",
-      phase: "embedding",
+      phase: replaceAll ? "chunking" : "deleting",
       current: 0,
       total: pagesToIndex.length,
     });
 
-    await deleteVectorsForUrls(
-      sourceId,
-      pagesToIndex.map((page) => page.url),
-    );
+    if (!replaceAll) {
+      await deleteVectorsForUrls(
+        sourceId,
+        refreshDeleteUrls({
+          ...changelog,
+          added: [],
+          removed: [],
+        }),
+        (current, total) => {
+          patchRefreshRun(sourceId, {
+            status: "applying",
+            phase: "deleting",
+            current,
+            total,
+          });
+        },
+      );
+    }
 
     const prepared = await prepareChunksForPages({
       sourceId,
       projectId: source.projectId,
       pages: pagesToIndex,
       onProgress: (progress) => {
-        if (progress.phase === "embedding") {
-          patchRefreshRun(sourceId, {
-            status: "applying",
-            phase: "embedding",
-            current: progress.current,
-            total: progress.total,
-          });
-        }
+        patchRefreshRun(sourceId, {
+          status: "applying",
+          phase: progress.phase,
+          current: progress.current,
+          total: progress.total,
+        });
       },
     });
 
@@ -661,7 +609,7 @@ async function runRefreshApply(sourceId: string, run: RefreshRunSnapshot) {
       sourceId,
       prepared,
       pageCount: pagesToIndex.length,
-      replaceMode: "incremental",
+      replaceMode: replaceAll ? "all" : "incremental",
       onProgress: (progress) => {
         patchRefreshRun(sourceId, {
           status: "applying",
@@ -675,19 +623,38 @@ async function runRefreshApply(sourceId: string, run: RefreshRunSnapshot) {
     indexedChunkCount = prepared.length;
   }
 
-  if (changelog.removed.length > 0) {
+  if (changelog.removed.length > 0 && !replaceAll) {
     await deleteVectorsForUrls(
       sourceId,
-      changelog.removed.map((page) => page.url),
+      refreshDeleteUrls({
+        ...changelog,
+        added: [],
+        updated: [],
+      }),
     );
   }
 
-  if (run.pendingSnapshots && run.pendingSnapshots.length > 0) {
-    await applyPageSnapshotRefresh({
+  if (pagesToIndex.length > 0) {
+    await syncPageSnapshotHashes({
       sourceId,
       crawlRunId: run.crawlRunId,
-      snapshots: run.pendingSnapshots,
+      snapshots: pagesToIndex.map((page) => ({
+        url: page.url,
+        title: page.title,
+        contentHash: hashForRefresh(page.markdown),
+      })),
     });
+  }
+
+  if (changelog.removed.length > 0) {
+    await tombstonePageSnapshots(
+      sourceId,
+      refreshDeleteUrls({
+        ...changelog,
+        added: [],
+        updated: [],
+      }),
+    );
   }
 
   if (pagesToIndex.length > 0 || changelog.removed.length > 0) {
@@ -806,10 +773,33 @@ export async function applySourceRefresh(sourceId: string) {
   return applyingRun;
 }
 
+export function toClientRefreshSnapshot(run: RefreshRunSnapshot) {
+  return {
+    runId: run.runId,
+    sourceId: run.sourceId,
+    crawlRunId: run.crawlRunId,
+    mode: run.mode,
+    status: run.status,
+    phase: run.phase,
+    current: run.current,
+    total: run.total,
+    activePath: run.activePath,
+    pathIndex: run.pathIndex,
+    pathTotal: run.pathTotal,
+    changelog: run.changelog,
+    error: run.error,
+    updatedAt: run.updatedAt,
+  };
+}
+
 export function getSourceRefreshStatus(
   sourceId: string,
 ): RefreshRunSnapshot | null {
   return getActiveRefreshRun(sourceId);
+}
+
+export function listSourceRefreshRuns(): RefreshRunSnapshot[] {
+  return listRefreshRuns();
 }
 
 export function cancelSourceRefresh(sourceId: string) {

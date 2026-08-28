@@ -1,0 +1,864 @@
+{
+  "schemaVersion": 1,
+  "name": "mastra-docs-50",
+  "sourceId": "f730533e-dd3d-448b-9927-6c45854d1a1b",
+  "sourceSlug": "mastra",
+  "strictness": "strict",
+  "hosting": "local",
+  "scope": "personal",
+  "corpusPin": {
+    "capturedAt": "2026-08-28T20:20:40.238Z",
+    "exportedAt": "2026-08-28T20:20:40.238Z",
+    "sourceVersionNumber": 1,
+    "sourceIndexedAt": "2026-08-28T19:36:17.537Z",
+    "pageHashes": {
+      "https://mastra.ai/docs": "idx:472edd0b8db0050f90b61361b8cded89e5013fe6aeb04eb3f6a70a6486edd047",
+      "https://mastra.ai/docs/agents/overview": "idx:7cc76300e1f788f9025d2834e2f084b86588b2047119aecc9942f7f809e9dd5c",
+      "https://mastra.ai/docs/develop": "idx:3ba2eb698a7bdd982ef71d8f8a2e73ee0fe6ce791c2c630f11652788ac07cd70",
+      "https://mastra.ai/reference/core/mastra-class": "idx:78ded9a117947b0022248464edbf6123dc538c1238a8bf1d22ee748ea8962e0d",
+      "https://mastra.ai/docs/workflows/overview": "idx:a16fdcf86ad9f563801b15cada853261b77afb5d090d029dca18c3859f3e6600",
+      "https://mastra.ai/docs/workflows/control-flow": "idx:57bea9d4b0816c177f96739fd313092c7ad8e356cb1c519fdb78b95847854e84",
+      "https://mastra.ai/docs/workflows/suspend-and-resume": "idx:555451c3eb3c0cd778e5fbc8b1ee5445616e03756ca51a72a2140afd2392cb38",
+      "https://mastra.ai/docs/agents/tools": "idx:4312e12571ce9335ec1dbe49c054387d80ed37bbeb0e000f72a82765fb84bdd9",
+      "https://mastra.ai/docs/memory/overview": "idx:035c7f3953208c759ab0ae2dfeb3b86d1e5ffa1afd02e7fc6aaec765f6ecf955",
+      "https://mastra.ai/docs/memory/semantic-recall": "idx:cdd9e627ff9ec1db49bc26bb1d1f46816cddd2c54e294e4a2ea48f89d83a9bf7",
+      "https://mastra.ai/docs/connections/mcp": "idx:809f8c8032117fc77d9cd9a7c40cd7eb1f9c76134ddff924647fc65467aeca3b",
+      "https://mastra.ai/reference/rag/overview": "idx:4a56cf2db321034f5c34d0e07d35248210945738782ff18d5b6cbd48959328f6",
+      "https://mastra.ai/reference/rag/chunking-and-embedding": "idx:a9188f56035c5b8a929087b96f6acc1be5dd0c312631c3e7f9ac8d459fc06126",
+      "https://mastra.ai/docs/evals/overview": "idx:ea62fea6f79771ca555665a74d25f3246acab775060e3033b507b657d55d4ed0",
+      "https://mastra.ai/docs/evals/running-in-ci": "idx:a3f58b27f7518f254d32a491599e091291a24ef843c4173647815b66f1e9e96d",
+      "https://mastra.ai/docs/auth/overview": "idx:cce5de16d16a99384181ce898b603de37471e887f8ecc73fd96723b538678d86",
+      "https://mastra.ai/docs/auth/simple-auth": "idx:b2bc8af076f2953f632a046bc9dedc2f8412881e98e81e5c81409bcd4f811c4c",
+      "https://mastra.ai/docs/deployment/overview": "idx:b37d944653cba6bce958d709e2288159128820d90e6cc581d8c93d6f0028c985",
+      "https://mastra.ai/reference/migrations/upgrade-to-v1/agent": "idx:179d9e6126fd4a724e109bfc47475f0722aa708cbe727bf6021624cbc1525640"
+    }
+  },
+  "defaults": {
+    "difficulty": "medium",
+    "rejectUrls": [],
+    "requiredClaimsMin": 2,
+    "requiredClaimsMax": 4,
+    "groundTruthSentencesMin": 1,
+    "groundTruthSentencesMax": 3
+  },
+  "cases": [
+    {
+      "id": "getting-started-build-with-mastra",
+      "question": "what are things you build with mastra",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "expectUrls": ["https://mastra.ai/docs"],
+      "rejectUrls": ["/docs/develop"],
+      "requiredClaims": [
+        "Mastra is a TypeScript framework for AI agents and applications.",
+        "Documented use cases include customer-facing assistants, internal copilots, data analysis agents, and content automation."
+      ],
+      "groundTruth": "Mastra is a TypeScript framework for AI agents and applications. Its documented use cases include embedded agents, customer-facing assistants, internal copilots, data analysis agents, and content automation.",
+      "tags": ["trigger", "use-cases", "confusable"],
+      "sourceUrls": ["https://mastra.ai/docs"]
+    },
+    {
+      "id": "getting-started-primitives",
+      "question": "what are the primitives",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "hard",
+      "expectUrls": ["/reference/core/mastra-class"],
+      "rejectUrls": ["/docs/workflows/overview", "/docs/agents/overview"],
+      "requiredClaims": [
+        "The Mastra class is the central orchestrator.",
+        "It is the top-level registry for agents, workflows, tools, and other shared components.",
+        "A typical application creates one Mastra instance."
+      ],
+      "groundTruth": "The `Mastra` class is the central orchestrator and top-level registry for primitives such as agents, workflows, and tools. Applications typically create one instance to coordinate shared services.",
+      "tags": ["trigger", "primitives", "reference", "confusable"],
+      "sourceUrls": ["https://mastra.ai/reference/core/mastra-class"]
+    },
+    {
+      "id": "getting-started-project-bootstrap",
+      "question": "How do I bootstrap a new Mastra project?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "expectUrls": ["https://mastra.ai/docs"],
+      "rejectUrls": ["/docs/develop"],
+      "requiredClaims": [
+        "The npm bootstrap command is `npm create mastra@latest`.",
+        "The generated project can be opened in Mastra Studio.",
+        "Mastra supports integration with frameworks including Next.js, React with Vite, Astro, Express, SvelteKit, and Hono."
+      ],
+      "groundTruth": "Run `npm create mastra@latest` to create a project, then open it in Mastra Studio. Mastra can also be integrated into an existing supported web framework.",
+      "tags": ["quickstart", "cli"],
+      "sourceUrls": ["https://mastra.ai/docs"]
+    },
+    {
+      "id": "agents-create-minimal",
+      "question": "What fields are required for a minimal Mastra Agent?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "expectUrls": ["/docs/agents/overview"],
+      "rejectUrls": ["/reference/migrations/upgrade-to-v1/agent"],
+      "requiredClaims": [
+        "Create an agent with the `Agent` class from `@mastra/core/agent`.",
+        "The documented constructor fields are `id`, `name`, `instructions`, and `model`.",
+        "The model uses `provider/model` format."
+      ],
+      "groundTruth": "Instantiate `Agent` from `@mastra/core/agent` with `id`, `name`, `instructions`, and a `model` string in `provider/model` format.",
+      "tags": ["agents", "quickstart"],
+      "sourceUrls": ["https://mastra.ai/docs/agents/overview"]
+    },
+    {
+      "id": "agents-when-to-use",
+      "question": "When should I use an agent instead of a workflow?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/agents/overview"],
+      "rejectUrls": ["/docs/workflows/overview"],
+      "requiredClaims": [
+        "Agents fit open-ended tasks whose steps are not known in advance.",
+        "An agent decides which tools to call, how often to loop, and when to stop.",
+        "Predetermined multi-step processes with explicit control flow should use workflows."
+      ],
+      "groundTruth": "Use an agent for open-ended work where the steps are not known ahead of time and the model must choose tools and stopping conditions. Use a workflow for predetermined multi-step control flow.",
+      "tags": ["agents", "workflows", "confusable"],
+      "sourceUrls": ["https://mastra.ai/docs/agents/overview"]
+    },
+    {
+      "id": "agents-generate-versus-stream",
+      "question": "What is the difference between Agent.generate and Agent.stream?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/agents/overview"],
+      "rejectUrls": ["/docs/guides/streaming"],
+      "requiredClaims": [
+        "`generate()` returns the full response after tool calls and steps complete.",
+        "`stream()` exposes `textStream` for incremental output.",
+        "Both provide tool calls, tool results, steps, and usage information."
+      ],
+      "groundTruth": "`generate()` waits for the complete response, while `stream()` exposes tokens incrementally through `textStream`. Both expose tool and step details plus usage data.",
+      "tags": ["agents", "streaming"],
+      "sourceUrls": ["https://mastra.ai/docs/agents/overview"]
+    },
+    {
+      "id": "agents-registration-benefits",
+      "question": "Why retrieve a registered agent with getAgentById instead of importing it directly?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/agents/overview"],
+      "rejectUrls": ["/reference/core/mastra-class"],
+      "requiredClaims": [
+        "Registered agents are retrieved with `mastra.getAgentById()`.",
+        "Retrieval through Mastra gives access to instance-level storage, logging, and the agent registry.",
+        "A directly imported agent lacks those shared services unless configured locally."
+      ],
+      "groundTruth": "Use `mastra.getAgentById()` so the agent receives instance-level services such as storage, logging, and registry access. A direct import only has its own local configuration.",
+      "tags": ["agents", "registration"],
+      "sourceUrls": ["https://mastra.ai/docs/agents/overview"]
+    },
+    {
+      "id": "develop-local-studio",
+      "question": "How do I run Mastra locally and where do I open Studio?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "expectUrls": ["/docs/develop"],
+      "rejectUrls": ["/docs/deployment/overview"],
+      "requiredClaims": [
+        "Run `npx mastra dev` from the project root.",
+        "Studio is available at `http://localhost:4111`.",
+        "The API browser is available at `http://localhost:4111/api`."
+      ],
+      "groundTruth": "Run `npx mastra dev`, then open Studio at `http://localhost:4111`. Browse the local agent, tool, and workflow APIs at `http://localhost:4111/api`.",
+      "tags": ["develop", "studio", "local"],
+      "sourceUrls": ["https://mastra.ai/docs/develop"]
+    },
+    {
+      "id": "develop-file-based-discovery",
+      "question": "When does Mastra discover file-based agents?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/develop"],
+      "rejectUrls": ["/docs/agents/overview"],
+      "requiredClaims": [
+        "File-based discovery runs through `mastra dev` or `mastra build`.",
+        "Importing Mastra directly through a framework or server adapter does not run discovery.",
+        "Direct-import setups must register agents in code or run Mastra as a separate server."
+      ],
+      "groundTruth": "File-based agents are discovered only by `mastra dev` or `mastra build`. Apps that import Mastra directly must register agents in code or use a separate Mastra server.",
+      "tags": ["develop", "file-based-agents", "confusable"],
+      "sourceUrls": ["https://mastra.ai/docs/develop"]
+    },
+    {
+      "id": "develop-project-structure",
+      "question": "What project structure does Mastra recommend for framework code?",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "easy",
+      "expectUrls": ["/docs/develop"],
+      "rejectUrls": ["/reference/project-structure"],
+      "requiredClaims": [
+        "Framework code should live under `src/mastra/`.",
+        "Related primitives should be grouped into their own files or folders.",
+        "`src/mastra/index.ts` is the central configuration and registration point."
+      ],
+      "groundTruth": "Keep Mastra framework code under `src/mastra/`, group related primitives by file or folder, and use `src/mastra/index.ts` to configure and register them.",
+      "tags": ["develop", "project-structure"],
+      "sourceUrls": ["https://mastra.ai/docs/develop"]
+    },
+    {
+      "id": "workflows-core-principles",
+      "question": "What are the core building blocks of a Mastra workflow?",
+      "category": "workflows/tools",
+      "difficulty": "easy",
+      "expectUrls": ["/docs/workflows/overview"],
+      "rejectUrls": ["/docs/agents/overview"],
+      "requiredClaims": [
+        "Steps are defined with `createStep` and input/output schemas.",
+        "Steps are composed with `createWorkflow`.",
+        "Workflows support suspension, resumption, and streaming results."
+      ],
+      "groundTruth": "Define typed steps with `createStep`, compose them with `createWorkflow`, and run the committed workflow. The engine supports suspension, resumption, and streaming.",
+      "tags": ["workflows", "steps"],
+      "sourceUrls": ["https://mastra.ai/docs/workflows/overview"]
+    },
+    {
+      "id": "workflows-create-step",
+      "question": "How is a workflow step defined and what does execute receive?",
+      "category": "workflows/tools",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/workflows/overview"],
+      "rejectUrls": ["/docs/agents/tools"],
+      "requiredClaims": [
+        "Use `createStep()`.",
+        "The step declares `inputSchema` and `outputSchema`.",
+        "Its `execute` function reads input through `inputData` and returns data matching the output schema."
+      ],
+      "groundTruth": "Call `createStep()` with input and output schemas and an `execute` function. The function reads `inputData` and returns the shape declared by the output schema.",
+      "tags": ["workflows", "createStep"],
+      "sourceUrls": ["https://mastra.ai/docs/workflows/overview"]
+    },
+    {
+      "id": "workflows-create-and-commit",
+      "question": "How do I compose and finalize a Mastra workflow?",
+      "category": "workflows/tools",
+      "difficulty": "easy",
+      "expectUrls": ["/docs/workflows/overview"],
+      "rejectUrls": ["/reference/workflows/workflow"],
+      "requiredClaims": [
+        "Create it with `createWorkflow()` and workflow-level input/output schemas.",
+        "Add sequential steps with `.then()`.",
+        "Finalize the definition with `.commit()`."
+      ],
+      "groundTruth": "Create the workflow with its input and output schemas, chain steps with `.then()`, and call `.commit()` to finalize it.",
+      "tags": ["workflows", "createWorkflow"],
+      "sourceUrls": ["https://mastra.ai/docs/workflows/overview"]
+    },
+    {
+      "id": "workflows-start-versus-stream",
+      "question": "When should I use workflow start versus stream?",
+      "category": "workflows/tools",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/workflows/overview"],
+      "rejectUrls": ["/docs/guides/streaming"],
+      "requiredClaims": [
+        "Create a run with `createRun()` before either mode.",
+        "`start()` waits for all steps and returns the final result.",
+        "`stream()` emits events during execution and exposes a final `result` promise."
+      ],
+      "groundTruth": "Create a run first. Use `start()` when only the final result matters, or `stream()` to observe execution events and then await the final result.",
+      "tags": ["workflows", "streaming"],
+      "sourceUrls": ["https://mastra.ai/docs/workflows/overview"]
+    },
+    {
+      "id": "workflows-result-statuses",
+      "question": "Which status values can a Mastra workflow result have?",
+      "category": "workflows/tools",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/workflows/overview"],
+      "rejectUrls": ["/reference/workflows/workflow"],
+      "requiredClaims": [
+        "The result is a discriminated union keyed by `status`.",
+        "Statuses are `success`, `failed`, `suspended`, `tripwire`, and `paused`.",
+        "Status-specific properties include `result`, `error`, `tripwire`, or suspension data."
+      ],
+      "groundTruth": "Workflow results use a `status` discriminant with `success`, `failed`, `suspended`, `tripwire`, or `paused`. Narrow the status before reading status-specific fields.",
+      "tags": ["workflows", "results", "types"],
+      "sourceUrls": ["https://mastra.ai/docs/workflows/overview"]
+    },
+    {
+      "id": "workflow-control-parallel",
+      "question": "How does parallel workflow execution shape its output?",
+      "category": "workflows/tools",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/workflows/control-flow"],
+      "rejectUrls": ["/docs/workflows/overview"],
+      "requiredClaims": [
+        "`.parallel()` runs its steps simultaneously.",
+        "All parallel steps complete before the next step runs.",
+        "The output object is keyed by each child step's `id`."
+      ],
+      "groundTruth": "`.parallel()` runs different steps on the same input and waits for all of them. It returns an object keyed by each step ID.",
+      "tags": ["workflows", "parallel", "control-flow"],
+      "sourceUrls": ["https://mastra.ai/docs/workflows/control-flow"]
+    },
+    {
+      "id": "workflow-control-branch",
+      "question": "What schema and execution rules apply to workflow branch?",
+      "category": "workflows/tools",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/workflows/control-flow"],
+      "rejectUrls": ["/reference/workflows/workflow-methods/branch"],
+      "requiredClaims": [
+        "`.branch()` executes the first branch whose condition evaluates true.",
+        "All branch steps need the same input and output schemas.",
+        "The branch output is keyed by the executed step's ID."
+      ],
+      "groundTruth": "`.branch()` checks conditions in order and runs the first matching branch. Branch steps share compatible schemas, and the selected output is keyed by its step ID.",
+      "tags": ["workflows", "branch", "control-flow"],
+      "sourceUrls": ["https://mastra.ai/docs/workflows/control-flow"]
+    },
+    {
+      "id": "workflow-control-foreach",
+      "question": "How does foreach handle arrays and concurrency?",
+      "category": "workflows/tools",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/workflows/control-flow"],
+      "rejectUrls": ["/reference/workflows/workflow-methods/foreach"],
+      "requiredClaims": [
+        "`.foreach()` applies one step to every item in an input array.",
+        "It returns outputs in input order as an array.",
+        "Its default concurrency is 1 and can be changed with `{ concurrency: N }`."
+      ],
+      "groundTruth": "`.foreach()` maps a step over an array and returns an ordered output array. It runs sequentially by default and accepts a concurrency limit.",
+      "tags": ["workflows", "foreach", "control-flow"],
+      "sourceUrls": ["https://mastra.ai/docs/workflows/control-flow"]
+    },
+    {
+      "id": "workflow-suspend-resume",
+      "question": "How do suspend and resume preserve a workflow run?",
+      "category": "workflows/tools",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/workflows/suspend-and-resume"],
+      "rejectUrls": ["/docs/workflows/overview"],
+      "requiredClaims": [
+        "`suspend()` pauses a workflow within a step.",
+        "The execution state is saved as a snapshot in configured storage.",
+        "`resume()` supplies data matching the step's `resumeSchema` and continues from the paused step."
+      ],
+      "groundTruth": "`suspend()` pauses a step and persists the run state as a snapshot. `resume()` restores that run and supplies typed resume data so execution can continue.",
+      "tags": ["workflows", "suspend", "resume"],
+      "sourceUrls": ["https://mastra.ai/docs/workflows/suspend-and-resume"]
+    },
+    {
+      "id": "tools-create-signature",
+      "question": "What is the current createTool execute signature?",
+      "category": "workflows/tools",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/agents/tools"],
+      "rejectUrls": ["/reference/migrations/upgrade-to-v1/agent"],
+      "requiredClaims": [
+        "Tools are created with `createTool` from `@mastra/core/tools`.",
+        "The signature is `execute(inputData, context)`.",
+        "The first argument is validated input and the second contains execution metadata such as request context and abort signal."
+      ],
+      "groundTruth": "Define tools with `createTool`. Its current execution signature is `execute(inputData, context)`, where the runtime validates the first argument and supplies execution metadata in the second.",
+      "tags": ["tools", "createTool", "api-signature"],
+      "sourceUrls": ["https://mastra.ai/docs/agents/tools"]
+    },
+    {
+      "id": "memory-feature-layers",
+      "question": "Which memory features can a Mastra agent enable?",
+      "category": "memory/MCP",
+      "difficulty": "easy",
+      "expectUrls": ["/docs/memory/overview"],
+      "rejectUrls": ["/docs/memory/message-history"],
+      "requiredClaims": [
+        "Message history stores user messages, agent replies, and tool results.",
+        "Optional features include Observational Memory, working memory, semantic recall, and multi-user threads.",
+        "Memory processors can trim or prioritize content when context grows."
+      ],
+      "groundTruth": "Mastra memory includes message history and can add Observational Memory, working memory, semantic recall, and multi-user threads. Memory processors control oversized context.",
+      "tags": ["memory", "features"],
+      "sourceUrls": ["https://mastra.ai/docs/memory/overview"]
+    },
+    {
+      "id": "memory-quickstart-storage",
+      "question": "What does the basic Mastra memory setup require?",
+      "category": "memory/MCP",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/memory/overview"],
+      "rejectUrls": ["/docs/storage"],
+      "requiredClaims": [
+        "Install `@mastra/memory`.",
+        "A storage provider is required to persist message history.",
+        "Create a `Memory` instance and pass it to the agent's `memory` option."
+      ],
+      "groundTruth": "Install `@mastra/memory`, configure persistent storage, and pass a `Memory` instance to the agent. The quickstart uses a LibSQL store.",
+      "tags": ["memory", "quickstart"],
+      "sourceUrls": ["https://mastra.ai/docs/memory/overview"]
+    },
+    {
+      "id": "memory-thread-resource",
+      "question": "What do resource and thread mean in Mastra message history?",
+      "category": "memory/MCP",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/memory/overview"],
+      "rejectUrls": ["/docs/memory/multi-user-threads"],
+      "requiredClaims": [
+        "`resource` is a stable identifier for a user or entity.",
+        "`thread` isolates a conversation or session.",
+        "Recall requires using the same resource and thread identifiers."
+      ],
+      "groundTruth": "`resource` identifies the owning user or entity, while `thread` identifies one conversation. Reuse both identifiers to recall that conversation's memory.",
+      "tags": ["memory", "threads", "resources"],
+      "sourceUrls": ["https://mastra.ai/docs/memory/overview"]
+    },
+    {
+      "id": "memory-model-context-placement",
+      "question": "Where do message history and cross-thread semantic recall appear in model context?",
+      "category": "memory/MCP",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/memory/overview"],
+      "rejectUrls": ["/docs/memory/semantic-recall"],
+      "requiredClaims": [
+        "Same-thread semantic recall interleaves with message history by timestamp.",
+        "Cross-thread semantic recall is formatted as a system message.",
+        "The new user message is placed last."
+      ],
+      "groundTruth": "Same-thread recalled messages interleave chronologically with message history, while cross-thread recall is added as a system message. The new user message comes last.",
+      "tags": ["memory", "context-window", "confusable"],
+      "sourceUrls": ["https://mastra.ai/docs/memory/overview"]
+    },
+    {
+      "id": "memory-subagent-isolation",
+      "question": "How is memory scoped when a supervisor delegates to a subagent?",
+      "category": "memory/MCP",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/memory/overview"],
+      "rejectUrls": ["/docs/subagents"],
+      "requiredClaims": [
+        "Each delegation gets a fresh thread ID.",
+        "The subagent resource ID is deterministically derived as `{parentResourceId}-{agentName}`.",
+        "A subagent without its own memory inherits the supervisor's Memory instance and options."
+      ],
+      "groundTruth": "Delegation creates a fresh subagent thread but a stable resource ID derived from the parent resource and agent name. A subagent inherits supervisor memory unless it defines its own.",
+      "tags": ["memory", "subagents", "isolation"],
+      "sourceUrls": ["https://mastra.ai/docs/memory/overview"]
+    },
+    {
+      "id": "memory-semantic-recall-mechanics",
+      "question": "How does semantic recall retrieve old messages?",
+      "category": "memory/MCP",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/memory/semantic-recall"],
+      "rejectUrls": ["/docs/memory/overview"],
+      "requiredClaims": [
+        "Semantic recall is RAG-based search over message embeddings.",
+        "New messages query a vector database for semantically similar messages.",
+        "User, assistant, and tool messages are inserted after an LLM response for later recall."
+      ],
+      "groundTruth": "Semantic recall embeds messages and queries a vector database by meaning. New conversation and tool messages are indexed after the response for later retrieval.",
+      "tags": ["memory", "semantic-recall", "vectors"],
+      "sourceUrls": ["https://mastra.ai/docs/memory/semantic-recall"]
+    },
+    {
+      "id": "memory-semantic-recall-options",
+      "question": "Which options tune Mastra semantic recall?",
+      "category": "memory/MCP",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/memory/semantic-recall"],
+      "rejectUrls": ["/reference/memory/recall"],
+      "requiredClaims": [
+        "`topK` controls the number of similar messages.",
+        "`messageRange` includes surrounding messages.",
+        "`scope` selects current-thread or resource-wide search.",
+        "`filter` restricts results using metadata."
+      ],
+      "groundTruth": "Tune semantic recall with `topK`, `messageRange`, `scope`, and metadata `filter`. Resource scope searches across threads for one resource where the storage adapter supports it.",
+      "tags": ["memory", "semantic-recall", "configuration"],
+      "sourceUrls": ["https://mastra.ai/docs/memory/semantic-recall"]
+    },
+    {
+      "id": "mcp-client-server-roles",
+      "question": "What are MCPClient and MCPServer used for in Mastra?",
+      "category": "memory/MCP",
+      "difficulty": "easy",
+      "expectUrls": ["/docs/connections/mcp"],
+      "rejectUrls": [
+        "/reference/tools/mcp-client",
+        "/reference/tools/mcp-server"
+      ],
+      "requiredClaims": [
+        "`MCPClient` connects Mastra to external MCP servers.",
+        "`MCPServer` exposes Mastra agents, tools, workflows, prompts, and resources.",
+        "The package is `@mastra/mcp`."
+      ],
+      "groundTruth": "Use `MCPClient` to consume external MCP tools and resources. Use `MCPServer` to expose Mastra primitives to MCP-compatible clients; both come from `@mastra/mcp`.",
+      "tags": ["mcp", "client", "server"],
+      "sourceUrls": ["https://mastra.ai/docs/connections/mcp"]
+    },
+    {
+      "id": "mcp-static-runtime-tools",
+      "question": "When should MCP tools be loaded with listTools versus listToolsets?",
+      "category": "memory/MCP",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/connections/mcp"],
+      "rejectUrls": ["/reference/tools/mcp-client"],
+      "requiredClaims": [
+        "`listTools()` fits shared, fixed server configuration.",
+        "`listToolsets()` fits per-user or per-request configuration.",
+        "Static tools go in the Agent constructor while runtime toolsets go to `generate()` or `stream()`."
+      ],
+      "groundTruth": "Use `listTools()` for fixed tools and shared credentials in the Agent constructor. Use `listToolsets()` at run time when configuration or credentials vary per request.",
+      "tags": ["mcp", "tools", "credentials"],
+      "sourceUrls": ["https://mastra.ai/docs/connections/mcp"]
+    },
+    {
+      "id": "mcp-security-controls",
+      "question": "What security controls does Mastra recommend for MCP connections?",
+      "category": "memory/MCP",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/connections/mcp"],
+      "rejectUrls": ["/reference/tools/mcp-client"],
+      "requiredClaims": [
+        "Restrict untrusted outbound HTTP configurations with `allowedHosts`.",
+        "Treat tool results as untrusted model input and inspect or sanitize them with processors.",
+        "Use `requireToolApproval` to gate sensitive tools.",
+        "Stdio subprocesses inherit a curated environment rather than the full parent environment."
+      ],
+      "groundTruth": "Restrict outbound hosts, limit subprocess environment variables, sanitize untrusted tool results with processors, and require approval for sensitive tools.",
+      "tags": ["mcp", "security"],
+      "sourceUrls": ["https://mastra.ai/docs/connections/mcp"]
+    },
+    {
+      "id": "rag-pipeline-stages",
+      "question": "What are the stages of a basic Mastra RAG pipeline?",
+      "category": "RAG/evals",
+      "difficulty": "easy",
+      "expectUrls": ["/reference/rag/overview"],
+      "rejectUrls": ["/reference/rag/chunking-and-embedding"],
+      "requiredClaims": [
+        "Create a document and split it into chunks.",
+        "Generate embeddings for chunk text.",
+        "Store embeddings in a vector database.",
+        "Embed a query and retrieve similar chunks at query time."
+      ],
+      "groundTruth": "Create and chunk a document, embed each chunk, store the vectors, then embed the query and retrieve similar chunks for model context.",
+      "tags": ["rag", "pipeline"],
+      "sourceUrls": ["https://mastra.ai/reference/rag/overview"]
+    },
+    {
+      "id": "rag-system-capabilities",
+      "question": "What does Mastra's RAG system provide?",
+      "category": "RAG/evals",
+      "difficulty": "easy",
+      "expectUrls": ["/reference/rag/overview"],
+      "rejectUrls": ["/docs/memory/semantic-recall"],
+      "requiredClaims": [
+        "It provides standardized document processing and embedding APIs.",
+        "It supports multiple vector stores.",
+        "It includes chunking strategies and retrieval observability."
+      ],
+      "groundTruth": "Mastra RAG provides document processing and embedding APIs, multiple vector-store integrations, chunking strategies, and observability for embedding and retrieval.",
+      "tags": ["rag", "capabilities"],
+      "sourceUrls": ["https://mastra.ai/reference/rag/overview"]
+    },
+    {
+      "id": "rag-document-input-formats",
+      "question": "Which content formats can initialize an MDocument?",
+      "category": "RAG/evals",
+      "difficulty": "medium",
+      "expectUrls": ["/reference/rag/chunking-and-embedding"],
+      "rejectUrls": ["/reference/rag/document"],
+      "requiredClaims": [
+        "`MDocument.fromText()` accepts plain text.",
+        "`fromHTML()` and `fromMarkdown()` handle markup.",
+        "`fromJSON()` handles JSON content."
+      ],
+      "groundTruth": "`MDocument` can be initialized from text, HTML, Markdown, or JSON with the corresponding static constructor.",
+      "tags": ["rag", "MDocument"],
+      "sourceUrls": ["https://mastra.ai/reference/rag/chunking-and-embedding"]
+    },
+    {
+      "id": "rag-chunk-strategies",
+      "question": "Which chunking strategies does MDocument support?",
+      "category": "RAG/evals",
+      "difficulty": "medium",
+      "expectUrls": ["/reference/rag/chunking-and-embedding"],
+      "rejectUrls": ["/reference/rag/chunk"],
+      "requiredClaims": [
+        "Strategies include recursive, character, token, markdown, semantic-markdown, HTML, JSON, LaTeX, and sentence.",
+        "Each strategy accepts parameters suited to its document type.",
+        "Metadata extraction may invoke an LLM and require an API key."
+      ],
+      "groundTruth": "MDocument supports recursive, character, token, Markdown, semantic Markdown, HTML, JSON, LaTeX, and sentence-aware chunking. Strategy parameters differ, and metadata extraction may call an LLM.",
+      "tags": ["rag", "chunking"],
+      "sourceUrls": ["https://mastra.ai/reference/rag/chunking-and-embedding"]
+    },
+    {
+      "id": "rag-embedding-dimensions",
+      "question": "What must match when reducing embedding dimensions?",
+      "category": "RAG/evals",
+      "difficulty": "hard",
+      "expectUrls": ["/reference/rag/chunking-and-embedding"],
+      "rejectUrls": ["/reference/rag/embeddings"],
+      "requiredClaims": [
+        "Some embedding models support lower output dimensions.",
+        "Lower dimensions can reduce storage and similarity-search costs.",
+        "The vector database index dimension must match the embedding output size."
+      ],
+      "groundTruth": "If a model emits reduced-dimension vectors, configure the vector index to exactly that output size. Reduced dimensions can lower storage and query costs, but a mismatch can cause errors or corrupted data.",
+      "tags": ["rag", "embeddings", "dimensions"],
+      "sourceUrls": ["https://mastra.ai/reference/rag/chunking-and-embedding"]
+    },
+    {
+      "id": "evals-scorer-purpose",
+      "question": "Why does Mastra use scorers for AI evaluations?",
+      "category": "RAG/evals",
+      "difficulty": "easy",
+      "expectUrls": ["/docs/evals/overview"],
+      "rejectUrls": ["/docs/evals/built-in-scorers"],
+      "requiredClaims": [
+        "AI outputs are non-deterministic.",
+        "Scorers produce numerical quality metrics, typically from 0 to 1.",
+        "Scorers may be model-graded, rule-based, or statistical."
+      ],
+      "groundTruth": "Because AI output varies for the same input, Mastra scorers quantify quality with numerical scores. Scoring can be model-based, rule-based, or statistical.",
+      "tags": ["evals", "scorers"],
+      "sourceUrls": ["https://mastra.ai/docs/evals/overview"]
+    },
+    {
+      "id": "evals-live-sampling",
+      "question": "How does live evaluation sampling work in Mastra?",
+      "category": "RAG/evals",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/evals/overview"],
+      "rejectUrls": ["/docs/observability/tracing/overview"],
+      "requiredClaims": [
+        "Live evaluations run asynchronously without blocking agent or workflow execution.",
+        "`sampling.rate` controls the eligible fraction scored.",
+        "Sampling is deterministic per trace ID, or per run ID when no trace exists.",
+        "Runs declined by trace sampling are not scored."
+      ],
+      "groundTruth": "Live scorers run in the background. Their rate is deterministic for a trace, falling back to the run ID when needed, and runs with declined traces are skipped.",
+      "tags": ["evals", "sampling", "live"],
+      "sourceUrls": ["https://mastra.ai/docs/evals/overview"]
+    },
+    {
+      "id": "evals-score-persistence",
+      "question": "What is required for Mastra scorer results to persist?",
+      "category": "RAG/evals",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/evals/overview"],
+      "rejectUrls": ["/reference/evals/run-evals"],
+      "requiredClaims": [
+        "The Mastra instance must have storage configured.",
+        "The scorer must be registered so Mastra can resolve its metadata by ID.",
+        "Scorers passed directly to `runEvals()` need registration through the Mastra `scorers` option."
+      ],
+      "groundTruth": "Persisted scores require configured storage and a registered scorer. Scorers passed directly to `runEvals()` must also appear in the Mastra instance's `scorers` registry.",
+      "tags": ["evals", "storage", "registration"],
+      "sourceUrls": ["https://mastra.ai/docs/evals/overview"]
+    },
+    {
+      "id": "getting-started-basic-setup-confusable",
+      "question": "what is the basic setup",
+      "category": "getting-started/agents/confusable",
+      "difficulty": "hard",
+      "expectUrls": ["https://mastra.ai/docs"],
+      "rejectUrls": [
+        "/docs/evals/running-in-ci",
+        "/docs/observability/integrations/exporters/mastra-storage"
+      ],
+      "requiredClaims": [
+        "The bootstrap command is `npm create mastra@latest`.",
+        "The generated project can be opened in Mastra Studio.",
+        "Agent models use the `provider/model` string format."
+      ],
+      "groundTruth": "Create the project with `npm create mastra@latest`, then open it in Mastra Studio. A basic agent specifies its model with a `provider/model` string.",
+      "tags": ["trigger", "quickstart", "confusable"],
+      "sourceUrls": ["https://mastra.ai/docs"]
+    },
+    {
+      "id": "evals-run-evals-data-results",
+      "question": "What data does runEvals accept and what aggregate results does it return?",
+      "category": "RAG/evals",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/evals/running-in-ci"],
+      "rejectUrls": ["/reference/evals/run-evals"],
+      "requiredClaims": [
+        "Each data item contains `input` and may contain `groundTruth`.",
+        "The result has average scores keyed by scorer.",
+        "`summary.totalItems` reports the number of processed cases."
+      ],
+      "groundTruth": "`runEvals` accepts data items with `input` and optional `groundTruth`. It returns per-scorer aggregate averages and `summary.totalItems`.",
+      "tags": ["evals", "runEvals", "ci"],
+      "sourceUrls": ["https://mastra.ai/docs/evals/running-in-ci"]
+    },
+    {
+      "id": "reference-mastra-registry",
+      "question": "What can be registered on the Mastra class?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "medium",
+      "expectUrls": ["/reference/core/mastra-class"],
+      "rejectUrls": ["/docs/agents/overview"],
+      "requiredClaims": [
+        "The class registers agents, workflows, and tools.",
+        "It can configure storage, vector stores, logging, and observability.",
+        "It can also register MCP servers, scorers, processors, memory instances, and gateways."
+      ],
+      "groundTruth": "The Mastra instance is the application registry for agents, workflows, tools, and MCP servers, and it configures shared services such as storage, vectors, logging, observability, scorers, processors, memory, and gateways.",
+      "tags": ["reference", "Mastra-class"],
+      "sourceUrls": ["https://mastra.ai/reference/core/mastra-class"]
+    },
+    {
+      "id": "reference-tool-id-lookups",
+      "question": "How do Mastra tool registration keys differ from intrinsic tool IDs?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "hard",
+      "expectUrls": ["/reference/core/mastra-class"],
+      "rejectUrls": ["/docs/agents/tools"],
+      "requiredClaims": [
+        "The `tools` constructor option is a record keyed by registration key.",
+        "`getTool()` uses the registration key.",
+        "`getToolById()` uses a tool's intrinsic ID.",
+        "`listTools()` reads the registry."
+      ],
+      "groundTruth": "The key in the Mastra `tools` record is the registration key used by `getTool()`. Use `getToolById()` for the tool's own ID and `listTools()` to inspect the registry.",
+      "tags": ["reference", "tools", "confusable"],
+      "sourceUrls": ["https://mastra.ai/reference/core/mastra-class"]
+    },
+    {
+      "id": "auth-protected-surfaces",
+      "question": "What does configuring Mastra authentication secure?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "easy",
+      "expectUrls": ["/docs/auth/overview"],
+      "rejectUrls": ["/docs/auth/simple-auth"],
+      "requiredClaims": [
+        "Authentication protects the Studio UI.",
+        "It protects built-in API routes and authenticated custom routes.",
+        "Without auth, Studio and routes are publicly accessible."
+      ],
+      "groundTruth": "Mastra auth secures both Studio and API routes. If auth is not configured, both are public unless other controls are added.",
+      "tags": ["auth", "studio", "api"],
+      "sourceUrls": ["https://mastra.ai/docs/auth/overview"]
+    },
+    {
+      "id": "auth-custom-prefix-warning",
+      "question": "What auth change is needed after setting a custom server.apiPrefix?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "hard",
+      "expectUrls": ["/docs/auth/overview"],
+      "rejectUrls": ["/docs/server/custom-api-routes"],
+      "requiredClaims": [
+        "Default auth patterns protect `/api/*` and leave `/api` and `/api/auth/*` public.",
+        "A custom API prefix no longer matches those defaults.",
+        "Both `server.auth.protected` and `server.auth.public` must be updated for the new prefix."
+      ],
+      "groundTruth": "A custom `server.apiPrefix` invalidates the default `/api` auth patterns. Update the protected and public route patterns to use the new prefix.",
+      "tags": ["auth", "api-prefix", "confusable"],
+      "sourceUrls": ["https://mastra.ai/docs/auth/overview"]
+    },
+    {
+      "id": "auth-simple-headers",
+      "question": "Which headers does SimpleAuth check by default?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/auth/simple-auth"],
+      "rejectUrls": ["/docs/auth/jwt"],
+      "requiredClaims": [
+        "SimpleAuth checks `Authorization` by default.",
+        "The Authorization token may include or omit the `Bearer` prefix.",
+        "It also checks `X-Playground-Access`.",
+        "Custom headers can be added with the `headers` option."
+      ],
+      "groundTruth": "SimpleAuth checks `Authorization`, with or without `Bearer`, and `X-Playground-Access`. Add other names through its `headers` option.",
+      "tags": ["auth", "SimpleAuth", "headers"],
+      "sourceUrls": ["https://mastra.ai/docs/auth/simple-auth"]
+    },
+    {
+      "id": "auth-simple-limitations",
+      "question": "Why is SimpleAuth not intended as full production security?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/auth/simple-auth"],
+      "rejectUrls": ["/docs/auth/overview"],
+      "requiredClaims": [
+        "Tokens are stored in memory and must be known at startup.",
+        "SimpleAuth has no token expiration or refresh.",
+        "It performs no cryptographic verification."
+      ],
+      "groundTruth": "SimpleAuth stores startup-known tokens in memory and has no expiration, refresh, or cryptographic verification. The docs recommend a full identity provider for production.",
+      "tags": ["auth", "SimpleAuth", "limitations"],
+      "sourceUrls": ["https://mastra.ai/docs/auth/simple-auth"]
+    },
+    {
+      "id": "deploy-runtime-support",
+      "question": "Which runtimes can host a Mastra application?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "easy",
+      "expectUrls": ["/docs/deployment/overview"],
+      "rejectUrls": ["/docs/develop"],
+      "requiredClaims": [
+        "Supported runtimes include Node.js 22.13.0 or later.",
+        "Bun and Deno are supported.",
+        "Cloudflare is supported."
+      ],
+      "groundTruth": "Mastra supports Node.js 22.13.0 or later, Bun, Deno, and Cloudflare runtime environments.",
+      "tags": ["deployment", "runtimes"],
+      "sourceUrls": ["https://mastra.ai/docs/deployment/overview"]
+    },
+    {
+      "id": "deploy-server-versus-framework",
+      "question": "How does deploying a Mastra server differ from integrating Mastra into a web framework?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "medium",
+      "expectUrls": ["/docs/deployment/overview"],
+      "rejectUrls": [
+        "/docs/deployment/mastra-server",
+        "/docs/deployment/web-framework"
+      ],
+      "requiredClaims": [
+        "A standalone Hono-based server is built with `mastra build` and deployed to a VM, container, or PaaS.",
+        "A web-framework integration deploys through that framework's normal process.",
+        "The standalone server suits infrastructure control, long-running processes, or WebSockets."
+      ],
+      "groundTruth": "Build the standalone Hono server with `mastra build` when you need control over infrastructure or long-running connections. Framework integrations ship with the host framework's standard deployment process.",
+      "tags": ["deployment", "server", "web-framework", "confusable"],
+      "sourceUrls": ["https://mastra.ai/docs/deployment/overview"]
+    },
+    {
+      "id": "migration-agent-context-and-list",
+      "question": "Which v1 agent API names replace RuntimeContext and getAgents?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "medium",
+      "expectUrls": ["/reference/migrations/upgrade-to-v1/agent"],
+      "rejectUrls": ["/docs/agents/overview"],
+      "requiredClaims": [
+        "`RuntimeContext` was renamed to `RequestContext`.",
+        "`runtimeContext` call options became `requestContext`.",
+        "`mastra.getAgents()` was renamed to `mastra.listAgents()`."
+      ],
+      "groundTruth": "In v1, replace `RuntimeContext` and `runtimeContext` with `RequestContext` and `requestContext`. Replace `mastra.getAgents()` with `mastra.listAgents()`.",
+      "tags": ["migration", "v1", "agents"],
+      "sourceUrls": [
+        "https://mastra.ai/reference/migrations/upgrade-to-v1/agent"
+      ]
+    },
+    {
+      "id": "migration-agent-memory-options",
+      "question": "How did agent memory call options change in Mastra v1?",
+      "category": "reference/auth/deploy/migration/confusable",
+      "difficulty": "hard",
+      "expectUrls": ["/reference/migrations/upgrade-to-v1/agent"],
+      "rejectUrls": ["/docs/memory/overview"],
+      "requiredClaims": [
+        "Top-level `threadId` and `resourceId` options were removed from agent `stream()` and `generate()`.",
+        "They now belong under the `memory` option as `thread` and `resource`.",
+        "`agent.fetchMemory()` was replaced by awaiting `agent.getMemory()` and calling `recall()`."
+      ],
+      "groundTruth": "Move top-level thread and resource IDs into `memory: { thread, resource }`. For direct retrieval, replace `fetchMemory()` with `await agent.getMemory()` followed by `memory.recall()`.",
+      "tags": ["migration", "v1", "memory", "confusable"],
+      "sourceUrls": [
+        "https://mastra.ai/reference/migrations/upgrade-to-v1/agent"
+      ]
+    }
+  ]
+}

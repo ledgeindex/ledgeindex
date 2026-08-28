@@ -72,6 +72,18 @@ const rateLimitPlugin: FastifyPluginAsync<RegisterRateLimitOptions> = async (
   await fastify.register(rateLimit, {
     global: false,
     hook: "preHandler",
+    enableDraftSpec: true,
+    addHeadersOnExceeding: {
+      "ratelimit-limit": true,
+      "ratelimit-remaining": true,
+      "ratelimit-reset": true,
+    },
+    addHeaders: {
+      "ratelimit-limit": true,
+      "ratelimit-remaining": true,
+      "ratelimit-reset": true,
+      "retry-after": true,
+    },
   });
 
   fastify.addHook("onRoute", (routeOptions: RouteOptions) => {
@@ -102,14 +114,19 @@ const rateLimitPlugin: FastifyPluginAsync<RegisterRateLimitOptions> = async (
           ? config.fallback.readMaxPerWindow
           : config.fallback.writeMaxPerWindow;
       },
-      errorResponseBuilder: (_request, context) => ({
-        statusCode: 429,
-        error: {
+      errorResponseBuilder: (_request, context) => {
+        const after = String(context.after);
+        const retrySeconds = Number.parseInt(after, 10);
+        return {
+          type: "https://ledgeindex.com/problems/rate-limited",
+          title: "Too Many Requests",
+          status: 429,
+          detail: `Too many requests. Retry after ${after}.`,
           code: "RATE_LIMITED",
-          type: "rate_limit",
-          message: `Too many requests. Retry after ${context.after}.`,
-        },
-      }),
+          error: `Too many requests. Retry after ${after}.`,
+          retryAfter: Number.isFinite(retrySeconds) ? retrySeconds : after,
+        };
+      },
     });
 
     chain.push(rlPreHandler);

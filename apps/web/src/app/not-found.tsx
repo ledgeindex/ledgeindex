@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { Container } from "@/components/ui/container";
+import { notFoundMarkdown } from "@/lib/agent-readiness/markdown";
 import { docsSiteHref } from "@/lib/docs-site-url";
 import { getSiteUrl } from "@/lib/site-url";
 
@@ -9,6 +10,9 @@ export default function NotFound() {
 
   return (
     <div className="flex min-h-dvh flex-col bg-background">
+      <pre className="sr-only" id="agent-404">
+        {notFoundMarkdown("/not-found")}
+      </pre>
       <Container className="flex flex-1 flex-col justify-center py-16">
         <p className="font-mono text-xs font-semibold tracking-[0.18em] text-muted uppercase">
           404

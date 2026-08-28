@@ -78,7 +78,9 @@ const mcpOAuthFastifyMiddleware: FastifyPluginAsync = async (fastify) => {
 
     const token = readBearerToken(request.headers.authorization);
     if (!token) {
-      return sendUnauthorized(reply, "Authentication required.");
+      // Initialize / server/discover / tools/list work without a token.
+      // Tool execute() still requires a user id.
+      return;
     }
 
     const user = await resolveMcpBearerUser(token);

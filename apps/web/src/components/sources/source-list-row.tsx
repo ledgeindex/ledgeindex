@@ -21,6 +21,10 @@ import {
   resolveStartUrls,
   SourceStartUrlsHint,
 } from "@/components/sources/source-start-urls-hint";
+import {
+  isPersonalCloudSource,
+  SourceCloudBadge,
+} from "@/components/sources/source-cloud-badge";
 import { cn } from "@/lib/utils";
 import type { SourceSummary } from "@/lib/ledgeindex-api";
 
@@ -66,6 +70,26 @@ function SourceFavicon({
   );
 }
 
+function SourceListFavicon({
+  source,
+  className,
+}: {
+  source: SourceSummary;
+  className?: string;
+}) {
+  return (
+    <div className="relative shrink-0">
+      <SourceFavicon source={source} className={className} />
+      {isPersonalCloudSource(source) ? (
+        <SourceCloudBadge
+          size="sm"
+          className="absolute -right-1 -bottom-1 size-4 border-border/90"
+        />
+      ) : null}
+    </div>
+  );
+}
+
 /** Lightweight floating preview while dragging. */
 export function SourceListRowDragPreview({
   source,
@@ -79,7 +103,7 @@ export function SourceListRowDragPreview({
   return (
     <div className="flex h-12 w-[min(36rem,calc(100vw-2rem))] items-center gap-2 rounded-lg border border-accent/40 bg-card-solid px-2.5 shadow-lg">
       <GripVertical className="size-3.5 shrink-0 text-muted" aria-hidden />
-      <SourceFavicon source={source} className="size-7" />
+      <SourceListFavicon source={source} className="size-7" />
       <div className="min-w-0 flex-1">
         <p className="truncate text-[0.8125rem] leading-4 font-semibold text-foreground">
           {source.name}
@@ -272,7 +296,7 @@ export function SourceListRow({
         </button>
       ) : null}
 
-      <SourceFavicon source={activeSource} className="size-7" />
+      <SourceListFavicon source={activeSource} className="size-7" />
 
       <div className="min-w-0 flex-1 overflow-hidden">
         <div className="min-w-0">

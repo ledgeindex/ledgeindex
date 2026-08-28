@@ -9,6 +9,7 @@ import { IndexedFlashProvider } from '@/contexts/indexed-flash-context'
 import { DashboardToolbarProvider } from '@/contexts/dashboard-toolbar-context'
 import { SourceChatToolbarProvider } from '@/contexts/source-chat-toolbar-context'
 import { SourceBuilderToolbarProvider } from '@/contexts/source-builder-toolbar-context'
+import { SourceRefreshJobsProvider } from '@/contexts/source-refresh-jobs-context'
 import { getLedgeIndexDesktop } from '@/lib/ledgeindex-desktop'
 import {
   resolveDesktopLocalApiUrl,
@@ -40,41 +41,43 @@ function AuthenticatedApp(): React.JSX.Element {
           <DashboardToolbarProvider>
             <SourceChatToolbarProvider>
               <SourceBuilderToolbarProvider>
-                <AppShell>
-                  <AppErrorBoundary label="page">
-                    <Routes>
-                      <Route path="/dashboard" element={<DashboardPage />} />
-                      <Route path="/sources/web-crawl" element={<WebCrawlPage />} />
-                      <Route path="/sources/builder" element={<SourceBuilderPage />} />
-                      <Route
-                        path="/sources/builder/:draftId"
-                        element={<SourceBuilderDraftPage />}
-                      />
-                      <Route path="/sources/:sourceId/chat" element={<SourceChatPage />} />
-                      <Route path="/source-sets" element={<SourceSetsPage />} />
-                      <Route path="/mcp/connect" element={<McpConnectPage />} />
-                      <Route path="/widget" element={<WebsiteWidgetPage />} />
-                      <Route
-                        path="/integrations"
-                        element={<Navigate to="/widget" replace />}
-                      />
-                      <Route path="/api-keys" element={<ApiKeysPage />} />
-                      <Route path="/usage" element={<UsagePage />} />
-                      <Route path="/billing" element={<BillingPage />} />
-                      <Route
-                        path="/settings/providers"
-                        element={<DesktopProviderKeysPage />}
-                      />
-                      <Route
-                        path="/admin/source-updater"
-                        element={<AdminSourceUpdaterPage />}
-                      />
-                      <Route path="/chat" element={<ExploreChatPage />} />
-                      <Route path="/" element={<Navigate to="/chat" replace />} />
-                      <Route path="*" element={<Navigate to="/chat" replace />} />
-                    </Routes>
-                  </AppErrorBoundary>
-                </AppShell>
+                <SourceRefreshJobsProvider>
+                  <AppShell>
+                    <AppErrorBoundary label="page">
+                      <Routes>
+                        <Route path="/dashboard" element={<DashboardPage />} />
+                        <Route path="/sources/web-crawl" element={<WebCrawlPage />} />
+                        <Route path="/sources/builder" element={<SourceBuilderPage />} />
+                        <Route
+                          path="/sources/builder/:draftId"
+                          element={<SourceBuilderDraftPage />}
+                        />
+                        <Route path="/sources/:sourceId/chat" element={<SourceChatPage />} />
+                        <Route path="/source-sets" element={<SourceSetsPage />} />
+                        <Route path="/mcp/connect" element={<McpConnectPage />} />
+                        <Route path="/widget" element={<WebsiteWidgetPage />} />
+                        <Route
+                          path="/integrations"
+                          element={<Navigate to="/widget" replace />}
+                        />
+                        <Route path="/api-keys" element={<ApiKeysPage />} />
+                        <Route path="/usage" element={<UsagePage />} />
+                        <Route path="/billing" element={<BillingPage />} />
+                        <Route
+                          path="/settings/providers"
+                          element={<DesktopProviderKeysPage />}
+                        />
+                        <Route
+                          path="/admin/source-updater"
+                          element={<AdminSourceUpdaterPage />}
+                        />
+                        <Route path="/chat" element={<ExploreChatPage />} />
+                        <Route path="/" element={<Navigate to="/chat" replace />} />
+                        <Route path="*" element={<Navigate to="/chat" replace />} />
+                      </Routes>
+                    </AppErrorBoundary>
+                  </AppShell>
+                </SourceRefreshJobsProvider>
               </SourceBuilderToolbarProvider>
             </SourceChatToolbarProvider>
           </DashboardToolbarProvider>
