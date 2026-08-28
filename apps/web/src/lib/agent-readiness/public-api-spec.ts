@@ -1,4 +1,8 @@
-/** Website copy: `apps/web/src/lib/agent-readiness/public-api-spec.ts` (Docker has no packages/). */
+/**
+ * Public OpenAPI + MCP manifest for the website (`/openapi.json`, `/.well-known/mcp.json`).
+ * Keep in sync with `packages/docs/src/runtime/openapi/public-api-spec.ts` (API server).
+ * The web Docker build has no monorepo `packages/` tree, so this file lives here.
+ */
 export type PublicApiSpecUrls = {
   siteUrl: string;
   apiUrl: string;

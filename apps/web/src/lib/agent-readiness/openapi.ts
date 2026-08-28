@@ -3,7 +3,7 @@ import { getPublicApiBaseUrl } from "./api-base";
 import {
   buildPublicMcpManifest,
   buildPublicOpenApiSpec,
-} from "../../../../../packages/docs/src/runtime/openapi/public-api-spec";
+} from "./public-api-spec";
 
 export function buildOpenApiSpec() {
   return buildPublicOpenApiSpec({
