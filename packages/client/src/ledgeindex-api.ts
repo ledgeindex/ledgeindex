@@ -100,6 +100,16 @@ export function resolveRemoteApiBaseUrl(): string | null {
   return null;
 }
 
+/** Hosted account API when configured; active API for self-hosted/local installs. */
+export function getCloudAccountApiBaseUrl(): string {
+  return resolveRemoteApiBaseUrl() ?? getLedgeIndexApiBaseUrl();
+}
+
+function cloudAccountApiOptions(): { baseUrl: string } | undefined {
+  const remoteBase = resolveRemoteApiBaseUrl();
+  return remoteBase ? { baseUrl: remoteBase } : undefined;
+}
+
 export function setLedgeIndexRemoteApiBaseUrl(url: string | null): void {
   if (!url?.trim()) {
     remoteApiBaseUrl = null;
@@ -2134,9 +2144,11 @@ export async function ensurePlaygroundApiKey() {
     success: boolean;
     data: ApiKeySummary[];
     provisioned_key?: string;
-  }>("/api/auth/api-keys/ensure-playground", {
-    method: "POST",
-  });
+  }>(
+    "/api/auth/api-keys/ensure-playground",
+    { method: "POST" },
+    cloudAccountApiOptions(),
+  );
 }
 
 export type DailyMessageUsage = {
@@ -2153,7 +2165,7 @@ export async function getAuthMe() {
     plan?: "free" | "pro";
     planLimitsEnabled?: boolean;
     dailyMessages?: DailyMessageUsage | null;
-  }>("/api/auth/me");
+  }>("/api/auth/me", undefined, cloudAccountApiOptions());
 }
 
 export type PaddleCheckoutConfig = {
@@ -2179,7 +2191,11 @@ export type BillingConfigResponse = {
 };
 
 export async function getBillingConfig() {
-  return api<BillingConfigResponse>("/api/billing/config");
+  return api<BillingConfigResponse>(
+    "/api/billing/config",
+    undefined,
+    cloudAccountApiOptions(),
+  );
 }
 
 export async function listApiKeys() {
@@ -2193,7 +2209,7 @@ export async function listApiKeys() {
       can_revoke: boolean;
     };
     provisioned_key?: string;
-  }>("/api/auth/api-keys");
+  }>("/api/auth/api-keys", undefined, cloudAccountApiOptions());
 }
 
 export async function createApiKey() {
@@ -2206,16 +2222,21 @@ export async function createApiKey() {
       scopes: string[];
     };
     message?: string;
-  }>("/api/auth/api-keys", {
-    method: "POST",
-    body: JSON.stringify({}),
-  });
+  }>(
+    "/api/auth/api-keys",
+    {
+      method: "POST",
+      body: JSON.stringify({}),
+    },
+    cloudAccountApiOptions(),
+  );
 }
 
 export async function deleteApiKey(keyId: string) {
   return api<{ success: boolean; message?: string }>(
     `/api/auth/api-keys/${keyId}`,
     { method: "DELETE" },
+    cloudAccountApiOptions(),
   );
 }
 

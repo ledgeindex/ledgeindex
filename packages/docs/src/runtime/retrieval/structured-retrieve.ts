@@ -60,6 +60,7 @@ export async function retrieveWithStructuredRewrite(input: {
   let retrieval = await kapaRetrieveMany({
     queries: rewrite.queries,
     question: input.question,
+    rerankQuery: rewrite.rerankQuery,
     sourceId: input.sourceId,
     filter: input.filter,
     catalogQueries: rewrite.catalogQueries,
@@ -75,6 +76,7 @@ export async function retrieveWithStructuredRewrite(input: {
     retrieval = await kapaRetrieveMany({
       queries: rewrite.queries,
       question: input.question,
+      rerankQuery: rewrite.rerankQuery,
       sourceId: input.sourceId,
       filter: input.filter,
       catalogQueries: rewrite.catalogQueries,
@@ -88,6 +90,7 @@ export async function retrieveWithStructuredRewrite(input: {
     retrieval = await kapaRetrieveMany({
       queries: rewrite.queries,
       question: input.question,
+      rerankQuery: rewrite.rerankQuery,
       sourceId: input.sourceId,
       filter: input.filter,
       catalogQueries: rewrite.catalogQueries,

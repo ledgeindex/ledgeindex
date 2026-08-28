@@ -1,6 +1,9 @@
 import { Agent } from "@mastra/core/agent";
 import { z } from "zod";
-import { cleanQuestionForRetrieve } from "@ledgeindex/core/query/query-intent.js";
+import {
+  cleanQuestionForRetrieve,
+  fallbackIntentForRerank,
+} from "@ledgeindex/core/query/query-intent.js";
 import { mergeRewriteWithCatalogPhrases } from "@ledgeindex/core/query/rank-catalog-pages.js";
 import type { MetadataCatalogPage } from "./metadata-catalog.js";
 import {
@@ -11,8 +14,9 @@ import { agentStructuredOutput } from "../llm/agent-structured-output.js";
 
 const rewriteOutputSchema = z.object({
   topicScope: z.enum(["single", "multi"]),
+  canonicalQuestion: z.string().min(3).max(220).optional(),
   /** Natural-language search queries (embedding + BM25 use the same text). */
-  queries: z.array(z.string().min(3).max(120)).min(1).max(3),
+  queries: z.array(z.string().min(3).max(120)).min(1),
 });
 
 export type RewriteTopicScope = "single" | "multi";
@@ -23,6 +27,8 @@ const REWRITE_TEMPERATURE = 0;
 export type RewriteResult = {
   /** Generated NL variants plus catalog title queries; retrieve also includes the user question. */
   queries: string[];
+  /** Corrected, intent-preserving question used for cross-encoder reranking. */
+  rerankQuery: string;
   /** Catalog page titles appended after the LLM variants. */
   catalogQueries: string[];
   topicScope: RewriteTopicScope;
@@ -53,6 +59,7 @@ function fallbackRewrite(
   const seed = cleaned ? [cleaned] : [question.trim().slice(0, 120)];
   return {
     ...attachCatalogQueries(question, seed, "single", pages),
+    rerankQuery: cleaned || question.trim().slice(0, 220),
     topicScope: "single",
     method: "fallback",
     rewriteModelId,
@@ -84,7 +91,8 @@ Use vocabulary from the page catalog. Resolve follow-ups from conversation histo
 
 Output:
 1. topicScope — "single" or "multi".
-2. queries — 1–3 complete natural-language questions or short phrases suitable for BOTH vector search and keyword search.
+2. canonicalQuestion — rewrite the user's complete question with spelling and grammar corrected. Preserve product names, identifiers, code, and intent. Use documentation terminology when the catalog provides it.
+3. queries — 1–3 complete natural-language questions or short phrases suitable for BOTH vector search and keyword search.
    - Use catalog terminology; prefer how the docs phrase the topic.
    - When a catalog page title names the topic (e.g. "Get started", "Quickstart", "Installation"), include that exact title as one query.
    - Do NOT output keyword lists, coreGoal splits, or code dumps.
@@ -115,6 +123,10 @@ The retrieve pipeline always runs the user's original question as well; your que
           topicScope,
           input.pages,
         ),
+        rerankQuery:
+          object.canonicalQuestion?.trim() ||
+          object.queries[0]?.trim() ||
+          fallbackIntentForRerank(input.question),
         topicScope,
         method: "llm",
         rewriteModelId,

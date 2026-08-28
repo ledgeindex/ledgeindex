@@ -711,8 +711,10 @@ export async function kapaRetrieveMany(input: {
   /** Generated NL query variants from rewrite (original question merged at retrieve). */
   queries: string[];
   sourceId: string;
-  /** User question — always included in fusion; drives cross-encoder rerank. */
+  /** User question, always included in fusion and retained as rerank fallback. */
   question?: string;
+  /** Corrected, intent-preserving question for cross-encoder reranking. */
+  rerankQuery?: string;
   filter?: KapaRetrieveFilter;
   relevanceThreshold?: number;
   /** Ignored — all fusion queries always run (LlamaIndex merge pattern). */
@@ -747,8 +749,11 @@ export async function kapaRetrieveMany(input: {
     throw new Error("At least one non-empty query is required");
   }
 
-  const rerankQuery = buildRerankQuery({
+  const originalRerankQuery = buildRerankQuery({
     originalQuestion: question || fusionQueries[0],
+  });
+  const rerankQuery = buildRerankQuery({
+    originalQuestion: input.rerankQuery || question || fusionQueries[0],
   });
   const candidateCount = getSearchRerankCandidates();
 
@@ -763,7 +768,7 @@ export async function kapaRetrieveMany(input: {
     return kapaRetrieve({
       query: fusionQueries[0],
       rerankQuery,
-      escalationRerankQuery: rerankQuery,
+      escalationRerankQuery: originalRerankQuery,
       prefused: {
         initialResults: fused.results,
         queryVector: fused.queryVector,

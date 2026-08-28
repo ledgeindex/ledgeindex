@@ -88,8 +88,8 @@ function OriginsEditor({
   const [draft, setDraft] = useState("");
   const [localError, setLocalError] = useState<string | null>(null);
 
-  function addOrigin() {
-    const origin = parseOriginInput(draft);
+  function addOrigin(raw: string) {
+    const origin = parseOriginInput(raw);
     if (!origin) {
       setLocalError("Enter a full origin, e.g. https://docs.yoursite.com");
       return;
@@ -101,11 +101,14 @@ function OriginsEditor({
     setLocalError(null);
     onChange([...origins, origin]);
     setDraft("");
+    onDraftChange?.("");
   }
 
   return (
     <div className="grid gap-2">
-      <span className="text-xs text-muted">Your website origins</span>
+      <span className="text-xs text-muted">
+        Websites allowed to use this widget
+      </span>
       {origins.length > 0 ? (
         <ul className="flex flex-col gap-1.5">
           {origins.map((origin) => (
@@ -130,7 +133,7 @@ function OriginsEditor({
         </ul>
       ) : (
         <p className="text-[0.6875rem] text-muted">
-          No origins yet — add the site that will embed the widget.
+          Paste the URL of the site where you will embed the widget.
         </p>
       )}
       <div className="flex gap-2">
@@ -145,10 +148,16 @@ function OriginsEditor({
             onDraftChange?.(e.target.value);
             if (localError) setLocalError(null);
           }}
+          onPaste={(e) => {
+            const pasted = e.clipboardData.getData("text");
+            if (!parseOriginInput(pasted)) return;
+            e.preventDefault();
+            addOrigin(pasted);
+          }}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
               e.preventDefault();
-              addOrigin();
+              addOrigin(draft);
             }
           }}
         />
@@ -157,17 +166,18 @@ function OriginsEditor({
           variant="secondary"
           className="h-9 shrink-0 gap-1 px-3 text-xs"
           disabled={disabled || !draft.trim()}
-          onClick={addOrigin}
+          onClick={() => addOrigin(draft)}
         >
           <Plus className="size-3.5" />
-          Add
+          Add site
         </Button>
       </div>
       {localError ? (
         <p className="text-[0.6875rem] text-destructive">{localError}</p>
       ) : (
         <p className="text-[0.6875rem] leading-4 text-muted">
-          One origin at a time (scheme + host). Path is ignored —{" "}
+          Pasted URLs are added automatically. You can also type a URL and press
+          Enter. Paths are reduced to the origin:{" "}
           <code className="rounded bg-surface-raised px-1">
             https://docs.yoursite.com/guides
           </code>{" "}
@@ -198,9 +208,13 @@ async function loadCloudSources(): Promise<SourceSummary[]> {
   for (const source of globalRes.sources) {
     byId.set(source.id, source);
   }
-  return [...byId.values()]
-    .filter(isCloudBoundableSource)
-    .sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+  const uniqueSources = [
+    ...new Map([...byId.values()].map((source) => [source.id, source])).values(),
+  ];
+  return uniqueSources.filter(isCloudBoundableSource).sort((a, b) => {
+    const scopeOrder = Number(a.scope === "global") - Number(b.scope === "global");
+    return scopeOrder || (a.name || a.id).localeCompare(b.name || b.id);
+  });
 }
 
 export default function WebsiteWidgetPage() {
@@ -221,6 +235,14 @@ export default function WebsiteWidgetPage() {
   >({});
 
   const cloudApi = resolveWidgetCloudApiBaseUrl();
+  const userCloudSources = useMemo(
+    () => sources.filter((source) => source.scope !== "global"),
+    [sources],
+  );
+  const publicSources = useMemo(
+    () => sources.filter((source) => source.scope === "global"),
+    [sources],
+  );
 
   const loadWidgets = useCallback(async (catalog: SourceSummary[]) => {
     syncWidgetCloudApi();
@@ -418,18 +440,31 @@ export default function WebsiteWidgetPage() {
                 {sources.length === 0 ? (
                   <option value="">{emptySourcesMessage}</option>
                 ) : (
-                  sources.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.scope === "global"
-                        ? `${s.name || s.id} (public)`
-                        : s.name || s.id}
-                    </option>
-                  ))
+                  <>
+                    {userCloudSources.length > 0 ? (
+                      <optgroup label="Your cloud sources">
+                        {userCloudSources.map((source) => (
+                          <option key={source.id} value={source.id}>
+                            {source.name || source.id}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                    {publicSources.length > 0 ? (
+                      <optgroup label="Public catalog sources">
+                        {publicSources.map((source) => (
+                          <option key={source.id} value={source.id}>
+                            {source.name || source.id}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ) : null}
+                  </>
                 )}
               </select>
               <span className="text-[0.6875rem] leading-4 text-muted">
-                Your cloud crawl or a public catalog source. Answers are served from{" "}
-                {cloudApi}.
+                Your cloud sources are listed first, followed by the public
+                catalog. Answers are served from {cloudApi}.
               </span>
             </label>
 

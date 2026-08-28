@@ -7,7 +7,7 @@ import {
   Layers,
   LayoutDashboard,
   MessageSquare,
-  Puzzle,
+  PanelTop,
   Plug,
   Plus,
   RefreshCw,
@@ -26,6 +26,8 @@ export type AppNavItem = {
   requiresPlanLimits?: boolean;
   /** Only show inside @ledgeindex/desktop (Electron). */
   desktopOnly?: boolean;
+  /** Only show in the hosted web app. */
+  webOnly?: boolean;
 };
 
 export const APP_NAV_ITEMS: AppNavItem[] = [
@@ -46,7 +48,7 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
     id: "website-widget",
     label: "Website widget",
     href: "/widget",
-    icon: Puzzle,
+    icon: PanelTop,
   },
   {
     id: "dashboard",
@@ -77,6 +79,7 @@ export const APP_NAV_ITEMS: AppNavItem[] = [
     label: "API keys",
     href: "/api-keys",
     icon: KeyRound,
+    webOnly: true,
   },
   {
     id: "usage",

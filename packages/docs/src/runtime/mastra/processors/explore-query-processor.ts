@@ -528,7 +528,7 @@ async function loadSourceCatalog(input: {
 async function retrieveSourceHits(input: {
   source: ExploreSource;
   rewrite: RewriteResult;
-  /** Original user question — fusion retrieve + rerank on this text. */
+  /** Original user question, retained in fusion retrieval. */
   question: string;
   authToken: string;
 }): Promise<{
@@ -599,6 +599,7 @@ async function retrieveSourceHits(input: {
     let retrieval = await kapaRetrieveMany({
       queries,
       question: input.question,
+      rerankQuery: input.rewrite.rerankQuery,
       sourceId: input.source.id,
       catalogQueries: input.rewrite.catalogQueries,
     });
@@ -607,6 +608,7 @@ async function retrieveSourceHits(input: {
       retrieval = await kapaRetrieveMany({
         queries,
         question: input.question,
+        rerankQuery: input.rewrite.rerankQuery,
         sourceId: input.source.id,
         catalogQueries: input.rewrite.catalogQueries,
         relevanceThreshold: RELAXED_RELEVANCE_THRESHOLD,

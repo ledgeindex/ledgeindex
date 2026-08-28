@@ -56,6 +56,7 @@ function AppSidebarInner({
     (item) =>
       (!item.adminOnly || isAdmin) &&
       (!item.desktopOnly || Boolean(desktop)) &&
+      (!item.webOnly || !desktop) &&
       (!item.requiresPlanLimits || planLimitsEnabled),
   );
 

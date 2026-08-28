@@ -3,7 +3,6 @@ import type { MastraDBMessage } from "@mastra/core/agent";
 import { getMetadataCatalog } from "../../retrieval/metadata-catalog-store.js";
 import { ensureCatalogHasPages } from "../../retrieval/page-catalog-rebuild.js";
 import { resolveCatalogUrlFilter } from "../../retrieval/rank-catalog-pages.js";
-import { buildRerankQuery } from "@ledgeindex/core/query/query-intent.js";
 import {
   formatCatalogForAgent,
   filterCatalogByUrlPrefix,
@@ -526,6 +525,7 @@ export class RAGQueryProcessor implements Processor {
     const rewriteStarted = performance.now();
     const {
       queries,
+      rerankQuery,
       catalogQueries,
       topicScope,
       method: rewriteMethod,
@@ -544,8 +544,6 @@ export class RAGQueryProcessor implements Processor {
       detail: rewriteModelId,
     });
 
-    const rerankQuery = buildRerankQuery({ originalQuestion: question });
-
     const catalogUrlCandidate = scopedCatalog?.pages?.length
       ? resolveCatalogUrlFilter(question, scopedCatalog.pages)
       : null;
@@ -563,6 +561,7 @@ export class RAGQueryProcessor implements Processor {
     let retrieval = await kapaRetrieveMany({
       queries,
       question,
+      rerankQuery,
       sourceId,
       catalogUrlFilter,
       catalogQueries,
@@ -603,6 +602,7 @@ export class RAGQueryProcessor implements Processor {
       retrieval = await kapaRetrieveMany({
         queries,
         question,
+        rerankQuery,
         sourceId,
         catalogUrlFilter,
         catalogQueries,
@@ -633,6 +633,7 @@ export class RAGQueryProcessor implements Processor {
       retrieval = await kapaRetrieveMany({
         queries,
         question,
+        rerankQuery,
         sourceId,
         catalogUrlFilter,
         catalogQueries,

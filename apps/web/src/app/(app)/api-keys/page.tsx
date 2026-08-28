@@ -10,13 +10,16 @@ import {
   deleteApiKey,
   KnowledgeIndexApiError,
   listApiKeys,
-  getLedgeIndexApiBaseUrl,
+  getCloudAccountApiBaseUrl,
   type ApiKeySummary,
 } from "@/lib/ledgeindex-api";
+import { useLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
+import { LEDGEINDEX_SITE_URL } from "@/lib/site-url";
 import { cn } from "@/lib/utils";
 
 export default function ApiKeysPage() {
   const { isAdmin } = useAuth();
+  const desktop = useLedgeIndexDesktop();
   const [apiKeys, setApiKeys] = useState<ApiKeySummary[]>([]);
   const [limit, setLimit] = useState(1);
   const [canCreate, setCanCreate] = useState(false);
@@ -48,10 +51,11 @@ export default function ApiKeysPage() {
   }
 
   useEffect(() => {
+    if (desktop) return;
     if (loadedRef.current) return;
     loadedRef.current = true;
     void loadKeys();
-  }, []);
+  }, [desktop]);
 
   async function handleCreate() {
     setCreating(true);
@@ -88,6 +92,31 @@ export default function ApiKeysPage() {
   }
 
   const atLimit = apiKeys.length >= limit;
+
+  if (desktop) {
+    return (
+      <div className="relative flex min-h-0 flex-1 items-start justify-center overflow-y-auto px-4 py-10">
+        <section className="w-full max-w-xl rounded-2xl border border-border bg-card-solid p-6 shadow-card">
+          <KeyRound className="size-5 text-muted" />
+          <h1 className="mt-4 text-xl font-semibold text-foreground">
+            Manage API keys on the web
+          </h1>
+          <p className="mt-2 text-sm leading-6 text-muted">
+            API keys belong to your hosted LedgeIndex account. Open the web app
+            to create, copy, or revoke them.
+          </p>
+          <Button
+            href={`${LEDGEINDEX_SITE_URL}/api-keys`}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-5"
+          >
+            Open API keys
+          </Button>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -160,7 +189,7 @@ export default function ApiKeysPage() {
             Usage
           </p>
           <pre className="field-input mt-3 overflow-x-auto font-mono text-xs leading-relaxed">
-{`curl ${getLedgeIndexApiBaseUrl()}/api/projects \\
+{`curl ${getCloudAccountApiBaseUrl()}/api/projects \\
   -H "Authorization: ApiKey live_..."`}
           </pre>
         </div>

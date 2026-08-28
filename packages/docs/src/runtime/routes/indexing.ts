@@ -527,6 +527,7 @@ export async function indexingRoutes(fastify: FastifyInstance) {
         pruned: retrieval.chunks,
         rewrite: {
           queries: retrieval.rewrite.queries,
+          rerankQuery: retrieval.rewrite.rerankQuery,
           topicScope: retrieval.rewrite.topicScope,
         },
       };
