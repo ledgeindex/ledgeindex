@@ -72,6 +72,8 @@ export type RunCompanyProfileInput = {
    * Markdown (when present) is used instead of fetching the URL.
    */
   seedPages?: SeedCatalogPage[];
+  /** Optional user guidance for page selection and profile synthesis. */
+  hint?: string;
   onLensStart?: (lens: ResearchLens, index: number, total: number) => void;
   onProgress?: (progress: CompanyProfileProgress) => void;
 };
@@ -190,6 +192,7 @@ export async function runCompanyProfile(
     const pick = await pickCatalogForLens(crawl.pages, lens, {
       ...modelOpts,
       rootUrl: crawl.rootUrl,
+      hint: input.hint,
     });
 
     if (pick.selected.length === 0) {
@@ -222,7 +225,10 @@ export async function runCompanyProfile(
       index: i,
       total: lenses.length,
     });
-    const synth = await synthesizeLens(lens, fetchedPages, modelOpts);
+    const synth = await synthesizeLens(lens, fetchedPages, {
+      ...modelOpts,
+      hint: input.hint,
+    });
 
     setProfileLens(profile, lens, synth.data);
     runs.push({

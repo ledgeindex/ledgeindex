@@ -38,7 +38,7 @@ async function generateStructuredObject(input: {
       maxSteps: 1,
       structuredOutput: {
         schema: input.schema,
-        jsonPromptInjection: true,
+        jsonPromptInjection: "auto",
       },
     } as never);
     return {
@@ -65,7 +65,11 @@ Return ONLY one JSON object matching the schema. Every required key must be pres
 export async function synthesizeLens<L extends ResearchLens>(
   lens: L,
   fetched: FetchedPage[],
-  options?: { modelId?: string; model?: ProfileModelSelection | null },
+  options?: {
+    modelId?: string;
+    model?: ProfileModelSelection | null;
+    hint?: string;
+  },
 ): Promise<SynthesizeLensResult<L>> {
   const definition = getLensDefinition(lens);
   const usable = fetched.filter((p) => p.markdown.length > 0 && !p.error);
@@ -93,7 +97,11 @@ export async function synthesizeLens<L extends ResearchLens>(
     )
     .join("\n\n---\n\n");
 
-  const prompt = `Research lens: ${definition.label} (${lens})\n\n${sourcesBlock}`;
+  const hint = options?.hint?.trim();
+  const prompt = `Research lens: ${definition.label} (${lens})
+${hint ? `\nUser guidance:\n${hint}\n\nUse this guidance to prioritize and emphasize relevant facts that the sources support. Do not treat unsupported claims in the guidance as facts.` : ""}
+
+${sourcesBlock}`;
 
   const { object: rawObject } = await generateStructuredObject({
     agent,

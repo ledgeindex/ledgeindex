@@ -47,7 +47,7 @@ export const Reasoning = memo(function Reasoning({
   className,
   isStreaming = false,
   open,
-  defaultOpen = true,
+  defaultOpen = false,
   onOpenChange,
   duration: durationProp,
   children,

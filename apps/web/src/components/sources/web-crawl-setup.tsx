@@ -9,6 +9,7 @@ import { cn } from "@/lib/utils";
 import { IngestPipelineFlow } from "@/components/sources/ingest-pipeline-flow";
 import { CrawlUrlFilterAssistant } from "@/components/sources/crawl-url-filter-assistant";
 import { NewSourceFirstHint } from "@/components/sources/new-source-first-hint";
+import { AgentGuideReviewDialog } from "@/components/sources/agent-guide-review-dialog";
 import { MobileMenuButton } from "@/components/app/app-shell";
 import { setWebCrawlHeaderControls } from "@/contexts/web-crawl-header-context";
 import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
@@ -749,6 +750,9 @@ export function WebCrawlSetup() {
     useState(false);
   const [crawlRun, setCrawlRun] = useState<CrawlRun | null>(null);
   const [parsePages, setParsePages] = useState<ParsePreviewPage[]>([]);
+  const [agentGuideSourceId, setAgentGuideSourceId] = useState<string | null>(
+    null,
+  );
   const [activePreviewTab, setActivePreviewTab] = useState(0);
   const [selectedPreviewUrls, setSelectedPreviewUrls] = useState<string[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
@@ -1719,9 +1723,13 @@ export function WebCrawlSetup() {
       setBusy(null);
       setSaved(true);
       setIngestSnapshot(snapshot);
-      router.push(dashboardIndexRedirectUrl(id, sourceScope));
+      if (isPathScopedMode) {
+        router.push(dashboardIndexRedirectUrl(id, sourceScope));
+      } else {
+        setAgentGuideSourceId(id);
+      }
     },
-    [router, sourceScope],
+    [isPathScopedMode, router, sourceScope],
   );
 
   useEffect(() => {
@@ -2716,7 +2724,11 @@ export function WebCrawlSetup() {
           })),
         );
         setSaved(true);
-        router.push(dashboardIndexRedirectUrl(id, sourceScope));
+        if (isPathScopedMode) {
+          router.push(dashboardIndexRedirectUrl(id, sourceScope));
+        } else {
+          setAgentGuideSourceId(id);
+        }
         return;
       }
 
@@ -4192,6 +4204,19 @@ export function WebCrawlSetup() {
         }
         onClose={() => setRobotsModalOpen(false)}
       />
+      {agentGuideSourceId ? (
+        <AgentGuideReviewDialog
+          open
+          sourceId={agentGuideSourceId}
+          onComplete={() => {
+            const completedSourceId = agentGuideSourceId;
+            setAgentGuideSourceId(null);
+            router.push(
+              dashboardIndexRedirectUrl(completedSourceId, sourceScope),
+            );
+          }}
+        />
+      ) : null}
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CachedRemoteImage } from "@/components/sources/cached-remote-image";
 import { SourceActionsMenu } from "@/components/sources/source-actions-menu";
 import { SourceCategoryBadges } from "@/components/sources/source-category-filter";
@@ -31,6 +31,10 @@ function SourceCardFavicon({
   const [failed, setFailed] = useState(false);
   const initials = source.name.slice(0, 2).toUpperCase();
   const showFavicon = Boolean(source.faviconUrl) && !failed;
+
+  useEffect(() => {
+    setFailed(false);
+  }, [source.faviconUrl, source.id]);
 
   if (showFavicon) {
     return (

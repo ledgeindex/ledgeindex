@@ -6,6 +6,7 @@ import { test } from "node:test";
 import {
   SOURCE_CORPUS_EXPORT_FORMAT,
   SOURCE_CORPUS_EXPORT_VERSION,
+  sourceCorpusPagesToProfileSeedPages,
   type SourceCorpusExport,
   writeSourceCorpusToDirectory,
 } from "./source-corpus.js";
@@ -107,4 +108,17 @@ test("writes page markdown and a versioned manifest", async () => {
   } finally {
     await rm(outputDirectory, { force: true, recursive: true });
   }
+});
+
+test("keeps large indexed catalogs available for profile picking", () => {
+  const pages = Array.from({ length: 540 }, (_, index) => ({
+    ...fixture().pages[0]!,
+    url: `https://mastra.ai/docs/page-${index}`,
+    title: `Page ${index}`,
+  }));
+
+  const seeds = sourceCorpusPagesToProfileSeedPages(pages);
+
+  assert.equal(seeds.length, 540);
+  assert.equal(seeds.at(-1)?.title, "Page 539");
 });

@@ -48,6 +48,7 @@ export function startSiteProfileRun(input: {
   model?: ProfileModelSelection | null;
   /** Skip crawl; pick from these pages (markdown skips fetch). */
   seedPages?: SeedCatalogPage[];
+  hint?: string;
 }): SiteProfileRun {
   const id = randomUUID();
   const run: SiteProfileRun = {
@@ -69,6 +70,7 @@ export function startSiteProfileRun(input: {
         sitemapOnly: input.sitemapOnly,
         model: input.model,
         seedPages: input.seedPages,
+        hint: input.hint,
         onProgress: (progress) => {
           const current = runs.get(id);
           if (!current || current.status !== "running") return;

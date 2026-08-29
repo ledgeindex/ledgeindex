@@ -40,6 +40,12 @@ export type RetrievalSearchFilter = {
 
 export type RetrievalSearchAttempt = {
   query: string;
+  /** Exact hybrid-search queries fused into this retrieval attempt. */
+  queryVariants?: string[];
+  /** Source this query was executed against (Explore multi-source). */
+  sourceId?: string;
+  sourceSlug?: string;
+  sourceName?: string;
   chunkCount: number;
   insufficient: boolean;
   attemptType?: "query" | "catalog_url_fallback";
@@ -53,6 +59,14 @@ export type RetrievalSearchAttempt = {
   /** Top rerank scores when nothing passed the threshold. */
   rerankTopScores?: number[];
   prunedCount?: number;
+};
+
+export type RetrievalSourceRewrite = {
+  sourceId: string;
+  sourceSlug: string;
+  sourceName: string;
+  queries: string[];
+  catalogQueries?: string[];
 };
 
 /** One timed stage in the RAG pipeline (shown in Retrieved sources). */
@@ -126,6 +140,8 @@ export type RetrievalMeta = {
   coverageModelId?: string;
   /** Sources the processor picked for this turn (badges above chat input). */
   pickedSources?: RetrievalPickedSource[];
+  /** Rewrite and catalogue candidates generated independently per source. */
+  sourceRewrites?: RetrievalSourceRewrite[];
   searchAttempts: RetrievalSearchAttempt[];
   chunks: RetrievalMetaChunk[];
   /** Pages retrieved then dropped before the answer agent saw them. */

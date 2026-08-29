@@ -81,6 +81,39 @@ export type SourceCorpusExportOptions = {
   includeChunks?: boolean;
 };
 
+export const PROFILE_SEED_MAX_PAGES = 1_000;
+export const PROFILE_SEED_MAX_MARKDOWN_CHARS = 120_000;
+
+export type SourceCorpusProfileSeedPage = {
+  url: string;
+  title: string;
+  markdown: string;
+};
+
+export function sourceCorpusPagesToProfileSeedPages(
+  pages: readonly SourceCorpusPage[],
+  options?: { maxPages?: number; maxMarkdownChars?: number },
+): SourceCorpusProfileSeedPage[] {
+  const maxPages = Math.min(
+    PROFILE_SEED_MAX_PAGES,
+    Math.max(1, Math.floor(options?.maxPages ?? PROFILE_SEED_MAX_PAGES)),
+  );
+  const maxMarkdownChars = Math.min(
+    PROFILE_SEED_MAX_MARKDOWN_CHARS,
+    Math.max(
+      1,
+      Math.floor(
+        options?.maxMarkdownChars ?? PROFILE_SEED_MAX_MARKDOWN_CHARS,
+      ),
+    ),
+  );
+  return pages.slice(0, maxPages).map((page) => ({
+    url: page.url,
+    title: page.title || page.url,
+    markdown: page.markdown.slice(0, maxMarkdownChars),
+  }));
+}
+
 export type WrittenSourceCorpus = {
   outputDirectory: string;
   manifestPath: string;

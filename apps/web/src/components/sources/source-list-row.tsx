@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useMemo, useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
@@ -42,6 +42,10 @@ function SourceFavicon({
   const [failed, setFailed] = useState(false);
   const initials = source.name.slice(0, 2).toUpperCase();
   const showFavicon = Boolean(source.faviconUrl) && !failed;
+
+  useEffect(() => {
+    setFailed(false);
+  }, [source.faviconUrl, source.id]);
 
   if (showFavicon) {
     return (

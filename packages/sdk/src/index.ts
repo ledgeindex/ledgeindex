@@ -17,6 +17,12 @@ export {
   getLensDefinition,
 } from "./profile.js";
 export {
+  profileIndexedSource,
+  corpusPagesToSeedPages,
+  PROFILE_INDEXED_SOURCE_MAX_PAGES,
+  PROFILE_INDEXED_SOURCE_MAX_MARKDOWN_CHARS,
+} from "./profile-indexed-source.js";
+export {
   resolveOptions,
   getDefaultDataDir,
   parseChatProvider,
@@ -63,6 +69,12 @@ export type {
   CompanyProfileResult,
   ResearchLens,
 } from "./profile.js";
+export type { ProfileIndexedSourceOptions } from "./profile-indexed-source.js";
+export type {
+  SeedCatalogPage,
+  DocsIdentityLensOutput,
+  CapabilitiesLensOutput,
+} from "@ledgeindex/profile";
 export type {
   SourceCorpusChunk,
   SourceCorpusPage,

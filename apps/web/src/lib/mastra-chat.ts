@@ -8,14 +8,12 @@ import { isCloudHostedSource } from "./rerank-backend";
 import { getLedgeIndexApiBaseUrl } from "@ledgeindex/client";
 
 export type LedgeIndexChatAgent =
-  | "docsAgent"
-  | "modelTestAgent"
-  | "exploreAgent";
+  "docsAgent" | "modelTestAgent" | "exploreAgent";
 
 /** Mastra chatRoute paths (registered on Fastify root, not under /mastra prefix). */
 export function mastraChatUrl(
   agent: LedgeIndexChatAgent,
-  apiBase?: string,
+  apiBase?: string
 ): string {
   const base = apiBase?.trim() || getLedgeIndexApiBaseUrl();
   return `${base.replace(/\/$/, "")}/chat/${agent}`;
@@ -28,6 +26,8 @@ export type MastraChatTransportBody = {
     source_name?: string;
     source_scope?: "personal" | "global";
     source_hosting?: "local" | "cloud";
+    explore_source_slugs?: string[];
+    explore_source_mode?: "picker" | "all";
     rerank_backend?: string;
     retrieval_strictness?: "strict" | "balanced" | "permissive";
     relevance_threshold?: number | null;
@@ -51,6 +51,8 @@ export function mastraChatTransportBody(input: {
   sourceName?: string;
   sourceScope?: "personal" | "global";
   sourceHosting?: "local" | "cloud";
+  exploreSourceSlugs?: string[];
+  exploreSourceMode?: "picker" | "all";
   thinkingLevel?: ChatThinkingLevel;
   rerankBackend?: LedgeIndexRerankBackendId;
   retrievalStrictness?: "strict" | "balanced" | "permissive";
@@ -60,7 +62,7 @@ export function mastraChatTransportBody(input: {
   const modelId = input.modelId.trim();
   const thinking = buildChatThinkingTransportExtras(
     modelId,
-    resolveChatThinkingLevel(modelId, input.thinkingLevel),
+    resolveChatThinkingLevel(modelId, input.thinkingLevel)
   );
   const docsUrlPrefix = input.docsUrlPrefix?.trim();
   const docsCrawlRoot = input.docsCrawlRoot?.trim();
@@ -83,6 +85,12 @@ export function mastraChatTransportBody(input: {
         : {}),
       ...(sourceScope ? { source_scope: sourceScope } : {}),
       ...(sourceHosting ? { source_hosting: sourceHosting } : {}),
+      ...(input.exploreSourceSlugs?.length
+        ? { explore_source_slugs: input.exploreSourceSlugs }
+        : {}),
+      ...(input.exploreSourceMode
+        ? { explore_source_mode: input.exploreSourceMode }
+        : {}),
       ...(rerankBackend ? { rerank_backend: rerankBackend } : {}),
       retrieval_strictness: input.retrievalStrictness ?? "strict",
       ...(input.retrievalStrictness === "permissive"

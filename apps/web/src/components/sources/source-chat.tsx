@@ -11,6 +11,7 @@ import type { ChatSuggestion } from "@/lib/chat-suggestions";
 import {
   CLOUD_SOURCE_RERANK_BACKEND_ID,
   isCloudHostedSource,
+  LOCAL_RERANK_BACKEND_ID,
   resolveSourceHosting,
 } from "@/lib/rerank-backend";
 import { pathOptionsFromStartUrls } from "@/lib/source-paths";
@@ -71,7 +72,6 @@ export function SourceChat({
   const {
     modelId,
     setModelId,
-    rerankBackend,
     activeSource,
     setTestPromptSuggestions,
     availableModels,
@@ -96,7 +96,7 @@ export function SourceChat({
   });
   const effectiveRerankBackend = cloudSource
     ? CLOUD_SOURCE_RERANK_BACKEND_ID
-    : rerankBackend;
+    : LOCAL_RERANK_BACKEND_ID;
 
   useEffect(() => {
     setTestPromptSuggestions(SOURCE_CHAT_SUGGESTIONS);
@@ -178,6 +178,7 @@ export function SourceChat({
       welcomeMessage={welcomeMessage}
       inputPlaceholder="Ask about this documentation…"
       retrievalSidePanel
+      hideRankingControl
       toolbarEnd={modelSelect}
       className="min-h-0 flex-1 border-0 shadow-none"
     />

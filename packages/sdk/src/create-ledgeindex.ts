@@ -8,6 +8,7 @@ import {
 } from "./export-corpus.js";
 import { indexRepository } from "./index-repo.js";
 import { profileWithResolvedOptions } from "./profile.js";
+import { profileIndexedSourceWithResolvedOptions } from "./profile-indexed-source.js";
 import { resolveOptions } from "./resolve-options.js";
 import { initRuntime, getActiveOptions } from "./runtime.js";
 import { applyUpdates, checkForUpdates } from "./refresh.js";
@@ -47,6 +48,12 @@ export async function createLedgeIndex(
     resolveSource: resolveSourceRef,
     profile: (url, profileOptions) =>
       profileWithResolvedOptions(url, profileOptions ?? {}, getActiveOptions()),
+    profileIndexedSource: (sourceIdOrSlug, profileOptions) =>
+      profileIndexedSourceWithResolvedOptions(
+        sourceIdOrSlug,
+        profileOptions ?? {},
+        getActiveOptions(),
+      ),
     checkForUpdates: (options) => checkForUpdates(options),
     applyUpdates: (options) => applyUpdates(options),
     deleteSource: (sourceIdOrSlug) => deleteSource(sourceIdOrSlug),

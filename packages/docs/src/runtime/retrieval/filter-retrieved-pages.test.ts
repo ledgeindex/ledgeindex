@@ -49,22 +49,31 @@ describe("shouldFilterRetrievedPages", () => {
     );
   });
 
-  it("skips cascade early-exit", () => {
+  it("runs after a cascade early-exit", () => {
     assert.equal(
       shouldFilterRetrievedPages({
         cascadePassUsed: true,
         uniquePageCount: 1,
         maxChunkScore: 0.9,
       }),
-      false,
+      true,
     );
   });
 
-  it("skips a confident multi-page retrieve", () => {
+  it("runs on a confident multi-page retrieve", () => {
     assert.equal(
       shouldFilterRetrievedPages({
         uniquePageCount: 3,
         maxChunkScore: 0.88,
+      }),
+      true,
+    );
+  });
+
+  it("skips only an empty retrieve", () => {
+    assert.equal(
+      shouldFilterRetrievedPages({
+        uniquePageCount: 0,
       }),
       false,
     );

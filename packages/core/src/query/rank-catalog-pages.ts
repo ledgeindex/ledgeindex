@@ -131,7 +131,10 @@ export function rankPagesForQuestion(
     .map((page, index) => ({
       page,
       index,
-      score: scorePageForQuestion(trimmed, page),
+      score: Math.max(
+        scorePageForQuestion(trimmed, page),
+        scoreCatalogTitleForQuery(trimmed, page),
+      ),
     }))
     .sort((a, b) => b.score - a.score || a.index - b.index)
     .map((entry) => entry.page);
@@ -237,6 +240,29 @@ export function pickCatalogQueryPhrases(
     if (picked.length >= max) break;
   }
   return picked;
+}
+
+/** Resolve an already-selected catalog title query back to its indexed page. */
+export function resolveCatalogQueryUrlFilter(
+  question: string,
+  catalogQueries: readonly string[],
+  pages: MetadataCatalogPage[],
+): CatalogUrlFilterMatch | null {
+  const titleKeys = new Set(
+    catalogQueries.map((query) => query.trim().toLowerCase()).filter(Boolean),
+  );
+  if (titleKeys.size === 0) return null;
+
+  const page = pages.find((candidate) =>
+    titleKeys.has(candidate.title.trim().toLowerCase()),
+  );
+  if (!page) return null;
+
+  return {
+    url: page.url,
+    score: scoreCatalogTitleForQuery(question, page),
+    title: page.title,
+  };
 }
 
 /** Append catalog title phrases onto LLM rewrite queries, skipping search duplicates. */

@@ -17,6 +17,7 @@ import {
 import { syncApiBaseForHosting } from "@/lib/desktop-api-routing";
 import { useHostingCapabilities } from "@/lib/use-hosting-capabilities";
 import { SourceHostingToggle } from "@/components/sources/source-hosting-toggle";
+import { AgentGuideReviewDialog } from "@/components/sources/agent-guide-review-dialog";
 import type { SourceHosting } from "@ledgeindex/client";
 import {
   buildIndexPagesForDraft,
@@ -177,6 +178,7 @@ export function BuilderIndexModal({
     pageCount: number;
     sourceId: string;
   } | null>(null);
+  const [agentGuideOpen, setAgentGuideOpen] = useState(false);
   const [existingIndexed, setExistingIndexed] = useState<{
     chunkCount: number;
     pageCount: number;
@@ -392,6 +394,7 @@ export function BuilderIndexModal({
         draft: nextDraft,
       });
       triggerIndexedFlash(sourceId);
+      setAgentGuideOpen(true);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Indexing failed";
       setError(message);
@@ -402,6 +405,7 @@ export function BuilderIndexModal({
   }
 
   return createPortal(
+    <>
     <div
       className="fixed inset-0 z-[300] flex items-center justify-center bg-black/45 p-4"
       role="presentation"
@@ -739,7 +743,15 @@ export function BuilderIndexModal({
           </div>
         </footer>
       </section>
-    </div>,
+    </div>
+    {agentGuideOpen && result ? (
+      <AgentGuideReviewDialog
+        open
+        sourceId={result.sourceId}
+        onComplete={() => setAgentGuideOpen(false)}
+      />
+    ) : null}
+    </>,
     document.body,
   );
 }

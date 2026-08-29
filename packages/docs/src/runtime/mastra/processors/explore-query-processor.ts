@@ -14,11 +14,25 @@ import {
   instructionForAnswerMode,
 } from "../../retrieval/assess-coverage.js";
 import { maybeFilterRetrievedPages } from "../../retrieval/filter-retrieved-pages.js";
-import { rewriteQueries, type RewriteResult } from "../../retrieval/rewrite-queries.js";
+import {
+  formatSourceAgentGuideForAnswer,
+  formatSourceAgentGuideForRewrite,
+  loadSourceAgentGuide,
+} from "../../retrieval/source-agent-guide.js";
+import {
+  clipRetrievalHistoryText,
+  resolveEvidenceQuestion,
+  rewriteQueries,
+  type RewriteResult,
+} from "../../retrieval/rewrite-queries.js";
 import { ensureCatalogHasPages } from "../../retrieval/page-catalog-rebuild.js";
 import { getMetadataCatalog } from "../../retrieval/metadata-catalog-store.js";
 import { formatCatalogForAgent } from "../../retrieval/search-query-planner.js";
 import type { MetadataCatalog } from "../../retrieval/metadata-catalog.js";
+import {
+  rankPagesForQuestion,
+  resolveCatalogQueryUrlFilter,
+} from "../../retrieval/rank-catalog-pages.js";
 import { agentStructuredOutput } from "../../llm/agent-structured-output.js";
 import {
   primaryAuxiliaryModelId,
@@ -110,7 +124,7 @@ function buildHistory(messages: MastraDBMessage[]): string {
     .map((m) => {
       const text = textFromMessage(m);
       if (!text) return "";
-      const clipped = text.length > 300 ? `${text.slice(0, 300)}…` : text;
+      const clipped = clipRetrievalHistoryText(text);
       return `${m.role}: ${clipped}`;
     })
     .filter(Boolean);
@@ -493,10 +507,21 @@ function withSourceRetrievalContext<T>(
 async function loadSourceCatalog(input: {
   source: ExploreSource;
   authToken: string;
-}): Promise<{ text: string; pages: MetadataCatalog["pages"] }> {
+  question: string;
+}): Promise<{
+  text: string;
+  pages: MetadataCatalog["pages"];
+  answerGuide: string;
+  rewriteGuide: string;
+}> {
   if (usesRemoteCorpus(input.source)) {
     if (!input.authToken) {
-      return { text: "No catalog available.", pages: [] };
+      return {
+        text: "No catalog available.",
+        pages: [],
+        answerGuide: "",
+        rewriteGuide: "",
+      };
     }
     const remote = await remoteGetMetadataCatalog(
       input.authToken,
@@ -507,21 +532,47 @@ async function loadSourceCatalog(input: {
         sourceId: input.source.id,
         step: "catalog",
       });
-      return { text: "No catalog available.", pages: [] };
+      return {
+        text: "No catalog available.",
+        pages: [],
+        answerGuide: "",
+        rewriteGuide: "",
+      };
     }
     const catalog = remote.catalog as MetadataCatalog | null;
+    const rankedCatalog = catalog
+      ? {
+          ...catalog,
+          pages: rankPagesForQuestion(input.question, catalog.pages),
+        }
+      : null;
     return {
-      text: formatCatalogForAgent(catalog),
+      text: formatCatalogForAgent(rankedCatalog, {
+        preservePageOrder: true,
+      }),
       pages: catalog?.pages ?? [],
+      answerGuide: "",
+      rewriteGuide: "",
     };
   }
 
   const catalog =
     (await ensureCatalogHasPages(input.source.id)) ??
     (await getMetadataCatalog(input.source.id));
+  const rankedCatalog = catalog
+    ? {
+        ...catalog,
+        pages: rankPagesForQuestion(input.question, catalog.pages),
+      }
+    : null;
+  const guide = await loadSourceAgentGuide(input.source.id);
   return {
-    text: formatCatalogForAgent(catalog),
+    text: formatCatalogForAgent(rankedCatalog, {
+      preservePageOrder: true,
+    }),
     pages: catalog?.pages ?? [],
+    answerGuide: formatSourceAgentGuideForAnswer(guide),
+    rewriteGuide: formatSourceAgentGuideForRewrite(guide),
   };
 }
 
@@ -531,25 +582,29 @@ async function retrieveSourceHits(input: {
   /** Original user question, retained in fusion retrieval. */
   question: string;
   authToken: string;
+  catalogPages: MetadataCatalog["pages"];
 }): Promise<{
   chunks: KapaRetrievedChunk[];
   insufficient: boolean;
   relaxedPassUsed: boolean;
   /** Undefined for a remote source, which does not report its backend back. */
   rerankBackendUsed?: string;
-  byQuery: Array<{ query: string; chunkCount: number; insufficient: boolean }>;
+  byQuery: RetrievalMeta["searchAttempts"];
 }> {
   const queries =
     input.rewrite.queries.length > 0
-      ? input.rewrite.queries.slice(0, 6)
+      ? input.rewrite.queries
       : ["documentation"];
+  const evidenceQuestion = resolveEvidenceQuestion(input.question, [
+    input.rewrite.rerankQuery,
+  ]);
 
   if (usesRemoteCorpus(input.source)) {
     const rerankBackend = getRequestRerankBackend();
     const remote = await remoteAskSource(
       input.authToken,
       input.source.id,
-      input.question,
+      evidenceQuestion,
       rerankBackend ? { rerankBackend } : undefined,
     );
     if (!remote.ok) {
@@ -563,7 +618,7 @@ async function retrieveSourceHits(input: {
         relaxedPassUsed: false,
         byQuery: [
           {
-            query: input.question,
+            query: evidenceQuestion,
             chunkCount: 0,
             insufficient: true,
           },
@@ -586,7 +641,7 @@ async function retrieveSourceHits(input: {
       relaxedPassUsed: false,
       byQuery: [
         {
-          query: input.question,
+          query: evidenceQuestion,
           chunkCount: chunks.length,
           insufficient,
         },
@@ -596,21 +651,28 @@ async function retrieveSourceHits(input: {
 
   return withSourceRetrievalContext(input.source, async () => {
     let relaxedPassUsed = false;
+    const catalogUrlFilter = resolveCatalogQueryUrlFilter(
+      evidenceQuestion,
+      input.rewrite.catalogQueries,
+      input.catalogPages,
+    );
     let retrieval = await kapaRetrieveMany({
       queries,
-      question: input.question,
+      question: evidenceQuestion,
       rerankQuery: input.rewrite.rerankQuery,
       sourceId: input.source.id,
       catalogQueries: input.rewrite.catalogQueries,
+      catalogUrlFilter: catalogUrlFilter ?? undefined,
     });
 
     if (retrieval.merged.length === 0) {
       retrieval = await kapaRetrieveMany({
         queries,
-        question: input.question,
+        question: evidenceQuestion,
         rerankQuery: input.rewrite.rerankQuery,
         sourceId: input.source.id,
         catalogQueries: input.rewrite.catalogQueries,
+        catalogUrlFilter: catalogUrlFilter ?? undefined,
         relevanceThreshold: RELAXED_RELEVANCE_THRESHOLD,
       });
       relaxedPassUsed = retrieval.merged.length > 0;
@@ -629,8 +691,18 @@ async function retrieveSourceHits(input: {
       rerankBackendUsed: retrieval.rerankBackendUsed,
       byQuery: retrieval.byQuery.map((entry) => ({
         query: entry.query,
+        queryVariants: entry.queryVariants,
         chunkCount: entry.rawPrunedCount ?? entry.prunedCount ?? 0,
         insufficient: entry.insufficient,
+        attemptType: entry.attemptType,
+        filter: entry.filter,
+        catalogMatchScore: entry.catalogMatchScore,
+        initialCount: entry.initialCount,
+        rerankedCount: entry.rerankedCount,
+        directHitCount: entry.directHitCount,
+        directHitScores: entry.directHitScores,
+        rerankTopScores: entry.rerankTopScores,
+        prunedCount: entry.prunedCount,
       })),
     };
   });
@@ -942,21 +1014,32 @@ ${catalogText}${platformNote}`
       };
     }
 
+    const uniqueAvailableSlugs = [
+      ...new Map(
+        loaded.sources.map((source) => [source.slug.toLowerCase(), source.slug])
+      ).values(),
+    ];
     const pickedSlugs =
       readSourceMode(requestContext) === "all"
-        ? loaded.sources.slice(0, MAX_PICKED_SOURCES).map((s) => s.slug)
+        ? uniqueAvailableSlugs.slice(0, MAX_PICKED_SOURCES)
         : await pickSources({
             question,
             history,
             sources: loaded.sources,
             requestContext,
           });
-    const picked = pickedSlugs
-      .map((slug) =>
-        loaded.sources.find((s) => s.slug.toLowerCase() === slug.toLowerCase())
-      )
-      .filter((s): s is ExploreSource => Boolean(s))
-      .slice(0, MAX_PICKED_SOURCES);
+    const picked = [
+      ...new Map(
+        pickedSlugs
+          .map((slug) =>
+            loaded.sources.find(
+              (source) => source.slug.toLowerCase() === slug.toLowerCase()
+            )
+          )
+          .filter((source): source is ExploreSource => Boolean(source))
+          .map((source) => [source.id, source])
+      ).values(),
+    ].slice(0, MAX_PICKED_SOURCES);
 
     logVerbose("Explore sources picked", "ExploreQuery", {
       question,
@@ -988,6 +1071,7 @@ ${catalogText}${platformNote}`
               source,
               rewrite: {
                 queries: [question],
+                rerankQuery: question,
                 catalogQueries: [] as string[],
                 topicScope: "single" as const,
                 method: "cascade" as const,
@@ -1011,12 +1095,17 @@ ${catalogText}${platformNote}`
           }
         }
 
-        const catalog = await loadSourceCatalog({ source, authToken });
+        const catalog = await loadSourceCatalog({
+          source,
+          authToken,
+          question,
+        });
         const rewrite = await rewriteQueries({
           question,
           catalogText: catalog.text,
           history,
           pages: catalog.pages,
+          sourceProfileHint: catalog.rewriteGuide,
           requestContext,
         });
         const result = await retrieveSourceHits({
@@ -1024,10 +1113,12 @@ ${catalogText}${platformNote}`
           rewrite,
           question,
           authToken,
+          catalogPages: catalog.pages,
         });
         return {
           source,
           rewrite,
+          answerGuide: catalog.answerGuide,
           ...result,
           cascadePassUsed: false as const,
           cascadeTopScore: undefined as number | undefined,
@@ -1046,8 +1137,12 @@ ${catalogText}${platformNote}`
         perSource.flatMap((entry) => entry.rewrite.catalogQueries ?? []),
       ),
     ];
-    const filtered = await maybeFilterRetrievedPages({
+    const evidenceQuestion = resolveEvidenceQuestion(
       question,
+      perSource.map((entry) => entry.rewrite.rerankQuery),
+    );
+    const filtered = await maybeFilterRetrievedPages({
+      question: evidenceQuestion,
       chunks: agentChunks,
       catalogQueries,
       requestContext,
@@ -1067,7 +1162,7 @@ ${catalogText}${platformNote}`
     const evidenceChunks = agentChunks.filter(isDirectHit);
     const { maxChunkScore, avgTop3Score } = scoreSummary(evidenceChunks);
     const coverage = await assessCoverage({
-      question,
+      question: evidenceQuestion,
       chunks: evidenceChunks,
       insufficient,
       relaxedPassUsed,
@@ -1110,6 +1205,7 @@ ${catalogText}${platformNote}`
 
     const meta: RetrievalMeta = {
       question,
+      rerankQuery: evidenceQuestion,
       rewrittenQueries:
         rewrittenQueries.length > 0 ? rewrittenQueries : [question],
       catalogQueries,
@@ -1141,13 +1237,20 @@ ${catalogText}${platformNote}`
         remote: source.remote,
         kind: describeKind(source.sourceType),
       })),
+      sourceRewrites: perSource.map((entry) => ({
+        sourceId: entry.source.id,
+        sourceSlug: entry.source.slug,
+        sourceName: entry.source.name,
+        queries: entry.rewrite.queries,
+        catalogQueries: entry.rewrite.catalogQueries,
+      })),
       searchAttempts: perSource.flatMap((entry) =>
         entry.byQuery.map((attempt) => ({
-          query: `${entry.source.slug}: ${attempt.query}`,
-          chunkCount: attempt.chunkCount,
-          insufficient: attempt.insufficient,
-          attemptType: "query" as const,
-          prunedCount: attempt.chunkCount,
+          ...attempt,
+          sourceId: entry.source.id,
+          sourceSlug: entry.source.slug,
+          sourceName: entry.source.name,
+          attemptType: attempt.attemptType ?? ("query" as const),
         }))
       ),
       chunks: agentChunks.map(toRetrievalMetaChunk),
@@ -1181,6 +1284,16 @@ ${catalogText}${platformNote}`
       new Set(picked.map((s) => describeKind(s.sourceType))).size > 1
         ? "This evidence spans both documentation and repository code. Where they disagree, describe what the code does and say the docs differ."
         : "";
+    const sourceGuides = perSource
+      .map((entry) => {
+        const guide =
+          "answerGuide" in entry && typeof entry.answerGuide === "string"
+            ? entry.answerGuide.trim()
+            : "";
+        return guide ? `${entry.source.name}:\n${guide}` : "";
+      })
+      .filter(Boolean)
+      .join("\n\n");
     const sourceBlock =
       coverage.answerMode === "none"
         ? ""
@@ -1190,7 +1303,13 @@ ${catalogText}${platformNote}`
       messages,
       systemMessages: appendSystem(
         systemMessages,
-        [retrievalInstruction, pickedLine, mixedKindNote, sourceBlock]
+        [
+          retrievalInstruction,
+          pickedLine,
+          mixedKindNote,
+          sourceGuides,
+          sourceBlock,
+        ]
           .map((part) => part.trim())
           .filter(Boolean)
           .join("\n\n")

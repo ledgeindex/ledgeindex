@@ -82,6 +82,7 @@ export const siteProfileSchema = z.object({
   generatedAt: z.string().optional(),
   updatedAt: z.string().optional(),
   runId: z.string().optional(),
+  guideHint: z.string().max(4000).optional(),
 });
 
 export const sourceMetadataSchema = z.object({

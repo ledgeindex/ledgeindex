@@ -272,6 +272,8 @@ export type KapaRetrieveManyResult = {
   };
   byQuery: Array<{
     query: string;
+    /** Exact hybrid-search queries fused into this retrieval attempt. */
+    queryVariants?: string[];
     attemptType: KapaRetrieveAttemptType;
     filter: KapaRetrieveFilter;
     catalogMatchScore?: number;
@@ -765,16 +767,54 @@ export async function kapaRetrieveMany(input: {
       filter,
       candidateCount,
     });
+    const catalogMatch = !filterOverride ? input.catalogUrlFilter : undefined;
+    const catalogQuery =
+      input.catalogQueries?.find(
+        (query) =>
+          query.trim().toLowerCase() ===
+          catalogMatch?.title?.trim().toLowerCase(),
+      ) ??
+      catalogMatch?.title?.trim() ??
+      fusionQueries[0];
+    const catalogFused = catalogMatch?.url
+      ? await fuseHybridCandidates({
+          fusionQueries: [catalogQuery],
+          sourceId: input.sourceId,
+          filter: {
+            ...filter,
+            url: catalogMatch.url,
+          },
+          candidateCount,
+        })
+      : null;
+    const candidatePools = catalogFused
+      ? [fused.results, catalogFused.results]
+      : [fused.results];
+    const initialResults = ensurePerQueryWinners(
+      candidatePools,
+      mergeFusedCandidatePoolsMany(candidatePools, candidateCount),
+      candidateCount,
+    );
     return kapaRetrieve({
       query: fusionQueries[0],
       rerankQuery,
       escalationRerankQuery: originalRerankQuery,
       prefused: {
-        initialResults: fused.results,
+        initialResults,
         queryVector: fused.queryVector,
-        fusionMeta: fused.fused,
-        embedMs: fused.embedMs,
-        vectorMs: fused.vectorMs,
+        fusionMeta: catalogFused
+          ? {
+              denseCount:
+                fused.fused.denseCount + catalogFused.fused.denseCount,
+              lexicalCount:
+                fused.fused.lexicalCount + catalogFused.fused.lexicalCount,
+              lexicalOnlyCount:
+                fused.fused.lexicalOnlyCount +
+                catalogFused.fused.lexicalOnlyCount,
+            }
+          : fused.fused,
+        embedMs: fused.embedMs + (catalogFused?.embedMs ?? 0),
+        vectorMs: fused.vectorMs + (catalogFused?.vectorMs ?? 0),
       },
       sourceId: input.sourceId,
       filter,
@@ -793,9 +833,11 @@ export async function kapaRetrieveMany(input: {
       attemptType?: KapaRetrieveAttemptType;
       catalogMatchScore?: number;
       fusionLabel?: string;
+      queryVariants?: string[];
     },
   ): KapaRetrieveManyResult["byQuery"][number] => ({
     query: extras?.fusionLabel ?? result.query,
+    queryVariants: extras?.queryVariants,
     attemptType: extras?.attemptType ?? "query",
     filter: result.filter,
     catalogMatchScore: extras?.catalogMatchScore,
@@ -820,7 +862,9 @@ export async function kapaRetrieveMany(input: {
   const queryTimings: KapaRetrieveStepTimings[] = [];
 
   const first = await fusionRetrieve();
-  byQueryRaw.push(toByQueryEntry(first, { fusionLabel }));
+  byQueryRaw.push(
+    toByQueryEntry(first, { fusionLabel, queryVariants: fusionQueries }),
+  );
   if (first.timings) queryTimings.push(first.timings);
 
   let skippedQueries: string[] = [];

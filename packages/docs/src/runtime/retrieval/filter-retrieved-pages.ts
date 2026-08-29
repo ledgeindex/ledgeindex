@@ -7,10 +7,8 @@ import {
 } from "../llm/chat-model-config.js";
 import { agentStructuredOutput } from "../llm/agent-structured-output.js";
 import { logVerbose, logWarn } from "../lib/logger.js";
-import { COVERAGE_FULL_MAX_SCORE } from "../vector/constants.js";
 
 const FILTER_TEMPERATURE = 0;
-const MAX_PAGES = 8;
 const PREVIEW_CHARS = 280;
 
 export type DroppedRetrievedPage = {
@@ -41,8 +39,7 @@ const filterOutputSchema = z.object({
         reason: z.string().min(1).max(160),
       }),
     )
-    .min(1)
-    .max(MAX_PAGES),
+    .min(1),
 });
 
 const FILTER_INSTRUCTIONS = `You decide which retrieved documentation pages the answer agent is allowed to see.
@@ -93,8 +90,7 @@ export function summarizeRetrievedPages(
     });
   }
   return [...byUrl.values()]
-    .sort((left, right) => right.score - left.score)
-    .slice(0, MAX_PAGES);
+    .sort((left, right) => right.score - left.score);
 }
 
 export function applyPageKeepDecisions(
@@ -130,11 +126,7 @@ export function applyPageKeepDecisions(
   return { kept, dropped: [...droppedByUrl.values()] };
 }
 
-/**
- * Skip the extra model call when retrieval is already a confident, on-threshold
- * hit. Run it when scores are in the relaxed/weak band, or when a single page
- * would otherwise own the whole answer.
- */
+/** Every non-empty retrieval is page-filtered before coverage and answering. */
 export function shouldFilterRetrievedPages(input: {
   cascadePassUsed?: boolean;
   relaxedPassUsed?: boolean;
@@ -142,11 +134,7 @@ export function shouldFilterRetrievedPages(input: {
   uniquePageCount: number;
   maxChunkScore?: number;
 }): boolean {
-  if (input.cascadePassUsed) return false;
-  if (input.uniquePageCount === 0) return false;
-  if (input.relaxedPassUsed || input.weakEvidenceUsed) return true;
-  if (input.uniquePageCount === 1) return true;
-  return (input.maxChunkScore ?? 0) < COVERAGE_FULL_MAX_SCORE;
+  return input.uniquePageCount > 0;
 }
 
 export async function maybeFilterRetrievedPages(input: {

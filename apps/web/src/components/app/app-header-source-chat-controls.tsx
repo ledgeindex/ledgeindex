@@ -19,6 +19,86 @@ import {
 import { cn } from "@/lib/utils";
 
 const SOURCE_CHAT_PATH = /^\/sources\/[^/]+\/chat$/;
+const PLAYGROUND_TEST_PROMPTS = [
+  "What is the basic setup, and can you offer to show me more?",
+];
+
+export function AppHeaderPlaygroundControls() {
+  const pathname = usePathname();
+  const toolbar = useOptionalSourceChatToolbar();
+  const { isAdmin } = useAuth();
+  const [testPromptsOpen, setTestPromptsOpen] = useState(false);
+  const isDesktop = Boolean(getLedgeIndexDesktop());
+
+  if (pathname !== "/chat" || !isDesktop || !toolbar) {
+    return null;
+  }
+
+  return (
+    <>
+      <div className="min-h-full min-w-[1.5rem] flex-1 self-stretch" aria-hidden />
+      <div
+        className="ml-auto flex shrink-0 items-center gap-1.5 [-webkit-app-region:no-drag]"
+        onDoubleClick={(event) => event.stopPropagation()}
+      >
+        {isAdmin ? (
+          <button
+            type="button"
+            onClick={() => setTestPromptsOpen(true)}
+            title="Test prompts (admin)"
+            aria-haspopup="dialog"
+            aria-expanded={testPromptsOpen}
+            className={cn(
+              "inline-flex h-8 min-w-8 shrink-0 items-center justify-center rounded-lg border border-border bg-card-solid px-[0.45rem]",
+              "text-[0.68rem] font-bold tracking-wide text-muted transition-colors",
+              "hover:border-foreground/15 hover:bg-surface-raised hover:text-foreground",
+              testPromptsOpen && "border-foreground/20 text-foreground",
+            )}
+          >
+            TP
+          </button>
+        ) : null}
+        {toolbar.canChooseModel &&
+        !toolbar.needsProviderKeys &&
+        toolbar.chatModelsReady &&
+        toolbar.availableModels.length > 0 ? (
+          <HeaderSelect
+            ariaLabel="Chat model"
+            value={toolbar.modelId}
+            onChange={toolbar.setModelId}
+            options={toolbar.availableModels.map((model) => ({
+              value: model.id,
+              label: model.label,
+            }))}
+            className="h-8 max-w-[12rem] text-xs"
+          />
+        ) : null}
+        <button
+          type="button"
+          onClick={toolbar.requestNewChat}
+          disabled={!toolbar.newChatAvailable}
+          title="New chat"
+          aria-label="New chat"
+          className={cn(
+            "inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-card-solid text-muted transition-colors",
+            "hover:bg-surface-raised hover:text-foreground",
+            "disabled:cursor-not-allowed disabled:opacity-40",
+          )}
+        >
+          <MessageSquarePlus className="size-3.5" aria-hidden />
+        </button>
+      </div>
+      {isAdmin ? (
+        <ChatTestPromptsSheet
+          open={testPromptsOpen}
+          onClose={() => setTestPromptsOpen(false)}
+          onSelect={toolbar.submitTestPrompt}
+          suggestions={PLAYGROUND_TEST_PROMPTS}
+        />
+      ) : null}
+    </>
+  );
+}
 
 export function AppHeaderSourceChatControls() {
   const pathname = usePathname();

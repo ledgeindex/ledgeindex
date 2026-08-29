@@ -36,6 +36,7 @@
     "@ai-sdk/google": "2.0.86",
     "@ai-sdk/openai": "^2.0.114",
     "@ledgeindex/core": "^0.1.19",
+    "@ledgeindex/profile": "^0.1.19",
     "@ledgeindex/repo": "^0.1.19",
     "@mastra/ai-sdk": "^1.6.2",
     "@mastra/core": "^1.51.0",

@@ -5,7 +5,10 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { AppHeaderDashboardControls } from "@/components/app/app-header-dashboard-controls";
-import { AppHeaderSourceChatControls } from "@/components/app/app-header-source-chat-controls";
+import {
+  AppHeaderPlaygroundControls,
+  AppHeaderSourceChatControls,
+} from "@/components/app/app-header-source-chat-controls";
 import { AppHeaderSourceBuilderControls } from "@/components/app/app-header-source-builder-controls";
 import { AppHeaderWebCrawlControls } from "@/components/app/app-header-web-crawl-controls";
 import { AppHeaderIndexedNotice } from "@/components/app/app-header-indexed-notice";
@@ -104,9 +107,13 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
     pathname === "/admin/source-updater" ||
     /^\/sources\/[^/]+\/chat$/.test(pathname);
   const isSourceChat = /^\/sources\/[^/]+\/chat$/.test(pathname);
+  const isPlaygroundDesktop = pathname === "/chat" && Boolean(desktop);
   const isSourceBuilderDetail = /^\/sources\/builder\/[^/]+$/.test(pathname);
   const useCustomHeader =
-    isSourceChat || isSourceBuilderDetail || isWebCrawlDesktop;
+    isSourceChat ||
+    isPlaygroundDesktop ||
+    isSourceBuilderDetail ||
+    isWebCrawlDesktop;
   const headerUsesDragRegion = desktop && !isOpen;
 
   const onHeaderDoubleClick = useCallback(() => {
@@ -154,6 +161,9 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
             {useCustomHeader ? (
               <div className="z-10 flex min-h-0 min-w-0 flex-1 items-center">
                 {isSourceChat ? <AppHeaderSourceChatControls /> : null}
+                {isPlaygroundDesktop ? (
+                  <AppHeaderPlaygroundControls />
+                ) : null}
                 {isSourceBuilderDetail ? (
                   <AppHeaderSourceBuilderControls />
                 ) : null}

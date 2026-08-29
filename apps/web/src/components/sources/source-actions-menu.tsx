@@ -334,7 +334,7 @@ export function SourceActionsMenu({
                 }}
                 className="flex w-full items-center px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-surface-raised"
               >
-                Add start URL
+                Add start URLs
               </button>
             ) : null}
             {canEditCategories ? (

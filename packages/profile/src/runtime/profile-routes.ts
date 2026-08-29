@@ -1,6 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import {
+  PROFILE_SEED_MAX_MARKDOWN_CHARS,
+  PROFILE_SEED_MAX_PAGES,
+} from "@ledgeindex/core/export/source-corpus.js";
+import {
   getLandscapeRun,
   LandscapeRunSchema,
   runCompanyLandscape,
@@ -34,7 +38,7 @@ const modelSelectionSchema = z
 const seedCatalogPageSchema = z.object({
   url: z.string().url(),
   title: z.string().min(1).max(500),
-  markdown: z.string().max(120_000).optional(),
+  markdown: z.string().max(PROFILE_SEED_MAX_MARKDOWN_CHARS).optional(),
 });
 
 const CreateSiteProfileRunBody = z.object({
@@ -43,7 +47,12 @@ const CreateSiteProfileRunBody = z.object({
   maxPages: z.number().int().positive().max(500).optional(),
   sitemapOnly: z.boolean().optional(),
   /** When set, skip crawl and pick from these pages (builder / seeded catalog). */
-  seedPages: z.array(seedCatalogPageSchema).min(1).max(200).optional(),
+  seedPages: z
+    .array(seedCatalogPageSchema)
+    .min(1)
+    .max(PROFILE_SEED_MAX_PAGES)
+    .optional(),
+  hint: z.string().trim().max(4_000).optional(),
   model: modelSelectionSchema,
   backend: z.string().optional(),
   modelId: z.string().optional(),
@@ -79,6 +88,7 @@ export async function registerProfile(fastify: FastifyInstance): Promise<void> {
       sitemapOnly: parsed.data.sitemapOnly,
       model,
       seedPages: parsed.data.seedPages,
+      hint: parsed.data.hint,
     });
     return reply.status(202).send({ run });
   });

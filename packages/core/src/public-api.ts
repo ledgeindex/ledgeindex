@@ -7,12 +7,27 @@ export {
   writeSourceCorpusToDirectory,
   SOURCE_CORPUS_EXPORT_FORMAT,
   SOURCE_CORPUS_EXPORT_VERSION,
+  PROFILE_SEED_MAX_PAGES,
+  PROFILE_SEED_MAX_MARKDOWN_CHARS,
+  sourceCorpusPagesToProfileSeedPages,
   type SourceCorpusChunk,
   type SourceCorpusPage,
   type SourceCorpusExport,
   type SourceCorpusExportOptions,
+  type SourceCorpusProfileSeedPage,
   type WrittenSourceCorpus,
 } from "./export/source-corpus.js";
+
+export {
+  sourceAgentGuideSchema,
+  sourceAgentGuideTopicSchema,
+  MAX_SOURCE_AGENT_GUIDE_TOPICS,
+  sourceAgentGuideFromMetadata,
+  formatSourceAgentGuideForRewrite,
+  formatSourceAgentGuideForAnswer,
+  type SourceAgentGuide,
+  type SourceAgentGuideTopic,
+} from "./schemas/source-agent-guide.js";
 
 
 

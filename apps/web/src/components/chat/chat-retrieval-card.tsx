@@ -167,6 +167,63 @@ function combinedScoreSummaryFromAttempts(
   };
 }
 
+type SourceAttemptGroup = {
+  id: string;
+  slug: string;
+  name: string;
+  remote?: boolean;
+  queries: string[];
+  catalogQueries: string[];
+  attempts: RetrievalMeta["searchAttempts"];
+};
+
+function groupAttemptsBySource(
+  meta: RetrievalMeta,
+  attempts: RetrievalMeta["searchAttempts"],
+): SourceAttemptGroup[] {
+  const pickedSources = meta.pickedSources ?? [];
+  if (pickedSources.length === 0) return [];
+
+  const groups = pickedSources.map((source) => {
+    const rewrite = meta.sourceRewrites?.find(
+      (candidate) =>
+        candidate.sourceId === source.id ||
+        candidate.sourceSlug === source.slug,
+    );
+    return {
+      id: source.id,
+      slug: source.slug,
+      name: source.name || source.slug,
+      remote: source.remote,
+      queries: rewrite?.queries ?? [],
+      catalogQueries: rewrite?.catalogQueries ?? [],
+      attempts: [] as RetrievalMeta["searchAttempts"],
+    };
+  });
+
+  for (const attempt of attempts) {
+    let group = groups.find(
+      (candidate) =>
+        (attempt.sourceId && candidate.id === attempt.sourceId) ||
+        (attempt.sourceSlug && candidate.slug === attempt.sourceSlug),
+    );
+    let query = attempt.query;
+
+    // Older streamed metadata encoded the source as a "<slug>: " prefix.
+    if (!group) {
+      group = groups.find((candidate) =>
+        query.toLowerCase().startsWith(`${candidate.slug.toLowerCase()}: `),
+      );
+      if (group) query = query.slice(group.slug.length + 2);
+    }
+    if (!group && groups.length === 1) group = groups[0];
+
+    if (group) group.attempts.push({ ...attempt, query });
+  }
+
+  return groups;
+}
+
 function scoreColor(score: number, threshold: number): string {
   if (score >= threshold + 0.15) {
     return "text-emerald-600 dark:text-emerald-400";
@@ -488,15 +545,20 @@ function AttemptRow({
   total,
   threshold,
   thresholdNote,
+  catalogQueries,
 }: {
   attempt: RetrievalMeta["searchAttempts"][number];
   index: number;
   total: number;
   threshold: number;
   thresholdNote?: "relaxed" | "weak" | "balanced" | "permissive";
+  catalogQueries?: string[];
 }) {
   const [open, setOpen] = useState(false);
   const query = attempt.query?.trim() || `Query ${index + 1}`;
+  const queryLabel = query
+    .replace(/\s*\(\+\d+\s+variants?\)$/i, "")
+    .trim();
   const directHits = attempt.directHitCount ?? attempt.chunkCount ?? 0;
   const injected =
     typeof attempt.prunedCount === "number" ? attempt.prunedCount : directHits;
@@ -507,6 +569,12 @@ function AttemptRow({
   const scoreSummary = attemptScoreSummary(attempt, threshold);
   const filter = filterLabel(attempt);
   const kind = attemptKindLabel(attempt);
+  const queryVariants = attempt.queryVariants ?? [];
+  const catalogVariantSet = new Set(
+    (catalogQueries ?? []).map((catalogQuery) =>
+      catalogQuery.trim().toLowerCase(),
+    ),
+  );
   const queryCoverage = assessHitCoverageLevel({
     directHitScores: attempt.directHitScores,
     insufficient: failed,
@@ -517,7 +585,12 @@ function AttemptRow({
       : queryCoverage === "partial"
         ? ("partial" as const)
         : ("none" as const);
-  const hasExtra = Boolean(pipeline || hitScores || filter !== "sourceId");
+  const hasExtra = Boolean(
+    queryVariants.length > 1 ||
+      pipeline ||
+      hitScores ||
+      filter !== "sourceId",
+  );
 
   return (
     <div className="rounded-md border border-border/35 bg-background/35 px-2 py-1.5">
@@ -526,7 +599,7 @@ function AttemptRow({
           {kind ?? label}
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-[0.625rem] text-foreground">
-          {query}
+          {queryLabel}
         </span>
         <CoverageBadge level={queryCoverage} answerMode={queryAnswerMode} />
         <span
@@ -548,7 +621,11 @@ function AttemptRow({
             className="shrink-0 text-[0.5625rem] text-muted underline-offset-2 hover:text-foreground hover:underline"
             aria-expanded={open}
           >
-            {open ? "less" : "more"}
+            {open
+              ? "less"
+              : queryVariants.length > 1
+                ? "Show fused queries"
+                : "more"}
           </button>
         ) : null}
       </div>
@@ -567,6 +644,29 @@ function AttemptRow({
 
       {open && hasExtra ? (
         <div className="mt-1 space-y-0.5 border-t border-border/30 pt-1 font-mono text-[0.5625rem] text-muted">
+          {queryVariants.length > 1 ? (
+            <div className="space-y-1 pb-1">
+              <p className="font-medium tracking-wide uppercase">
+                Fused search queries
+              </p>
+              {queryVariants.map((variant, variantIndex) => (
+                <p
+                  key={`${variant}-${variantIndex}`}
+                  className={cn(
+                    "rounded px-1.5 py-1",
+                    catalogVariantSet.has(variant.trim().toLowerCase())
+                      ? "bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                      : "bg-muted/20 text-foreground/80",
+                  )}
+                >
+                  <span className="mr-1.5 text-muted">
+                    Q{variantIndex + 1}
+                  </span>
+                  {variant}
+                </p>
+              ))}
+            </div>
+          ) : null}
           {filter !== "sourceId" ? <p>filter: {filter}</p> : null}
           {pipeline ? <p>{pipeline}</p> : null}
           {hitScores ? <p>{hitScores}</p> : null}
@@ -681,6 +781,7 @@ export function ChatRetrievalCard({
     (meta.catalogQueries ?? []).map((query) => query.trim().toLowerCase()),
   );
   const attempts = meta.searchAttempts ?? [];
+  const sourceAttemptGroups = groupAttemptsBySource(meta, attempts);
   const chunks = meta.chunks ?? [];
   const timings = meta.timings;
   const sourceCount = countUniqueUrls(chunks);
@@ -872,33 +973,112 @@ export function ChatRetrievalCard({
               ) : null}
             </div>
 
-            {rewrittenQueries.length > 0 ? (
-              <div className="flex flex-wrap gap-1">
-                {rewrittenQueries.map((query, index) => (
-                  <QueryChip
-                    key={`${query}-${index}`}
-                    query={query}
-                    index={index}
-                    skipped={skippedSet.has(query)}
-                    catalog={catalogSet.has(query.trim().toLowerCase())}
-                  />
-                ))}
+            {rewrittenQueries.length > 0 &&
+            (meta.sourceRewrites?.length ?? 0) === 0 ? (
+              <div className="space-y-1">
+                <p className="font-mono text-[0.5625rem] font-medium tracking-wide text-muted uppercase">
+                  Rewrite candidates
+                </p>
+                <div className="flex flex-wrap gap-1">
+                  {rewrittenQueries.map((query, index) => (
+                    <QueryChip
+                      key={`${query}-${index}`}
+                      query={query}
+                      index={index}
+                      skipped={skippedSet.has(query)}
+                      catalog={catalogSet.has(query.trim().toLowerCase())}
+                    />
+                  ))}
+                </div>
               </div>
             ) : null}
 
             {attempts.length > 0 ? (
-              <div className="space-y-1.5">
-                {attempts.map((attempt, index) => (
-                  <AttemptRow
-                    key={`${attempt.query}-${index}`}
-                    attempt={attempt}
-                    index={index}
-                    total={attempts.length}
-                    threshold={threshold}
-                    thresholdNote={thresholdNote}
-                  />
-                ))}
-              </div>
+              sourceAttemptGroups.length > 0 ? (
+                <div className="space-y-2">
+                  <p className="font-mono text-[0.5625rem] font-medium tracking-wide text-muted uppercase">
+                    Queries sent by source
+                  </p>
+                  {sourceAttemptGroups.map((group) => (
+                    <section
+                      key={group.id}
+                      className="space-y-1.5 rounded-lg border border-border/50 bg-background/20 p-2"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="truncate text-[0.6875rem] font-semibold text-foreground">
+                            {group.name}
+                          </p>
+                          <p className="truncate font-mono text-[0.5625rem] text-muted">
+                            {group.slug}
+                          </p>
+                        </div>
+                        <MetaBadge variant={group.remote ? "info" : "neutral"}>
+                          {group.remote ? "cloud" : "local"}
+                        </MetaBadge>
+                      </div>
+                      {group.queries.length > 0 ? (
+                        <div className="space-y-1 border-t border-border/35 pt-1.5">
+                          <p className="font-mono text-[0.5625rem] font-medium tracking-wide text-muted uppercase">
+                            Rewrite candidates
+                          </p>
+                          <div className="flex flex-wrap gap-1">
+                            {group.queries.map((query, index) => (
+                              <QueryChip
+                                key={`${group.id}-rewrite-${query}-${index}`}
+                                query={query}
+                                index={index}
+                                skipped={skippedSet.has(query)}
+                                catalog={group.catalogQueries.some(
+                                  (catalogQuery) =>
+                                    catalogQuery.trim().toLowerCase() ===
+                                    query.trim().toLowerCase(),
+                                )}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      ) : null}
+                      <p className="font-mono text-[0.5625rem] font-medium tracking-wide text-muted uppercase">
+                        Executed queries
+                      </p>
+                      {group.attempts.length > 0 ? (
+                        <div className="space-y-1.5">
+                          {group.attempts.map((attempt, index) => (
+                            <AttemptRow
+                              key={`${group.id}-${attempt.query}-${index}`}
+                              attempt={attempt}
+                              index={index}
+                              total={group.attempts.length}
+                              threshold={threshold}
+                              thresholdNote={thresholdNote}
+                              catalogQueries={group.catalogQueries}
+                            />
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-[0.625rem] text-muted">
+                          No query was executed against this source.
+                        </p>
+                      )}
+                    </section>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-1.5">
+                  {attempts.map((attempt, index) => (
+                    <AttemptRow
+                      key={`${attempt.query}-${index}`}
+                      attempt={attempt}
+                      index={index}
+                      total={attempts.length}
+                      threshold={threshold}
+                      thresholdNote={thresholdNote}
+                      catalogQueries={meta.catalogQueries}
+                    />
+                  ))}
+                </div>
+              )
             ) : null}
 
             {meta.droppedPages && meta.droppedPages.length > 0 ? (

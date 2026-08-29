@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { setLedgeIndexApiBaseUrl } from "@ledgeindex/client";
 import { StreamingChatPanel } from "@/components/chat/streaming-chat-panel";
@@ -15,6 +15,74 @@ import {
 import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
 import { modelSupportsThinking } from "@/lib/chat-thinking-level";
 import { cn } from "@/lib/utils";
+import {
+  PlaygroundSourcePicker,
+  type PlaygroundTarget,
+} from "@/components/sources/playground-source-picker";
+
+const PLAYGROUND_TARGET_STORAGE_KEY = "ledgeindex:playground-target";
+
+function parseStoredTarget(raw: string | null): PlaygroundTarget | null {
+  if (!raw) return null;
+  try {
+    const value = JSON.parse(raw) as Record<string, unknown>;
+    const sourceSlugs = Array.isArray(value.sourceSlugs)
+      ? value.sourceSlugs.filter(
+          (slug): slug is string => typeof slug === "string" && slug.length > 0
+        )
+      : [];
+    if (
+      typeof value.name !== "string" ||
+      sourceSlugs.length === 0 ||
+      (value.scope !== "personal" && value.scope !== "global") ||
+      (value.hosting !== "local" && value.hosting !== "cloud")
+    ) {
+      return null;
+    }
+
+    if (
+      value.kind === "source-set" &&
+      typeof value.id === "string" &&
+      value.scope === "personal"
+    ) {
+      return {
+        kind: "source-set",
+        id: value.id,
+        name: value.name,
+        sourceSlugs: [sourceSlugs[0]!, ...sourceSlugs.slice(1)],
+        scope: "personal",
+        hosting: value.hosting,
+      };
+    }
+
+    const storedIds = Array.isArray(value.ids)
+      ? value.ids.filter(
+          (id): id is string => typeof id === "string" && id.length > 0
+        )
+      : typeof value.id === "string"
+        ? [value.id]
+        : [];
+    if (
+      (value.kind === "sources" || value.kind === "source") &&
+      storedIds.length > 0 &&
+      storedIds.length <= 3 &&
+      sourceSlugs.length === storedIds.length
+    ) {
+      return {
+        kind: "sources",
+        ids: [storedIds[0]!, ...storedIds.slice(1)],
+        name: value.name,
+        sourceSlugs: [sourceSlugs[0]!, ...sourceSlugs.slice(1)],
+        scope: value.scope,
+        hosting: value.hosting,
+      };
+    }
+
+    return null;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Playground chat: discover personal + global sources, then retrieve evidence.
@@ -22,6 +90,11 @@ import { cn } from "@/lib/utils";
  * With local keys, chat runs on the sidecar so personal indexes are included.
  */
 export default function ExploreChatPage(): React.JSX.Element {
+  const [target, setTarget] = useState<PlaygroundTarget | null>(null);
+  const targetId =
+    target?.kind === "source-set"
+      ? target.id
+      : (target?.ids.join(",") ?? "none");
   const {
     modelId,
     setModelId,
@@ -29,10 +102,29 @@ export default function ExploreChatPage(): React.JSX.Element {
     availableModels,
     chatModelsReady,
     needsProviderKeys,
-    chatUsesRemoteApi,
+    setActiveSource,
     setExploreSession,
   } = useSourceChatToolbar();
   const isDesktop = Boolean(getLedgeIndexDesktop());
+
+  useEffect(() => {
+    const stored = parseStoredTarget(
+      window.localStorage.getItem(PLAYGROUND_TARGET_STORAGE_KEY)
+    );
+    if (stored) setTarget(stored);
+  }, []);
+
+  function handleTargetChange(nextTarget: PlaygroundTarget | null) {
+    setTarget(nextTarget);
+    if (!nextTarget) {
+      window.localStorage.removeItem(PLAYGROUND_TARGET_STORAGE_KEY);
+      return;
+    }
+    window.localStorage.setItem(
+      PLAYGROUND_TARGET_STORAGE_KEY,
+      JSON.stringify(nextTarget)
+    );
+  }
 
   useEffect(() => {
     setExploreSession(true);
@@ -40,11 +132,25 @@ export default function ExploreChatPage(): React.JSX.Element {
   }, [setExploreSession]);
 
   useEffect(() => {
+    setActiveSource(
+      target
+        ? {
+            sourceId: targetId,
+            sourceName: target.name,
+            scope: target.scope,
+            hosting: target.hosting,
+          }
+        : null
+    );
+    return () => setActiveSource(null);
+  }, [setActiveSource, target, targetId]);
+
+  useEffect(() => {
     if (!isDesktop) return;
     setLedgeIndexApiBaseUrl(
-      chatUsesRemoteApi
+      target?.hosting === "cloud"
         ? (resolveDesktopRemoteApiUrl() ?? resolveDesktopLocalApiUrl())
-        : resolveDesktopLocalApiUrl(),
+        : resolveDesktopLocalApiUrl()
     );
     return () => {
       const stored =
@@ -53,30 +159,29 @@ export default function ExploreChatPage(): React.JSX.Element {
           : null;
       syncDesktopApiBaseForScope(stored === "global" ? "global" : "personal");
     };
-  }, [isDesktop, chatUsesRemoteApi]);
+  }, [isDesktop, target?.hosting]);
 
-  const modelSelect =
-    needsProviderKeys ? (
-      <Link
-        href="/settings/providers"
-        className={cn(
-          "inline-flex h-8 items-center rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5",
-          "text-xs font-medium text-amber-900 dark:text-amber-100",
-        )}
-      >
-        Add API key
-      </Link>
-    ) : chatModelsReady && availableModels.length > 0 ? (
-      <HeaderSelect
-        ariaLabel="Chat model"
-        value={modelId}
-        onChange={setModelId}
-        options={availableModels.map((model) => ({
-          value: model.id,
-          label: model.label,
-        }))}
-      />
-    ) : null;
+  const modelSelect = needsProviderKeys ? (
+    <Link
+      href="/settings/providers"
+      className={cn(
+        "inline-flex h-8 items-center rounded-lg border border-amber-500/40 bg-amber-500/10 px-2.5",
+        "text-xs font-medium text-amber-900 dark:text-amber-100"
+      )}
+    >
+      Add API key
+    </Link>
+  ) : chatModelsReady && availableModels.length > 0 ? (
+    <HeaderSelect
+      ariaLabel="Chat model"
+      value={modelId}
+      onChange={setModelId}
+      options={availableModels.map((model) => ({
+        value: model.id,
+        label: model.label,
+      }))}
+    />
+  ) : null;
 
   // Playground uses the hosted API when no local keys exist, but model choices
   // still follow configured provider keys (add keys in Settings to pick a model).
@@ -107,19 +212,31 @@ export default function ExploreChatPage(): React.JSX.Element {
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden">
       <StreamingChatPanel
-        key={`${modelId}-${rerankBackend}-${chatUsesRemoteApi ? "cloud" : "local"}`}
-        chatId={`explore-chat-${modelId}-${rerankBackend}`}
+        key={`${modelId}-${target?.kind ?? "none"}-${targetId}`}
+        chatId={`explore-chat-${modelId}-${targetId}`}
         agent="exploreAgent"
         modelId={modelId}
         rerankBackend={rerankBackend}
-        showDeepThinkingToggle={modelSupportsThinking(modelId)}
-        inputPlaceholder="Ask about your sources…"
-        emptyHint={
-          chatUsesRemoteApi
-            ? "Using cloud models — ask about public or cloud sources. Add Model keys in Settings to include local personal indexes."
-            : "Ask what sources are available (personal or global), or ask a question. Playground picks up to 3 sources and answers from the evidence."
+        sourceScope={target?.scope}
+        sourceHosting={target?.hosting}
+        exploreSourceSlugs={target?.sourceSlugs}
+        exploreSourceMode={target?.kind === "sources" ? "all" : "picker"}
+        sourceSelectionRequired
+        sourceSelectionControl={
+          <PlaygroundSourcePicker value={target} onChange={handleTargetChange} />
         }
-        toolbarEnd={modelSelect}
+        hideRankingControl
+        showNewChatButton={!isDesktop}
+        showDeepThinkingToggle={modelSupportsThinking(modelId)}
+        inputPlaceholder={
+          target ? `Ask about ${target.name}…` : "Select a source to start…"
+        }
+        emptyHint={
+          target
+            ? `Ask a question grounded in ${target.name}.`
+            : "Select an existing source or source set before asking a question."
+        }
+        toolbarEnd={isDesktop ? null : modelSelect}
         // Full-bleed chat, so it sits on the app canvas like every other page
         // instead of painting the brighter card colour across the whole area.
         className="min-h-0 flex-1 rounded-none border-0 bg-surface-alt shadow-none"

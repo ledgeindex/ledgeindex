@@ -1254,6 +1254,23 @@ export async function updateSourceSiteProfile(
   }
 }
 
+export async function startSourceAgentGuideRun(
+  id: string,
+  options?: { hint?: string },
+) {
+  return api<{ run: ProfileSiteRun }>(
+    `/api/sources/${id}/agent-guide-runs`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ...(options?.hint?.trim()
+          ? { hint: options.hint.trim() }
+          : {}),
+      }),
+    },
+  );
+}
+
 export async function deleteSourceSiteProfile(id: string) {
   try {
     return await api<{ source: Source; deleted: boolean }>(
@@ -2372,6 +2389,7 @@ export async function startProfileSiteRun(input: {
   sitemapOnly?: boolean;
   /** Skip crawl; pick from these pages (markdown skips HTTP fetch). */
   seedPages?: ProfileSeedCatalogPage[];
+  hint?: string;
   backend?: string;
   modelId?: string;
   baseUrl?: string;
@@ -2385,6 +2403,7 @@ export async function startProfileSiteRun(input: {
       ...(input.maxPages != null ? { maxPages: input.maxPages } : {}),
       ...(input.sitemapOnly ? { sitemapOnly: true } : {}),
       ...(input.seedPages?.length ? { seedPages: input.seedPages } : {}),
+      ...(input.hint?.trim() ? { hint: input.hint.trim() } : {}),
       ...(input.backend ? { backend: input.backend } : {}),
       ...(input.modelId ? { modelId: input.modelId } : {}),
       ...(input.baseUrl ? { baseUrl: input.baseUrl } : {}),

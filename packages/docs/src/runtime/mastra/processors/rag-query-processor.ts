@@ -2,7 +2,11 @@ import type { Processor, ProcessInputArgs } from "@mastra/core/processors";
 import type { MastraDBMessage } from "@mastra/core/agent";
 import { getMetadataCatalog } from "../../retrieval/metadata-catalog-store.js";
 import { ensureCatalogHasPages } from "../../retrieval/page-catalog-rebuild.js";
-import { resolveCatalogUrlFilter } from "../../retrieval/rank-catalog-pages.js";
+import {
+  rankPagesForQuestion,
+  resolveCatalogQueryUrlFilter,
+  resolveCatalogUrlFilter,
+} from "../../retrieval/rank-catalog-pages.js";
 import {
   formatCatalogForAgent,
   filterCatalogByUrlPrefix,
@@ -19,12 +23,21 @@ import {
   type RetrievalMeta,
   type RetrievalTimingStep,
 } from "../../retrieval/retrieval-meta.js";
-import { rewriteQueries } from "../../retrieval/rewrite-queries.js";
+import {
+  clipRetrievalHistoryText,
+  resolveEvidenceQuestion,
+  rewriteQueries,
+} from "../../retrieval/rewrite-queries.js";
 import {
   assessCoverage,
   instructionForAnswerMode,
 } from "../../retrieval/assess-coverage.js";
 import { maybeFilterRetrievedPages } from "../../retrieval/filter-retrieved-pages.js";
+import {
+  formatSourceAgentGuideForAnswer,
+  formatSourceAgentGuideForRewrite,
+  loadSourceAgentGuide,
+} from "../../retrieval/source-agent-guide.js";
 import { logVerbose } from "../../lib/logger.js";
 import { getSourceSummary } from "../../services/source-summary.js";
 import { primaryAuxiliaryModelId } from "../../llm/chat-model-config.js";
@@ -68,7 +81,7 @@ function buildHistory(messages: MastraDBMessage[]): string {
     .map((m) => {
       const text = textFromMessage(m);
       if (!text) return "";
-      const clipped = text.length > 300 ? `${text.slice(0, 300)}…` : text;
+      const clipped = clipRetrievalHistoryText(text);
       return `${m.role}: ${clipped}`;
     })
     .filter(Boolean);
@@ -244,6 +257,7 @@ function buildRetrievalMeta(input: {
     coverageModelId: input.coverage.coverageModelId,
     searchAttempts: input.byQuery.map((entry) => ({
       query: entry.query,
+      queryVariants: entry.queryVariants,
       chunkCount: entry.rawPrunedCount,
       insufficient: entry.insufficient,
       attemptType: entry.attemptType,
@@ -382,6 +396,9 @@ export class RAGQueryProcessor implements Processor {
     const timingSteps: RetrievalTimingStep[] = [];
 
     const catalogStarted = performance.now();
+    const sourceAgentGuide = await loadSourceAgentGuide(sourceId);
+    const answerGuide = formatSourceAgentGuideForAnswer(sourceAgentGuide);
+    const rewriteGuide = formatSourceAgentGuideForRewrite(sourceAgentGuide);
     const catalogRecord =
       (await ensureCatalogHasPages(sourceId)) ??
       (await getMetadataCatalog(sourceId));
@@ -390,8 +407,16 @@ export class RAGQueryProcessor implements Processor {
       catalogRecord,
       docsUrlPrefix || docsCrawlRoot || null
     );
-    const catalogText = formatCatalogForAgent(scopedCatalog);
     const history = buildHistory(messages);
+    const rankedCatalog = scopedCatalog
+      ? {
+          ...scopedCatalog,
+          pages: rankPagesForQuestion(question, scopedCatalog.pages),
+        }
+      : null;
+    const catalogText = formatCatalogForAgent(rankedCatalog, {
+      preservePageOrder: true,
+    });
     const retrievalSettings = readRetrievalSettingsFromRequestContext(
       requestContext,
     );
@@ -506,7 +531,7 @@ export class RAGQueryProcessor implements Processor {
           ? ""
           : `\n\nRetrieved sources:\n${formatChunksForContext(agentChunks)}`;
 
-      const systemParts = [retrievalInstruction, sourceBlock]
+      const systemParts = [retrievalInstruction, answerGuide, sourceBlock]
         .map((part) => part.trim())
         .filter(Boolean);
 
@@ -535,8 +560,10 @@ export class RAGQueryProcessor implements Processor {
       catalogText,
       history,
       pages: scopedCatalog?.pages,
+      sourceProfileHint: rewriteGuide,
       requestContext,
     });
+    const evidenceQuestion = resolveEvidenceQuestion(question, [rerankQuery]);
     timingSteps.push({
       id: "rewrite",
       label: `Rewrite (${rewriteMethod})`,
@@ -545,7 +572,11 @@ export class RAGQueryProcessor implements Processor {
     });
 
     const catalogUrlCandidate = scopedCatalog?.pages?.length
-      ? resolveCatalogUrlFilter(question, scopedCatalog.pages)
+      ? (resolveCatalogQueryUrlFilter(
+          evidenceQuestion,
+          catalogQueries,
+          scopedCatalog.pages,
+        ) ?? resolveCatalogUrlFilter(evidenceQuestion, scopedCatalog.pages))
       : null;
     const catalogUrlFilter = catalogUrlCandidate
       ? {
@@ -560,7 +591,7 @@ export class RAGQueryProcessor implements Processor {
     const retrieveStrictStarted = performance.now();
     let retrieval = await kapaRetrieveMany({
       queries,
-      question,
+      question: evidenceQuestion,
       rerankQuery,
       sourceId,
       catalogUrlFilter,
@@ -601,7 +632,7 @@ export class RAGQueryProcessor implements Processor {
       const retrieveRelaxedStarted = performance.now();
       retrieval = await kapaRetrieveMany({
         queries,
-        question,
+        question: evidenceQuestion,
         rerankQuery,
         sourceId,
         catalogUrlFilter,
@@ -632,7 +663,7 @@ export class RAGQueryProcessor implements Processor {
       const retrieveWeakStarted = performance.now();
       retrieval = await kapaRetrieveMany({
         queries,
-        question,
+        question: evidenceQuestion,
         rerankQuery,
         sourceId,
         catalogUrlFilter,
@@ -658,7 +689,7 @@ export class RAGQueryProcessor implements Processor {
     let agentChunks = retrieval.merged;
     const filterStarted = performance.now();
     const filtered = await maybeFilterRetrievedPages({
-      question,
+      question: evidenceQuestion,
       chunks: agentChunks,
       catalogQueries,
       requestContext,
@@ -686,7 +717,7 @@ export class RAGQueryProcessor implements Processor {
     const { maxChunkScore, avgTop3Score } = scoreSummary(evidenceChunks);
     const coverageStarted = performance.now();
     const coverage = await assessCoverage({
-      question,
+      question: evidenceQuestion,
       chunks: evidenceChunks,
       insufficient,
       relaxedPassUsed,
@@ -777,6 +808,7 @@ export class RAGQueryProcessor implements Processor {
     const systemParts = [
       retrievalInstruction,
       multiPartInstruction,
+      answerGuide,
       sourceBlock,
     ]
       .map((part) => part.trim())

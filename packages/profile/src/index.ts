@@ -16,6 +16,11 @@ export {
 
 export { profile, profileSite, type ProfileOptions } from "./profile.js";
 export {
+  startSiteProfileRun,
+  getSiteProfileRun,
+  type SiteProfileRun,
+} from "./site-profile-runs.js";
+export {
   runCompanyProfile,
   type CompanyProfileResult,
   type CompanyProfileLensRun,

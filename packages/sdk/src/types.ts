@@ -11,6 +11,7 @@ import type { SourceAskResult } from "@ledgeindex/docs/runtime/services/source-a
 import type { RoutedAskResult } from "@ledgeindex/docs/runtime/services/routed-ask.js";
 import type { CrawlProgressUpdate, RunWebCrawlResult } from "./crawl.js";
 import type { LedgeIndexProfileOptions } from "./profile.js";
+import type { ProfileIndexedSourceOptions } from "./profile-indexed-source.js";
 import type {
   ApplyUpdatesOptions,
   ApplyUpdatesResult,
@@ -217,6 +218,11 @@ export type LedgeIndex = {
   profile(
     url: string,
     options?: LedgeIndexProfileOptions,
+  ): Promise<CompanyProfileResult>;
+  /** Profile an indexed source from stored page content without crawling it again. */
+  profileIndexedSource(
+    sourceIdOrSlug: string,
+    options?: ProfileIndexedSourceOptions,
   ): Promise<CompanyProfileResult>;
   /** Compare indexed pages to live content — new, updated, and removed pages. */
   checkForUpdates(

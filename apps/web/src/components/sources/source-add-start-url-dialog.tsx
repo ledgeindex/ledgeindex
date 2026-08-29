@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatUrlLabel } from "@/components/sources/source-display";
 import {
@@ -13,27 +14,31 @@ import {
   type SourceSummary,
 } from "@/lib/ledgeindex-api";
 
-function resolveAddedStartUrl(
-  raw: string,
+function resolveAddedStartUrls(
+  rawEntries: readonly string[],
   existingStartUrls: string[],
-): string {
-  const trimmed = raw.trim();
-  if (!trimmed) {
-    throw new Error("Enter a URL or path");
-  }
-
-  if (/^https?:\/\//i.test(trimmed)) {
-    return normalizeStartUrl(trimmed);
-  }
+): string[] {
+  const entries = rawEntries
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (entries.length === 0) throw new Error("Enter at least one URL or path");
 
   const base = existingStartUrls[0];
-  if (!base) {
-    throw new Error("This set has no start URL to resolve a path against");
-  }
-
-  const origin = new URL(base).origin;
-  const path = trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
-  return normalizeStartUrl(`${origin}${path}`);
+  return [
+    ...new Set(
+      entries.map((entry) => {
+        if (/^https?:\/\//i.test(entry)) return normalizeStartUrl(entry);
+        if (!base) {
+          throw new Error(
+            "This set has no start URL to resolve a path against",
+          );
+        }
+        const origin = new URL(base).origin;
+        const path = entry.startsWith("/") ? entry : `/${entry}`;
+        return normalizeStartUrl(`${origin}${path}`);
+      }),
+    ),
+  ];
 }
 
 function sameSite(a: string, b: string): boolean {
@@ -58,8 +63,8 @@ export function SourceAddStartUrlDialog({
   onSaved?: (startUrls: string[]) => void;
 }) {
   const router = useRouter();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [draft, setDraft] = useState("");
+  const inputRefs = useRef<Array<HTMLInputElement | null>>([]);
+  const [drafts, setDrafts] = useState<string[]>([""]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,25 +76,33 @@ export function SourceAddStartUrlDialog({
 
   useEffect(() => {
     if (!open) return;
-    setDraft("");
+    setDrafts([""]);
     setError(null);
-    const timer = window.setTimeout(() => inputRef.current?.focus(), 0);
+    const timer = window.setTimeout(() => inputRefs.current[0]?.focus(), 0);
     return () => window.clearTimeout(timer);
   }, [open]);
 
   if (!open) return null;
 
+  function addDraftField() {
+    setDrafts((current) => {
+      const nextIndex = current.length;
+      window.setTimeout(() => inputRefs.current[nextIndex]?.focus(), 0);
+      return [...current, ""];
+    });
+  }
+
   async function handleContinue() {
     setError(null);
-    let nextUrl: string;
+    let resolvedUrls: string[];
     try {
-      nextUrl = resolveAddedStartUrl(draft, existingUrls);
+      resolvedUrls = resolveAddedStartUrls(drafts, existingUrls);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invalid URL");
       return;
     }
 
-    if (isPdfUrl(nextUrl)) {
+    if (resolvedUrls.some(isPdfUrl)) {
       setError(UNSUPPORTED_PDF_START_URL_MESSAGE);
       return;
     }
@@ -97,13 +110,19 @@ export function SourceAddStartUrlDialog({
     const normalizedExisting = existingUrls.map((url) =>
       normalizeStartUrl(url).replace(/\/$/, ""),
     );
-    if (normalizedExisting.includes(nextUrl.replace(/\/$/, ""))) {
-      setError("That start URL is already on this set");
+    const nextUrls = resolvedUrls.filter(
+      (url) => !normalizedExisting.includes(url.replace(/\/$/, "")),
+    );
+    if (nextUrls.length === 0) {
+      setError("Those start URLs are already on this set");
       return;
     }
 
-    if (existingUrls[0] && !sameSite(existingUrls[0], nextUrl)) {
-      setError("Use a URL on the same site as the existing start URLs");
+    if (
+      existingUrls[0] &&
+      nextUrls.some((url) => !sameSite(existingUrls[0], url))
+    ) {
+      setError("Use URLs on the same site as the existing start URLs");
       return;
     }
 
@@ -113,7 +132,7 @@ export function SourceAddStartUrlDialog({
       const merged = [
         ...new Set([
           ...(full.config.startUrls ?? existingUrls),
-          nextUrl,
+          ...nextUrls,
         ].map((url) => normalizeStartUrl(url))),
       ];
 
@@ -129,7 +148,7 @@ export function SourceAddStartUrlDialog({
       const scope =
         (source.scope ?? "personal") === "global" ? "&scope=global" : "";
       router.push(
-        `/sources/web-crawl?url=${encodeURIComponent(nextUrl)}${scope}&mode=add-path&sourceId=${encodeURIComponent(source.id)}`,
+        `/sources/web-crawl?url=${encodeURIComponent(nextUrls[0])}&urls=${encodeURIComponent(JSON.stringify(nextUrls))}${scope}&mode=add-path&sourceId=${encodeURIComponent(source.id)}`,
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add start URL");
@@ -150,13 +169,13 @@ export function SourceAddStartUrlDialog({
           id="add-start-url-title"
           className="text-base font-semibold text-foreground"
         >
-          Add start URL
+          Add start URLs
         </h2>
         <p className="mt-2 text-sm text-muted">
           Add another crawl root to{" "}
           <span className="font-medium text-foreground">{source.name}</span>{" "}
           without re-crawling existing paths. Next you’ll crawl only the new
-          URL.
+          URLs.
         </p>
 
         {existingUrls.length > 0 ? (
@@ -178,27 +197,75 @@ export function SourceAddStartUrlDialog({
           </div>
         ) : null}
 
-        <label className="mt-4 block">
-          <span className="mb-1 block font-mono text-[0.625rem] font-semibold tracking-[0.12em] text-muted uppercase">
-            New start URL or path
-          </span>
-          <input
-            ref={inputRef}
-            value={draft}
-            onChange={(event) => setDraft(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") {
-                event.preventDefault();
-                void handleContinue();
-              }
-            }}
-            placeholder="/components or https://…"
-            spellCheck={false}
-            className="w-full rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground"
-          />
-        </label>
+        <div className="mt-4">
+          <div className="mb-1.5 flex items-center justify-between gap-3">
+            <p className="font-mono text-[0.625rem] font-semibold tracking-[0.12em] text-muted uppercase">
+              New start URLs or paths
+            </p>
+            <button
+              type="button"
+              onClick={addDraftField}
+              className="inline-flex h-7 items-center gap-1 rounded-md border border-border bg-card-solid px-2 text-[0.6875rem] font-medium text-muted transition-colors hover:text-foreground"
+            >
+              <Plus className="size-3" aria-hidden />
+              Add path
+            </button>
+          </div>
+          <div className="space-y-2">
+            {drafts.map((draft, index) => (
+              <div key={index} className="flex items-center gap-2">
+                <input
+                  ref={(element) => {
+                    inputRefs.current[index] = element;
+                  }}
+                  value={draft}
+                  onChange={(event) =>
+                    setDrafts((current) =>
+                      current.map((entry, entryIndex) =>
+                        entryIndex === index ? event.target.value : entry,
+                      ),
+                    )
+                  }
+                  onKeyDown={(event) => {
+                    if (event.key !== "Enter") return;
+                    event.preventDefault();
+                    if (index === drafts.length - 1) {
+                      addDraftField();
+                    } else {
+                      inputRefs.current[index + 1]?.focus();
+                    }
+                  }}
+                  placeholder={
+                    index === 0
+                      ? "/components or https://…"
+                      : "/guides or https://…"
+                  }
+                  spellCheck={false}
+                  className="min-w-0 flex-1 rounded-md border border-border bg-background px-3 py-2 font-mono text-sm text-foreground"
+                />
+                <button
+                  type="button"
+                  aria-label={`Remove start URL ${index + 1}`}
+                  onClick={() =>
+                    setDrafts((current) =>
+                      current.length === 1
+                        ? [""]
+                        : current.filter(
+                            (_, entryIndex) => entryIndex !== index,
+                          ),
+                    )
+                  }
+                  className="inline-flex size-9 shrink-0 items-center justify-center rounded-md border border-border text-muted transition-colors hover:bg-surface-raised hover:text-red-600"
+                >
+                  <Trash2 className="size-3.5" aria-hidden />
+                </button>
+              </div>
+            ))}
+          </div>
+        </div>
         <p className="mt-1.5 text-xs text-muted">
-          Path-only values resolve against this set’s site (e.g.{" "}
+          Add one URL or path per field. Path-only values resolve against this
+          set’s site (e.g.{" "}
           <span className="font-mono">/components</span>).
         </p>
 
@@ -218,7 +285,7 @@ export function SourceAddStartUrlDialog({
           </Button>
           <Button
             type="button"
-            disabled={saving || !draft.trim()}
+            disabled={saving || !drafts.some((draft) => draft.trim())}
             onClick={() => void handleContinue()}
             className="h-9 px-4 text-xs"
           >

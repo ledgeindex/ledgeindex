@@ -32,6 +32,10 @@ function BannerFavicon({
   const initials = source.name.slice(0, 2).toUpperCase();
   const showFavicon = Boolean(source.faviconUrl) && !failed;
 
+  useEffect(() => {
+    setFailed(false);
+  }, [source.faviconUrl, source.id]);
+
   if (showFavicon) {
     return (
       <CachedRemoteImage

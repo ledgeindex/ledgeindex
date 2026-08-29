@@ -2,6 +2,7 @@
 
 export type SiteProfileLensId =
   | "docs_identity"
+  | "docs_topics"
   | "identity"
   | "capabilities"
   | "integrations"
@@ -33,6 +34,11 @@ const LENS_BY_ID: Record<SiteProfileLensId, SiteProfileLensOption> = {
     id: "docs_identity",
     label: "About / shelf",
     description: "What it is — framework, library, API, tooling",
+  },
+  docs_topics: {
+    id: "docs_topics",
+    label: "Documentation topics",
+    description: "Broad subject areas covered by the docs",
   },
   identity: {
     id: "identity",
@@ -101,7 +107,7 @@ export const SITE_PROFILE_LENS_GROUPS: SiteProfileLensGroup[] = [
     id: "about",
     label: "About",
     description: "What this source is and who it’s for",
-    lensIds: ["docs_identity", "identity", "capabilities"],
+    lensIds: ["docs_identity", "docs_topics", "identity", "capabilities"],
   },
   {
     id: "developer",

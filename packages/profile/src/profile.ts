@@ -19,6 +19,8 @@ export type ProfileOptions = {
   pickOnly?: boolean;
   /** Skip crawl; pick from these pages (optional markdown skips HTTP fetch). */
   seedPages?: SeedCatalogPage[];
+  /** Optional user guidance for page selection and profile synthesis. */
+  hint?: string;
   onLensStart?: (lens: ResearchLens, index: number, total: number) => void;
   onProgress?: (progress: CompanyProfileProgress) => void;
 };
@@ -49,6 +51,7 @@ export async function profileSite(
     sitemapOnly: options?.sitemapOnly,
     pickOnly: options?.pickOnly,
     seedPages: options?.seedPages,
+    hint: options?.hint,
     onLensStart: options?.onLensStart,
     onProgress: options?.onProgress,
   });

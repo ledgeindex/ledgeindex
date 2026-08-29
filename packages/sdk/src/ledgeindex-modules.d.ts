@@ -77,6 +77,13 @@ declare module "@ledgeindex/core/export/source-corpus.js" {
     includeChunks?: boolean;
   };
 
+  export const PROFILE_SEED_MAX_PAGES: number;
+  export const PROFILE_SEED_MAX_MARKDOWN_CHARS: number;
+  export function sourceCorpusPagesToProfileSeedPages(
+    pages: readonly SourceCorpusPage[],
+    options?: { maxPages?: number; maxMarkdownChars?: number },
+  ): Array<{ url: string; title: string; markdown: string }>;
+
   export type WrittenSourceCorpus = {
     outputDirectory: string;
     manifestPath: string;
@@ -549,6 +556,28 @@ declare module "@ledgeindex/repo" {
 }
 declare module "@ledgeindex/profile" {
   export type ResearchLens = string;
+  export type SeedCatalogPage = {
+    url: string;
+    title: string;
+    markdown?: string;
+  };
+  export type DocsIdentityLensOutput = {
+    overallSummary: string;
+    kind: "frameworks" | "libraries" | "apis-services" | "tooling" | "uncategorized";
+    language: "javascript" | "typescript" | "python" | "other";
+    notes?: string;
+    citations?: Array<{ url: string; quote?: string }>;
+  };
+  export type CapabilitiesLensOutput = {
+    capabilities: Array<{
+      name: string;
+      description: string;
+      priority: "main" | "top" | "supporting";
+      tierOrLimit?: string;
+      citation: { url: string; quote?: string };
+    }>;
+    gapsOrUnclear?: string;
+  };
 
   export type CompanyProfileProgress = {
     phase: "crawl" | "pick" | "fetch" | "synthesize";
@@ -574,7 +603,8 @@ declare module "@ledgeindex/profile" {
     maxPages?: number;
     sitemapOnly?: boolean;
     pickOnly?: boolean;
-    seedPages?: Array<{ url: string; title: string; markdown?: string }>;
+    seedPages?: SeedCatalogPage[];
+    hint?: string;
     onLensStart?: (lens: ResearchLens, index: number, total: number) => void;
     onProgress?: (progress: CompanyProfileProgress) => void;
   };

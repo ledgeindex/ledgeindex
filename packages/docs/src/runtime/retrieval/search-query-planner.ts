@@ -73,6 +73,7 @@ const CATALOG_MAX_PAGES_PER_GROUP = 60;
 function formatGroupedCatalog(
   pages: MetadataCatalog["pages"],
   charBudget: number,
+  preservePageOrder: boolean,
 ): string {
   const groups = new Map<string, MetadataCatalog["pages"]>();
   for (const page of pages) {
@@ -82,17 +83,19 @@ function formatGroupedCatalog(
     else groups.set(key, [page]);
   }
 
-  const ordered = [...groups.entries()].sort(
-    (a, b) => b[1].length - a[1].length,
-  );
+  const ordered = preservePageOrder
+    ? [...groups.entries()]
+    : [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
   const lines: string[] = [];
   let used = 0;
   let shown = 0;
 
   for (const [name, groupPages] of ordered) {
-    const sorted = [...groupPages].sort(
-      (a, b) => (b.chunkCount ?? 0) - (a.chunkCount ?? 0),
-    );
+    const sorted = preservePageOrder
+      ? groupPages
+      : [...groupPages].sort(
+          (a, b) => (b.chunkCount ?? 0) - (a.chunkCount ?? 0),
+        );
     const visible = sorted.slice(0, CATALOG_MAX_PAGES_PER_GROUP);
     const header = `## ${name} (${groupPages.length} pages)`;
     const body = visible
@@ -118,7 +121,7 @@ function formatGroupedCatalog(
 /** Full page catalog for the docs agent — titles + keyword hints, no URLs. */
 export function formatCatalogForAgent(
   catalog: MetadataCatalog | null,
-  options?: { charBudget?: number },
+  options?: { charBudget?: number; preservePageOrder?: boolean },
 ): string {
   const charBudget = options?.charBudget ?? CATALOG_CHAR_BUDGET;
   if (catalog?.pages?.length) {
@@ -126,7 +129,11 @@ export function formatCatalogForAgent(
       .map((page) => formatCatalogPageForRewrite(page))
       .join("\n");
     if (flat.length <= charBudget) return flat;
-    return formatGroupedCatalog(catalog.pages, charBudget);
+    return formatGroupedCatalog(
+      catalog.pages,
+      charBudget,
+      options?.preservePageOrder ?? false,
+    );
   }
 
   if (!catalog?.categories.length) {

@@ -1,5 +1,10 @@
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import {
+  exportSourceCorpus,
+  sourceCorpusPagesToProfileSeedPages,
+} from "@ledgeindex/core/export/source-corpus.js";
+import { startSiteProfileRun } from "@ledgeindex/profile";
 import { discoverUrls } from "../crawler/discover.js";
 import { estimateChunkCountFromMarkdown } from "../indexing/index-size-estimate.js";
 import { getStore } from "../db/index.js";
@@ -431,10 +436,6 @@ export async function sourceRoutes(fastify: FastifyInstance) {
     const userId = await requireUser(request, reply);
     if (!userId) return;
 
-    if (isApiAuthRequired() && !(await requireAdmin(request, reply))) {
-      return;
-    }
-
     const role = await getRequestUserRole(request);
     const { id } = request.params as { id: string };
     const existing = await getSourceForWrite(id, userId, role);
@@ -475,10 +476,6 @@ export async function sourceRoutes(fastify: FastifyInstance) {
   fastify.put("/api/sources/:id/site-profile", async (request, reply) => {
     const userId = await requireUser(request, reply);
     if (!userId) return;
-
-    if (isApiAuthRequired() && !(await requireAdmin(request, reply))) {
-      return;
-    }
 
     const role = await getRequestUserRole(request);
     const { id } = request.params as { id: string };
@@ -543,13 +540,49 @@ export async function sourceRoutes(fastify: FastifyInstance) {
     return { source, siteProfile: nextMetadata.siteProfile };
   });
 
-  fastify.delete("/api/sources/:id/site-profile", async (request, reply) => {
+  fastify.post("/api/sources/:id/agent-guide-runs", async (request, reply) => {
     const userId = await requireUser(request, reply);
     if (!userId) return;
 
-    if (isApiAuthRequired() && !(await requireAdmin(request, reply))) {
-      return;
+    const role = await getRequestUserRole(request);
+    const { id } = request.params as { id: string };
+    const source = await getSourceForWrite(id, userId, role);
+    if (!source) {
+      return reply.status(404).send({ error: "Source not found" });
     }
+    const body = z
+      .object({ hint: z.string().trim().max(4_000).optional() })
+      .safeParse(request.body ?? {});
+    if (!body.success) {
+      return reply.status(400).send({ error: body.error.flatten() });
+    }
+
+    const corpus = await exportSourceCorpus(source.id, {
+      includeContent: true,
+      includeChunks: false,
+    });
+    const seedPages = sourceCorpusPagesToProfileSeedPages(corpus.pages);
+    if (seedPages.length === 0) {
+      return reply.status(409).send({
+        error: "Source has no indexed pages available for an agent guide",
+      });
+    }
+    const rootUrl =
+      corpus.source.canonicalUrl ??
+      corpus.source.startUrls[0] ??
+      seedPages[0].url;
+    const run = startSiteProfileRun({
+      rootUrl,
+      lenses: ["docs_identity", "docs_topics"],
+      seedPages,
+      hint: body.data.hint,
+    });
+    return reply.status(202).send({ run });
+  });
+
+  fastify.delete("/api/sources/:id/site-profile", async (request, reply) => {
+    const userId = await requireUser(request, reply);
+    if (!userId) return;
 
     const role = await getRequestUserRole(request);
     const { id } = request.params as { id: string };

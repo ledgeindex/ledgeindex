@@ -61,6 +61,7 @@ export type SiteProfile = {
   generatedAt?: string;
   updatedAt?: string;
   runId?: string;
+  guideHint?: string;
 };
 
 export type SourceMetadata = {

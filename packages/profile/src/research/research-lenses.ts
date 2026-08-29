@@ -3,6 +3,7 @@ import { z } from "zod";
 export const researchLensIds = [
   "identity",
   "docs_identity",
+  "docs_topics",
   "capabilities",
   "pricing",
   "business_model",
@@ -66,6 +67,19 @@ export const docsIdentityLensSchema = z.object({
     ),
   notes: z.string().optional(),
   citations: z.array(citationSchema).optional(),
+});
+
+export const docsTopicsLensSchema = z.object({
+  topics: z
+    .array(
+      z.object({
+        name: z.string(),
+        description: z.string(),
+        priority: z.enum(["main", "top"]),
+        citation: citationSchema,
+      }),
+    )
+    .max(25),
 });
 
 export const capabilitiesLensSchema = z.object({
@@ -384,6 +398,7 @@ export const businessUsageLensSchema = z.object({
 
 export type IdentityLensOutput = z.infer<typeof identityLensSchema>;
 export type DocsIdentityLensOutput = z.infer<typeof docsIdentityLensSchema>;
+export type DocsTopicsLensOutput = z.infer<typeof docsTopicsLensSchema>;
 export type CapabilitiesLensOutput = z.infer<typeof capabilitiesLensSchema>;
 export type PricingLensOutput = z.infer<typeof pricingLensSchema>;
 export type BusinessModelLensOutput = z.infer<typeof businessModelLensSchema>;
@@ -405,6 +420,7 @@ export type BusinessUsageLensOutput = z.infer<typeof businessUsageLensSchema>;
 export type LensOutputById = {
   identity: IdentityLensOutput;
   docs_identity: DocsIdentityLensOutput;
+  docs_topics: DocsTopicsLensOutput;
   capabilities: CapabilitiesLensOutput;
   pricing: PricingLensOutput;
   business_model: BusinessModelLensOutput;
@@ -466,6 +482,23 @@ Your job is DOCS IDENTITY — same pattern as other profile lenses: use the pick
 4. citations: ground claims when possible.
 5. Do not invent sections. Do not output per-path hubs — picked URLs stay in the research context only.`,
     schema: docsIdentityLensSchema,
+  },
+  docs_topics: {
+    id: "docs_topics",
+    label: "Documentation topics",
+    pickMessage:
+      "Select pages that reveal the broad, first-class subject areas covered by this documentation set. Start with the docs root, overview, navigation/index, concepts, and top-level section hubs. Then select one representative overview page for each major topic. When user guidance names topics, cover every named topic that has a matching page and do not substitute adjacent niche features. Avoid leaf API references and narrow subfeatures when a broader parent or overview page exists. Prefer 8–20 pages.",
+    synthInstructions: `${BASE_SYNTH_RULES}
+Your job is DOCS TOPICS — identify the broad subject areas a reader can learn from this documentation set. This is not a product-feature ranking and not an inventory of whichever leaf pages happened to be selected.
+
+1. Return 5–20 topics, up to the hard schema limit of 25.
+2. Use priority "main" for foundational subject areas and "top" for important secondary areas.
+3. Prefer stable parent concepts over narrow implementations. For example, use a broad parent such as "Retrieval-Augmented Generation" rather than one specific retrieval algorithm when the sources support the parent.
+4. Merge related subfeatures under their broad topic. Do not elevate isolated leaf pages above clearly documented top-level sections.
+5. User guidance defines the intended emphasis. Include every topic it names when the supplied sources support that topic; unsupported guidance must still be omitted.
+6. Each topic requires: name, a concise description of what that docs area teaches, priority, and citation.
+7. Order main topics first, followed by top topics.`,
+    schema: docsTopicsLensSchema,
   },
   capabilities: {
     id: "capabilities",

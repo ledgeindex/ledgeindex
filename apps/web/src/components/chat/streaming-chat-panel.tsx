@@ -31,7 +31,7 @@ import {
 import { MessageSources } from "@/components/chat/message-sources";
 import { collectMessageCitationSources } from "@/lib/message-citation-sources";
 import type { RetrievalMeta } from "@/lib/retrieval-meta";
-import { authenticatedFetch, getSource } from "@/lib/ledgeindex-api";
+import { authenticatedFetch } from "@/lib/ledgeindex-api";
 import { getLedgeIndexDesktop } from "@/lib/ledgeindex-desktop";
 import { resolveApiBaseForHosting } from "@/lib/desktop-api-routing";
 import {
@@ -68,17 +68,14 @@ import {
   PromptInputTools,
   type PromptInputMessage,
 } from "@/components/ai-elements/prompt-input";
-import { Cloud } from "lucide-react";
+import { Cloud, MessageSquarePlus } from "lucide-react";
 import { MessageStats } from "@/components/chat/message-stats";
 import { cn } from "@/lib/utils";
 import type { SourcePathOption } from "@/lib/source-paths";
 import { useOptionalSourceChatToolbar } from "@/contexts/source-chat-toolbar-context";
 import { useAuth } from "@/lib/auth-context";
-import {
-  DocsIdentityDialog,
-  docsIdentitySummaryText,
-} from "@/components/sources/docs-identity-dialog";
 import { SourceChatUpdateControls } from "@/components/sources/source-chat-update-controls";
+import { AgentGuideReviewDialog } from "@/components/sources/agent-guide-review-dialog";
 
 function reasoningText(parts: Array<{ type: string; text?: string }>): string {
   return parts
@@ -103,6 +100,12 @@ export function StreamingChatPanel({
   /** When cloud-hosted, force Cohere-auto and show cloud icon (no rerank picker). */
   sourceScope,
   sourceHosting,
+  exploreSourceSlugs = [],
+  exploreSourceMode,
+  sourceSelectionRequired = false,
+  sourceSelectionControl,
+  hideRankingControl = false,
+  showNewChatButton = false,
   pathOptions,
   retrievalSidePanel = false,
   toolbarEnd,
@@ -118,6 +121,12 @@ export function StreamingChatPanel({
   rerankBackend?: LedgeIndexRerankBackendId;
   sourceScope?: "personal" | "global";
   sourceHosting?: "local" | "cloud";
+  exploreSourceSlugs?: string[];
+  exploreSourceMode?: "picker" | "all";
+  sourceSelectionRequired?: boolean;
+  sourceSelectionControl?: React.ReactNode;
+  hideRankingControl?: boolean;
+  showNewChatButton?: boolean;
   pathOptions?: readonly SourcePathOption[];
   welcomeMessage?: string;
   welcomeTitle?: string;
@@ -146,6 +155,8 @@ export function StreamingChatPanel({
     hosting: resolvedHosting,
     scope: resolvedScope,
   });
+  const sourceSelectionReady =
+    !sourceSelectionRequired || exploreSourceSlugs.length > 0;
   const chatApiBase = useMemo(() => {
     const scope = resolvedScope === "global" ? "global" : "personal";
     return resolveApiBaseForHosting({
@@ -155,30 +166,29 @@ export function StreamingChatPanel({
   }, [resolvedScope, resolvedHosting]);
   const [localRerankBackend, setLocalRerankBackend] =
     useState<LedgeIndexRerankBackendId>(() =>
-      resolveAllowedRerankBackend(rerankBackend, isAdmin),
+      resolveAllowedRerankBackend(rerankBackend, isAdmin)
     );
   const effectiveRerankBackend = cloudSource
     ? CLOUD_SOURCE_RERANK_BACKEND_ID
     : resolveAllowedRerankBackend(
         rerankBackend ?? toolbar?.rerankBackend ?? localRerankBackend,
-        isAdmin,
+        isAdmin
       );
   const retrievalPath: "cloud" | "local" = isCloudRerankBackend(
-    effectiveRerankBackend,
+    effectiveRerankBackend
   )
     ? "cloud"
     : "local";
   /** Cloud path uses hosted models — no per-user model picker. */
-  const showModelPicker = Boolean(toolbarEnd) && !cloudSource && retrievalPath === "local";
+  const showModelPicker =
+    Boolean(toolbarEnd) && !cloudSource && retrievalPath === "local";
   const [input, setInput] = useState("");
 
   const [chatSession, setChatSession] = useState(0);
   const [pathScope, setPathScope] = useState("all");
-  const [docsIdentityOpen, setDocsIdentityOpen] = useState(false);
-  const [docsIdentitySummary, setDocsIdentitySummary] = useState("");
-  const hasDocsIdentity = docsIdentitySummary.length > 0;
+  const [agentGuideOpen, setAgentGuideOpen] = useState(false);
   const [deepThinkingEnabled, setDeepThinkingEnabled] = useState(() =>
-    modelSupportsThinking(modelId),
+    modelSupportsThinking(modelId)
   );
   const modelIdRef = useRef(modelId);
   const sourceIdRef = useRef(sourceId);
@@ -186,47 +196,25 @@ export function StreamingChatPanel({
   const thinkingLevelRef = useRef<ChatThinkingLevel>("off");
   const rerankBackendRef = useRef(rerankBackend);
   const retrievalStrictnessRef = useRef(
-    toolbar?.retrievalStrictness ?? "strict",
+    toolbar?.retrievalStrictness ?? "strict"
   );
   const docsUrlPrefixRef = useRef<string | undefined>(undefined);
   const docsCrawlRootRef = useRef<string | undefined>(undefined);
   const sourceScopeRef = useRef(resolvedScope);
   const sourceHostingRef = useRef(resolvedHosting);
+  const exploreSourceSlugsRef = useRef(exploreSourceSlugs);
+  const exploreSourceModeRef = useRef(exploreSourceMode);
   const requestStartedAtRef = useRef<number | null>(null);
-  const [clientDurations, setClientDurations] = useState<Record<string, number>>(
-    {},
-  );
+  const [clientDurations, setClientDurations] = useState<
+    Record<string, number>
+  >({});
 
   const resolvedPathOptions = pathOptions ?? [];
-  const startUrls = useMemo(
-    () => resolvedPathOptions.map((path) => path.startUrl).filter(Boolean),
-    [resolvedPathOptions],
+  const canEditAgentGuide = Boolean(
+    sourceId &&
+      retrievalSidePanel &&
+      (resolvedScope !== "global" || isAdmin),
   );
-  const showDocsIdentityAdmin = Boolean(
-    isAdmin && sourceId && retrievalSidePanel,
-  );
-
-  useEffect(() => {
-    if (!showDocsIdentityAdmin || !sourceId) {
-      setDocsIdentitySummary("");
-      return;
-    }
-    let cancelled = false;
-    void getSource(sourceId)
-      .then(({ source }) => {
-        if (cancelled) return;
-        setDocsIdentitySummary(
-          docsIdentitySummaryText(source.sourceMetadata?.docsIdentity),
-        );
-      })
-      .catch(() => {
-        if (!cancelled) setDocsIdentitySummary("");
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [showDocsIdentityAdmin, sourceId]);
-
   const activePath =
     pathScope === "all"
       ? null
@@ -240,7 +228,8 @@ export function StreamingChatPanel({
   }, [pathScope, resolvedPathOptions]);
 
   const resolvedThinkingLevel =
-    thinkingLevel ?? thinkingLevelFromDeepThinking(deepThinkingEnabled, modelId);
+    thinkingLevel ??
+    thinkingLevelFromDeepThinking(deepThinkingEnabled, modelId);
 
   const canUseDeepThinking = modelSupportsThinking(modelId);
 
@@ -249,12 +238,13 @@ export function StreamingChatPanel({
   sourceNameRef.current = sourceName;
   thinkingLevelRef.current = resolvedThinkingLevel;
   rerankBackendRef.current = effectiveRerankBackend;
-  retrievalStrictnessRef.current =
-    toolbar?.retrievalStrictness ?? "strict";
+  retrievalStrictnessRef.current = toolbar?.retrievalStrictness ?? "strict";
   docsUrlPrefixRef.current = activePath?.startUrl;
   docsCrawlRootRef.current = activePath?.startUrl;
   sourceScopeRef.current = resolvedScope;
   sourceHostingRef.current = resolvedHosting;
+  exploreSourceSlugsRef.current = exploreSourceSlugs;
+  exploreSourceModeRef.current = exploreSourceMode;
 
   const transport = useMemo(
     () =>
@@ -268,6 +258,8 @@ export function StreamingChatPanel({
             sourceName: sourceNameRef.current,
             sourceScope: sourceScopeRef.current,
             sourceHosting: sourceHostingRef.current,
+            exploreSourceSlugs: exploreSourceSlugsRef.current,
+            exploreSourceMode: exploreSourceModeRef.current,
             thinkingLevel: thinkingLevelRef.current,
             rerankBackend: rerankBackendRef.current,
             retrievalStrictness: retrievalStrictnessRef.current,
@@ -275,7 +267,7 @@ export function StreamingChatPanel({
             docsCrawlRoot: docsCrawlRootRef.current,
           }),
       }),
-    [agent, chatApiBase],
+    [agent, chatApiBase]
   );
 
   const { messages, sendMessage, status, error } = useChat({
@@ -316,7 +308,7 @@ export function StreamingChatPanel({
         (part.type === "text" && part.text?.trim()) ||
         part.type === "reasoning" ||
         isToolPart(part) ||
-        Boolean(parseRetrievalPart(part)),
+        Boolean(parseRetrievalPart(part))
     );
   // Show pending indicator until the first token / tool / retrieval UI appears.
   const showPendingIndicator =
@@ -327,12 +319,12 @@ export function StreamingChatPanel({
   const handleSubmit = useCallback(
     (message: PromptInputMessage) => {
       const trimmed = message.text.trim();
-      if (!trimmed || busy) return;
+      if (!trimmed || busy || !sourceSelectionReady) return;
       setInput("");
       requestStartedAtRef.current = Date.now();
       void sendMessage({ text: trimmed });
     },
-    [busy, sendMessage],
+    [busy, sendMessage, sourceSelectionReady]
   );
 
   const handleSuggestionClick = useCallback(
@@ -340,7 +332,7 @@ export function StreamingChatPanel({
       if (busy) return;
       setInput(suggestion);
     },
-    [busy],
+    [busy]
   );
 
   useEffect(() => {
@@ -394,26 +386,19 @@ export function StreamingChatPanel({
   }, [messages, showRetrievalPanel]);
   const retrievalNewestFirst = useMemo(
     () => [...retrievalEntries].reverse(),
-    [retrievalEntries],
+    [retrievalEntries]
   );
-  const hasRetrievalResults = retrievalEntries.length > 0;
-  const [aboutExpanded, setAboutExpanded] = useState(true);
-
-  useEffect(() => {
-    if (hasRetrievalResults) setAboutExpanded(false);
-  }, [hasRetrievalResults]);
-
   return (
     <div
       className={cn(
         "flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-card-solid shadow-card",
-        className,
+        className
       )}
     >
       <div
         className={cn(
           "flex min-h-0 flex-1",
-          showRetrievalPanel ? "flex-col lg:flex-row" : "flex-col",
+          showRetrievalPanel ? "flex-col lg:flex-row" : "flex-col"
         )}
       >
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden">
@@ -421,7 +406,7 @@ export function StreamingChatPanel({
             <ConversationContent
               className={cn(
                 !showRetrievalPanel && "mx-auto max-w-3xl",
-                "px-4 pt-5 pb-4 sm:px-6",
+                "px-4 pt-5 pb-4 sm:px-6"
               )}
             >
               {docsEmpty ? (
@@ -453,110 +438,113 @@ export function StreamingChatPanel({
                     {emptyHint ? (
                       <p className="max-w-sm text-sm text-muted">{emptyHint}</p>
                     ) : null}
+                    {!sourceSelectionReady && sourceSelectionControl
+                      ? sourceSelectionControl
+                      : null}
                   </div>
                 )
               ) : null}
 
               {messages.map((message, messageIndex) => {
-                    const reasoning = reasoningText(message.parts);
-                    const lastPart = message.parts.at(-1);
-                    const isReasoningStreaming =
-                      status === "streaming" &&
-                      message.id === lastMessageId &&
-                      messageIndex === messages.length - 1 &&
-                      lastPart?.type === "reasoning";
-                    const hasAssistantText =
-                      message.role === "assistant" &&
-                      message.parts.some(
-                        (part) => part.type === "text" && part.text?.trim(),
-                      );
-                    const showFooter =
-                      hasAssistantText &&
-                      (messageIndex < messages.length - 1 ||
-                        (status !== "streaming" && status !== "submitted"));
-                    const citationSources =
-                      message.role === "assistant"
-                        ? collectMessageCitationSources(message.parts)
-                        : [];
+                const reasoning = reasoningText(message.parts);
+                const lastPart = message.parts.at(-1);
+                const isReasoningStreaming =
+                  status === "streaming" &&
+                  message.id === lastMessageId &&
+                  messageIndex === messages.length - 1 &&
+                  lastPart?.type === "reasoning";
+                const hasAssistantText =
+                  message.role === "assistant" &&
+                  message.parts.some(
+                    (part) => part.type === "text" && part.text?.trim()
+                  );
+                const showFooter =
+                  hasAssistantText &&
+                  (messageIndex < messages.length - 1 ||
+                    (status !== "streaming" && status !== "submitted"));
+                const citationSources =
+                  message.role === "assistant"
+                    ? collectMessageCitationSources(message.parts)
+                    : [];
 
-                    return (
-                      <div key={message.id} className="w-full min-w-0 space-y-3">
-                        {reasoning ? (
-                          <Reasoning
-                            className="w-full min-w-0"
-                            isStreaming={isReasoningStreaming}
-                          >
-                            <ReasoningTrigger />
-                            <ReasoningContent>{reasoning}</ReasoningContent>
-                          </Reasoning>
-                        ) : null}
+                return (
+                  <div key={message.id} className="w-full min-w-0 space-y-3">
+                    {reasoning ? (
+                      <Reasoning
+                        className="w-full min-w-0"
+                        isStreaming={isReasoningStreaming}
+                      >
+                        <ReasoningTrigger />
+                        <ReasoningContent>{reasoning}</ReasoningContent>
+                      </Reasoning>
+                    ) : null}
 
-                        {message.parts.map((part, index) => {
-                          const retrieval = parseRetrievalPart(part);
-                          if (retrieval) {
-                            if (!canSeeRetrievedSources || showRetrievalPanel) {
-                              return null;
-                            }
-                            return (
-                              <ChatRetrievalCard
-                                key={`${message.id}-retrieval-${index}`}
-                                meta={retrieval}
-                                retrievalStrictness={
-                                  retrievalStrictnessRef.current
-                                }
-                              />
-                            );
-                          }
-
-                          if (!isToolPart(part)) return null;
-                          return (
-                            <ChatToolResultCard
-                              key={`${message.id}-tool-${index}`}
-                              part={part as ToolUIPart}
-                            />
-                          );
-                        })}
-
-                        {message.parts.map((part, index) => {
-                          if (part.type === "reasoning" || isToolPart(part)) {
-                            return null;
-                          }
-                          if (parseRetrievalPart(part)) return null;
-
-                          if (part.type === "text" && part.text.trim()) {
-                            return (
-                              <Message
-                                key={`${message.id}-text-${index}`}
-                                from={message.role}
-                              >
-                                <MessageContent>
-                                  <MessageResponse citationSources={citationSources}>
-                                    {part.text}
-                                  </MessageResponse>
-                                </MessageContent>
-                              </Message>
-                            );
-                          }
-
+                    {message.parts.map((part, index) => {
+                      const retrieval = parseRetrievalPart(part);
+                      if (retrieval) {
+                        if (!canSeeRetrievedSources || showRetrievalPanel) {
                           return null;
-                        })}
+                        }
+                        return (
+                          <ChatRetrievalCard
+                            key={`${message.id}-retrieval-${index}`}
+                            meta={retrieval}
+                            retrievalStrictness={retrievalStrictnessRef.current}
+                          />
+                        );
+                      }
 
-                        {showFooter ? (
-                          <>
-                            <MessageSources
-                              parts={message.parts}
-                              role={message.role}
-                            />
-                            <MessageStats
-                              parts={message.parts}
-                              metadata={message.metadata}
-                              clientDurationMs={clientDurations[message.id]}
-                            />
-                          </>
-                        ) : null}
-                      </div>
-                    );
-                  })}
+                      if (!isToolPart(part)) return null;
+                      return (
+                        <ChatToolResultCard
+                          key={`${message.id}-tool-${index}`}
+                          part={part as ToolUIPart}
+                        />
+                      );
+                    })}
+
+                    {message.parts.map((part, index) => {
+                      if (part.type === "reasoning" || isToolPart(part)) {
+                        return null;
+                      }
+                      if (parseRetrievalPart(part)) return null;
+
+                      if (part.type === "text" && part.text.trim()) {
+                        return (
+                          <Message
+                            key={`${message.id}-text-${index}`}
+                            from={message.role}
+                          >
+                            <MessageContent>
+                              <MessageResponse
+                                citationSources={citationSources}
+                              >
+                                {part.text}
+                              </MessageResponse>
+                            </MessageContent>
+                          </Message>
+                        );
+                      }
+
+                      return null;
+                    })}
+
+                    {showFooter ? (
+                      <>
+                        <MessageSources
+                          parts={message.parts}
+                          role={message.role}
+                        />
+                        <MessageStats
+                          parts={message.parts}
+                          metadata={message.metadata}
+                          clientDurationMs={clientDurations[message.id]}
+                        />
+                      </>
+                    ) : null}
+                  </div>
+                );
+              })}
 
               {showPendingIndicator ? (
                 <div
@@ -584,17 +572,15 @@ export function StreamingChatPanel({
             <div
               className={cn(
                 "w-full",
-                !showRetrievalPanel && "mx-auto max-w-3xl",
+                !showRetrievalPanel && "mx-auto max-w-3xl"
               )}
             >
-              <PromptInput
-                className="gap-0 p-0"
-                onSubmit={handleSubmit}
-              >
+              <PromptInput className="gap-0 p-0" onSubmit={handleSubmit}>
                 <PromptInputTextarea
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   placeholder={resolvedPlaceholder}
+                  disabled={!sourceSelectionReady}
                   className="min-h-10 max-h-28 w-full px-3 py-2.5"
                 />
                 <PromptInputFooter className="border-t border-border/60 px-2 py-1.5">
@@ -621,13 +607,16 @@ export function StreamingChatPanel({
                         }
                       />
                     ) : null}
-                    {cloudSource ? (
+                    {sourceSelectionReady && sourceSelectionControl
+                      ? sourceSelectionControl
+                      : null}
+                    {hideRankingControl ? null : cloudSource ? (
                       <span
                         title="Cloud-hosted index — always ranked with Cohere"
                         aria-label="Ranking: Cohere cloud"
                         className={cn(
                           "inline-flex h-8 items-center gap-1.5 rounded-lg border border-border bg-card-solid px-2",
-                          "text-muted",
+                          "text-muted"
                         )}
                       >
                         <span
@@ -661,9 +650,24 @@ export function StreamingChatPanel({
                     )}
                     {showModelPicker ? toolbarEnd : null}
                   </PromptInputTools>
+                  {showNewChatButton ? (
+                    <button
+                      type="button"
+                      onClick={handleNewChat}
+                      disabled={busy || messages.length === 0}
+                      title="Clear this conversation and start a new chat"
+                      aria-label="Start a new chat"
+                      className={cn(
+                        "inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-border bg-card-solid text-muted transition-colors",
+                        "hover:bg-surface-raised hover:text-foreground disabled:cursor-not-allowed disabled:opacity-45"
+                      )}
+                    >
+                      <MessageSquarePlus className="size-3.5" aria-hidden />
+                    </button>
+                  ) : null}
                   <PromptInputSubmit
                     status={status}
-                    disabled={!input.trim() || busy}
+                    disabled={!input.trim() || busy || !sourceSelectionReady}
                     className="size-8"
                   />
                 </PromptInputFooter>
@@ -679,7 +683,7 @@ export function StreamingChatPanel({
               retrievalEntries.length === 0
                 ? "hidden lg:flex"
                 : "max-h-[42vh] lg:max-h-none",
-              "border-t lg:w-[22rem] lg:border-t-0 lg:border-l xl:w-[26rem]",
+              "border-t lg:w-[22rem] lg:border-t-0 lg:border-l xl:w-[26rem]"
             )}
             aria-label="Retrieved sources"
           >
@@ -688,42 +692,18 @@ export function StreamingChatPanel({
                 Retrieved sources
               </p>
               <div className="flex shrink-0 items-center gap-1.5">
-                {sourceId ? (
-                  <SourceChatUpdateControls variant="panel" />
-                ) : null}
-                {showDocsIdentityAdmin && sourceId ? (
+                {canEditAgentGuide ? (
                   <button
                     type="button"
-                    onClick={() => setDocsIdentityOpen(true)}
+                    onClick={() => setAgentGuideOpen(true)}
                     className="inline-flex shrink-0 items-center rounded-md border border-border bg-card-solid px-2 py-1 font-mono text-[0.5rem] font-semibold tracking-[0.08em] text-muted uppercase transition-colors hover:border-foreground/15 hover:text-foreground"
                   >
-                    {hasDocsIdentity ? "Edit about" : "Add about"}
+                    Agent guide
                   </button>
                 ) : null}
+                {sourceId ? <SourceChatUpdateControls variant="panel" /> : null}
               </div>
             </div>
-            {showDocsIdentityAdmin && hasDocsIdentity ? (
-              <div className="shrink-0 border-b border-border bg-card-solid/60 px-3 py-2.5">
-                <button
-                  type="button"
-                  onClick={() => setAboutExpanded((open) => !open)}
-                  className="flex w-full items-center justify-between gap-2 text-left"
-                  aria-expanded={aboutExpanded}
-                >
-                  <p className="font-mono text-[0.5rem] font-semibold tracking-[0.1em] text-muted uppercase">
-                    About
-                  </p>
-                  <span className="font-mono text-[0.5rem] tracking-[0.06em] text-muted uppercase">
-                    {aboutExpanded ? "Hide" : "Show"}
-                  </span>
-                </button>
-                {aboutExpanded ? (
-                  <p className="mt-1.5 text-xs leading-relaxed text-foreground">
-                    {docsIdentitySummary}
-                  </p>
-                ) : null}
-              </div>
-            ) : null}
             {resolvedPathOptions.length >= 2 ? (
               <div className="shrink-0 border-b border-border px-3 py-2.5">
                 <PathScopePills
@@ -761,16 +741,12 @@ export function StreamingChatPanel({
           </aside>
         ) : null}
       </div>
-
-      {showDocsIdentityAdmin && sourceId ? (
-        <DocsIdentityDialog
+      {canEditAgentGuide && sourceId ? (
+        <AgentGuideReviewDialog
+          open={agentGuideOpen}
           sourceId={sourceId}
-          startUrls={startUrls}
-          open={docsIdentityOpen}
-          onOpenChange={setDocsIdentityOpen}
-          onSaved={(identity) =>
-            setDocsIdentitySummary(docsIdentitySummaryText(identity))
-          }
+          mode="edit"
+          onComplete={() => setAgentGuideOpen(false)}
         />
       ) : null}
     </div>

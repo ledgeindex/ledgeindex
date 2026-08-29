@@ -4,6 +4,8 @@ import type { MetadataCatalogPage } from "./metadata-catalog.js";
 import {
   mergeRewriteWithCatalogPhrases,
   pickCatalogQueryPhrases,
+  rankPagesForQuestion,
+  resolveCatalogQueryUrlFilter,
   resolveCatalogUrlFilter,
 } from "./rank-catalog-pages.js";
 
@@ -32,6 +34,15 @@ describe("pickCatalogQueryPhrases", () => {
     );
   });
 
+  it("puts Get started in the visible catalog for a basic setup question", () => {
+    const ranked = rankPagesForQuestion(
+      "what is the basic setup",
+      mastraLikePages,
+    );
+
+    assert.equal(ranked[0]?.title, "Get started");
+  });
+
   it("does not force Get started for unrelated questions", () => {
     const phrases = pickCatalogQueryPhrases("what are agents", mastraLikePages);
     assert.ok(!phrases.some((phrase) => /get started/i.test(phrase)));
@@ -44,6 +55,17 @@ describe("pickCatalogQueryPhrases", () => {
       mastraLikePages,
     );
     assert.equal(match, null);
+  });
+
+  it("resolves a selected catalog title back to its page URL", () => {
+    const match = resolveCatalogQueryUrlFilter(
+      "what is the basic setup",
+      ["Get started"],
+      mastraLikePages,
+    );
+
+    assert.equal(match?.url, "https://mastra.ai/docs/getting-started");
+    assert.equal(match?.title, "Get started");
   });
 });
 
