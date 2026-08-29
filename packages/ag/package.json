@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/ag",
-  "version": "0.1.19",
+  "version": "0.1.20",
   "description": "AutomationGhost profile — agents, workflows, brain routes on LedgeIndex server",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
@@ -29,8 +29,8 @@
   "dependencies": {
     "@ai-sdk/google": "2.0.86",
     "@google/genai": "^2.10.0",
-    "@ledgeindex/core": "^0.1.19",
-    "@ledgeindex/docs": "^0.1.19",
+    "@ledgeindex/core": "^0.1.20",
+    "@ledgeindex/docs": "^0.1.20",
     "@mastra/ai-sdk": "^1.6.1",
     "@mastra/core": "^1.49.0",
     "@mastra/memory": "^1.24.0",
