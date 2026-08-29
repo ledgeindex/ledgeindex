@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useOptionalSourceRefreshJobs } from "@/contexts/source-refresh-jobs-context";
 
 /** Starts a background refresh and opens the header panel. Does not block the page. */
@@ -28,6 +28,7 @@ export function SourceRefreshDialog({
   const done =
     jobs?.jobs.find((job) => job.sourceId === sourceId)?.snapshot?.status ===
     "done";
+  const notifiedDoneRef = useRef(false);
 
   useEffect(() => {
     if (!open || !startJob) return;
@@ -51,7 +52,13 @@ export function SourceRefreshDialog({
   ]);
 
   useEffect(() => {
-    if (done) onApplied?.();
+    if (!done) {
+      notifiedDoneRef.current = false;
+      return;
+    }
+    if (notifiedDoneRef.current) return;
+    notifiedDoneRef.current = true;
+    onApplied?.();
   }, [done, onApplied]);
 
   return null;

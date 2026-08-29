@@ -6,6 +6,10 @@ import type {
   DocsIdentityLanguage,
   SiteProfile,
 } from "./source-metadata";
+import {
+  RequestLoopBlockedError,
+  RequestLoopGuard,
+} from "./request-loop-guard";
 
 type ApiUrlEnv = {
   NEXT_PUBLIC_LEDGEINDEX_API_URL?: string;
@@ -431,6 +435,57 @@ export class KnowledgeIndexApiError extends Error {
   }
 }
 
+const apiRequestLoopGuard = new RequestLoopGuard();
+
+function requestFingerprint(
+  input: string | URL | Request,
+  init?: RequestInit,
+): string {
+  const method = (
+    init?.method ??
+    (typeof Request !== "undefined" && input instanceof Request
+      ? input.method
+      : "GET")
+  ).toUpperCase();
+  const rawUrl =
+    typeof input === "string"
+      ? input
+      : input instanceof URL
+        ? input.href
+        : input.url;
+  try {
+    const url = new URL(rawUrl);
+    url.hash = "";
+    return `${method} ${url.href}`;
+  } catch {
+    return `${method} ${rawUrl}`;
+  }
+}
+
+async function fetchWithLoopProtection(
+  input: string | URL | Request,
+  init?: RequestInit,
+): Promise<Response> {
+  const fingerprint = requestFingerprint(input, init);
+  try {
+    apiRequestLoopGuard.check(fingerprint);
+  } catch (error) {
+    if (error instanceof RequestLoopBlockedError) {
+      throw new KnowledgeIndexApiError(
+        `${error.message} Retry in ${Math.ceil(error.retryAfterMs / 1_000)} seconds.`,
+        429,
+      );
+    }
+    throw error;
+  }
+
+  const response = await fetch(input, init);
+  if (response.status === 429) {
+    apiRequestLoopGuard.block(fingerprint);
+  }
+  return response;
+}
+
 function formatApiErrorPayload(error: unknown, data?: unknown): string {
   if (typeof error === "string") {
     // Fastify default: { error: "Internal Server Error", message: "…" }
@@ -568,7 +623,7 @@ export async function authenticatedFetch(
       }
     }
 
-    return fetch(input, { ...init, headers });
+    return fetchWithLoopProtection(input, { ...init, headers });
   }
 
   const response = await doFetch(false);
@@ -614,11 +669,12 @@ async function fetchWithAuth(
 
   let response: Response;
   try {
-    response = await fetch(`${base}${path}`, {
+    response = await fetchWithLoopProtection(`${base}${path}`, {
       ...init,
       headers,
     });
-  } catch {
+  } catch (error) {
+    if (error instanceof KnowledgeIndexApiError) throw error;
     throw new KnowledgeIndexApiError(
       `Cannot reach LedgeIndex API at ${base}. Is the LedgeIndex server running?`,
       0,

@@ -110,6 +110,43 @@ test("writes page markdown and a versioned manifest", async () => {
   }
 });
 
+test("supports named Markdown files while preserving URL hierarchy", async () => {
+  const outputDirectory = await mkdtemp(join(tmpdir(), "ledgeindex-corpus-"));
+  try {
+    const written = await writeSourceCorpusToDirectory(
+      fixture(),
+      outputDirectory,
+      { pageLayout: "named-files" },
+    );
+
+    assert.equal(
+      await readFile(join(outputDirectory, "docs", "agents.md"), "utf8"),
+      "# Agents\n\nBuild an agent.",
+    );
+    assert.equal(
+      await readFile(
+        join(outputDirectory, "reference", "core", "mastra-class.md"),
+        "utf8",
+      ),
+      "# Mastra class\n\nAPI reference.",
+    );
+
+    const manifest = JSON.parse(
+      await readFile(written.manifestPath, "utf8"),
+    ) as {
+      pageLayout: string;
+      pages: Array<{ filePath: string }>;
+    };
+    assert.equal(manifest.pageLayout, "named-files");
+    assert.deepEqual(
+      manifest.pages.map((page) => page.filePath),
+      ["docs/agents.md", "reference/core/mastra-class.md"],
+    );
+  } finally {
+    await rm(outputDirectory, { force: true, recursive: true });
+  }
+});
+
 test("keeps large indexed catalogs available for profile picking", () => {
   const pages = Array.from({ length: 540 }, (_, index) => ({
     ...fixture().pages[0]!,

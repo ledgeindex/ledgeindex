@@ -1,7 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import { Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { useSearchParams } from "next/navigation";
 import {
   DndContext,
@@ -131,12 +138,13 @@ function DashboardContent() {
   const [activeDragId, setActiveDragId] = useState<string | null>(null);
   const [reordering, setReordering] = useState(false);
   const fetchSeqRef = useRef(0);
+  const userId = user?.uid ?? null;
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
   useEffect(() => {
-    if (authLoading || !user || !toolbarReady) return;
+    if (authLoading || !userId || !toolbarReady) return;
 
     const fetchSeq = ++fetchSeqRef.current;
     let cancelled = false;
@@ -172,7 +180,7 @@ function DashboardContent() {
     return () => {
       cancelled = true;
     };
-  }, [authLoading, user, toolbarReady, scope, indexedParam]);
+  }, [authLoading, userId, toolbarReady, scope, indexedParam]);
 
   async function handleDeleteSource(sourceId: string) {
     setDeletingId(sourceId);
@@ -283,13 +291,13 @@ function DashboardContent() {
     );
   }
 
-  function handleRefreshApplied() {
+  const handleRefreshApplied = useCallback(() => {
     void listSources(scope)
       .then(({ sources: next }) => setSources(groupSourcesByFamily(next)))
       .catch(() => {
         // keep existing list if refresh fails
       });
-  }
+  }, [scope]);
 
   async function persistSourceOrder(ordered: SourceSummary[]) {
     const withOrder = ordered.map((source, index) => ({

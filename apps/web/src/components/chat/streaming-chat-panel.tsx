@@ -37,6 +37,7 @@ import { resolveApiBaseForHosting } from "@/lib/desktop-api-routing";
 import {
   mastraChatTransportBody,
   mastraChatUrl,
+  type LocalAgentSelection,
   type LedgeIndexChatAgent,
 } from "@/lib/mastra-chat";
 import { DEFAULT_CHAT_MODEL_ID } from "@/lib/chat-models";
@@ -102,8 +103,10 @@ export function StreamingChatPanel({
   sourceHosting,
   exploreSourceSlugs = [],
   exploreSourceMode,
+  localAgentSelection,
   sourceSelectionRequired = false,
   sourceSelectionControl,
+  composerDisabled = false,
   hideRankingControl = false,
   showNewChatButton = false,
   pathOptions,
@@ -123,8 +126,10 @@ export function StreamingChatPanel({
   sourceHosting?: "local" | "cloud";
   exploreSourceSlugs?: string[];
   exploreSourceMode?: "picker" | "all";
+  localAgentSelection?: LocalAgentSelection;
   sourceSelectionRequired?: boolean;
   sourceSelectionControl?: React.ReactNode;
+  composerDisabled?: boolean;
   hideRankingControl?: boolean;
   showNewChatButton?: boolean;
   pathOptions?: readonly SourcePathOption[];
@@ -157,6 +162,7 @@ export function StreamingChatPanel({
   });
   const sourceSelectionReady =
     !sourceSelectionRequired || exploreSourceSlugs.length > 0;
+  const composerReady = sourceSelectionReady && !composerDisabled;
   const chatApiBase = useMemo(() => {
     const scope = resolvedScope === "global" ? "global" : "personal";
     return resolveApiBaseForHosting({
@@ -204,6 +210,7 @@ export function StreamingChatPanel({
   const sourceHostingRef = useRef(resolvedHosting);
   const exploreSourceSlugsRef = useRef(exploreSourceSlugs);
   const exploreSourceModeRef = useRef(exploreSourceMode);
+  const localAgentSelectionRef = useRef(localAgentSelection);
   const requestStartedAtRef = useRef<number | null>(null);
   const [clientDurations, setClientDurations] = useState<
     Record<string, number>
@@ -245,6 +252,7 @@ export function StreamingChatPanel({
   sourceHostingRef.current = resolvedHosting;
   exploreSourceSlugsRef.current = exploreSourceSlugs;
   exploreSourceModeRef.current = exploreSourceMode;
+  localAgentSelectionRef.current = localAgentSelection;
 
   const transport = useMemo(
     () =>
@@ -260,6 +268,7 @@ export function StreamingChatPanel({
             sourceHosting: sourceHostingRef.current,
             exploreSourceSlugs: exploreSourceSlugsRef.current,
             exploreSourceMode: exploreSourceModeRef.current,
+            localAgentSelection: localAgentSelectionRef.current,
             thinkingLevel: thinkingLevelRef.current,
             rerankBackend: rerankBackendRef.current,
             retrievalStrictness: retrievalStrictnessRef.current,
@@ -531,14 +540,14 @@ export function StreamingChatPanel({
 
                     {showFooter ? (
                       <>
-                        <MessageSources
-                          parts={message.parts}
-                          role={message.role}
-                        />
                         <MessageStats
                           parts={message.parts}
                           metadata={message.metadata}
                           clientDurationMs={clientDurations[message.id]}
+                        />
+                        <MessageSources
+                          parts={message.parts}
+                          role={message.role}
                         />
                       </>
                     ) : null}
@@ -580,7 +589,7 @@ export function StreamingChatPanel({
                   value={input}
                   onChange={(event) => setInput(event.target.value)}
                   placeholder={resolvedPlaceholder}
-                  disabled={!sourceSelectionReady}
+                  disabled={!composerReady}
                   className="min-h-10 max-h-28 w-full px-3 py-2.5"
                 />
                 <PromptInputFooter className="border-t border-border/60 px-2 py-1.5">
@@ -607,9 +616,7 @@ export function StreamingChatPanel({
                         }
                       />
                     ) : null}
-                    {sourceSelectionReady && sourceSelectionControl
-                      ? sourceSelectionControl
-                      : null}
+                    {sourceSelectionControl ?? null}
                     {hideRankingControl ? null : cloudSource ? (
                       <span
                         title="Cloud-hosted index — always ranked with Cohere"
@@ -667,7 +674,7 @@ export function StreamingChatPanel({
                   ) : null}
                   <PromptInputSubmit
                     status={status}
-                    disabled={!input.trim() || busy || !sourceSelectionReady}
+                    disabled={!input.trim() || busy || !composerReady}
                     className="size-8"
                   />
                 </PromptInputFooter>

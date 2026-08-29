@@ -3,9 +3,13 @@ import {
   writeSourceCorpusToDirectory,
   type SourceCorpusExport,
   type SourceCorpusExportOptions,
+  type SourceCorpusWriteOptions,
   type WrittenSourceCorpus,
 } from "@ledgeindex/core/export/source-corpus.js";
 import { resolveSourceRef } from "./sources.js";
+
+export type ExportCorpusToDirectoryOptions = SourceCorpusExportOptions &
+  SourceCorpusWriteOptions;
 
 export async function exportCorpus(
   sourceIdOrSlug: string,
@@ -18,8 +22,9 @@ export async function exportCorpus(
 export async function exportCorpusToDirectory(
   sourceIdOrSlug: string,
   outputDirectory: string,
-  options?: SourceCorpusExportOptions,
+  options: ExportCorpusToDirectoryOptions = {},
 ): Promise<WrittenSourceCorpus> {
-  const corpus = await exportCorpus(sourceIdOrSlug, options);
-  return writeSourceCorpusToDirectory(corpus, outputDirectory);
+  const { pageLayout, ...exportOptions } = options;
+  const corpus = await exportCorpus(sourceIdOrSlug, exportOptions);
+  return writeSourceCorpusToDirectory(corpus, outputDirectory, { pageLayout });
 }

@@ -120,6 +120,17 @@ export type WrittenSourceCorpus = {
   pageFiles: string[];
 };
 
+export type SourceCorpusPageLayout = "directory-index" | "named-files";
+
+export type SourceCorpusWriteOptions = {
+  /**
+   * Controls how page URLs map to Markdown paths.
+   * `directory-index` preserves the original URL-shaped export.
+   * `named-files` writes `/guides/setup` as `guides/setup.md`.
+   */
+  pageLayout?: SourceCorpusPageLayout;
+};
+
 type PageChunkGroup = {
   catalogPage: MetadataCatalogPage;
   chunks: SourceCorpusChunk[];
@@ -341,7 +352,11 @@ function safePathSegment(segment: string): string {
   return safe || "_";
 }
 
-function pageFilePath(url: string, used: Set<string>): string {
+function pageFilePath(
+  url: string,
+  used: Set<string>,
+  pageLayout: SourceCorpusPageLayout,
+): string {
   let pathname = "/";
   try {
     pathname = new URL(url).pathname;
@@ -350,10 +365,14 @@ function pageFilePath(url: string, used: Set<string>): string {
   }
   const segments = pathname.split("/").filter(Boolean).map(safePathSegment);
   const last = segments.at(-1);
-  if (!last || !/\.(?:md|mdx)$/i.test(last)) {
+  if (!last) {
     segments.push("index.md");
-  } else {
+  } else if (/\.(?:md|mdx)$/i.test(last)) {
     segments[segments.length - 1] = last.replace(/\.mdx$/i, ".md");
+  } else if (pageLayout === "named-files") {
+    segments[segments.length - 1] = `${last}.md`;
+  } else {
+    segments.push("index.md");
   }
 
   let relativePath = segments.join("/") || "index.md";
@@ -368,17 +387,19 @@ function pageFilePath(url: string, used: Set<string>): string {
 export async function writeSourceCorpusToDirectory(
   corpus: SourceCorpusExport,
   outputDirectory: string,
+  options: SourceCorpusWriteOptions = {},
 ): Promise<WrittenSourceCorpus> {
   const target = outputDirectory.trim();
   if (!target) throw new Error("outputDirectory is required");
 
+  const pageLayout = options.pageLayout ?? "directory-index";
   await mkdir(target, { recursive: true });
   const used = new Set<string>();
   const pageFiles: string[] = [];
   const manifestPages = [];
 
   for (const page of corpus.pages) {
-    const relativePath = pageFilePath(page.url, used);
+    const relativePath = pageFilePath(page.url, used, pageLayout);
     const absolutePath = join(target, ...relativePath.split("/"));
     await mkdir(dirname(absolutePath), { recursive: true });
     await writeFile(absolutePath, page.markdown, "utf8");
@@ -402,6 +423,7 @@ export async function writeSourceCorpusToDirectory(
         format: corpus.format,
         formatVersion: corpus.formatVersion,
         exportedAt: corpus.exportedAt,
+        pageLayout,
         source: corpus.source,
         index: corpus.index,
         pages: manifestPages,

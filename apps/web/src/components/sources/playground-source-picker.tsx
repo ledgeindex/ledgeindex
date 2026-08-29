@@ -34,6 +34,7 @@ export type PlaygroundTarget =
       sourceSlugs: [string, ...string[]];
       scope: "personal" | "global";
       hosting: "local" | "cloud";
+      agentEligible: boolean;
     }
   | {
       kind: "source-set";
@@ -42,6 +43,7 @@ export type PlaygroundTarget =
       sourceSlugs: [string, ...string[]];
       scope: "personal";
       hosting: "local" | "cloud";
+      agentEligible: boolean;
     };
 
 function sourceHosting(source: SourceSummary): "local" | "cloud" {
@@ -75,6 +77,10 @@ function targetForSources(
     // Mixed selections enter through the local sidecar. The Explore processor
     // still chooses local or cloud retrieval independently for each source.
     hosting: includesLocal ? "local" : "cloud",
+    agentEligible: selectedSources.every(
+      (source) =>
+        source.scope !== "global" && sourceHosting(source) === "local",
+    ),
   };
 }
 
@@ -94,6 +100,9 @@ function targetForSet(
   const includesLocal = sourceSet.sources.some((source) =>
     localIds.has(source.id)
   );
+  const resolvedMembers = sourceSet.sources
+    .map((member) => sources.find((source) => source.id === member.id))
+    .filter((source): source is SourceSummary => Boolean(source));
   return {
     kind: "source-set",
     id: sourceSet.id,
@@ -101,6 +110,12 @@ function targetForSet(
     sourceSlugs: [slugs[0]!, ...slugs.slice(1)],
     scope: "personal",
     hosting: includesLocal ? "local" : "cloud",
+    agentEligible:
+      resolvedMembers.length === sourceSet.sources.length &&
+      resolvedMembers.every(
+        (source) =>
+          source.scope !== "global" && sourceHosting(source) === "local",
+      ),
   };
 }
 

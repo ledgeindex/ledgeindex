@@ -90,6 +90,14 @@ declare module "@ledgeindex/core/export/source-corpus.js" {
     pageFiles: string[];
   };
 
+  export type SourceCorpusPageLayout =
+    | "directory-index"
+    | "named-files";
+
+  export type SourceCorpusWriteOptions = {
+    pageLayout?: SourceCorpusPageLayout;
+  };
+
   export function exportSourceCorpus(
     sourceId: string,
     options?: SourceCorpusExportOptions,
@@ -98,6 +106,7 @@ declare module "@ledgeindex/core/export/source-corpus.js" {
   export function writeSourceCorpusToDirectory(
     corpus: SourceCorpusExport,
     outputDirectory: string,
+    options?: SourceCorpusWriteOptions,
   ): Promise<WrittenSourceCorpus>;
 }
 

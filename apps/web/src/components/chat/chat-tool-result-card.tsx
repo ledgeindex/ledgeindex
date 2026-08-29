@@ -4,6 +4,18 @@ import { useState } from "react";
 import type { ToolUIPart } from "ai";
 import { Loader } from "@/components/ai-elements/loader";
 import { cn } from "@/lib/utils";
+import {
+  ChevronDown,
+  CircleCheck,
+  FileSearch,
+  FileText,
+  FolderTree,
+  Info,
+  Search,
+  TriangleAlert,
+  Wrench,
+  type LucideIcon,
+} from "lucide-react";
 
 type SearchChunk = {
   title?: string;
@@ -210,6 +222,192 @@ function isExploreAskTool(name: string): boolean {
   return n === "ask_source" || n === "asksource";
 }
 
+type WorkspaceToolKind = "read" | "list" | "stat" | "grep" | "search";
+
+const WORKSPACE_TOOL_CONFIG: Record<
+  WorkspaceToolKind,
+  { title: string; icon: LucideIcon }
+> = {
+  read: { title: "Read file", icon: FileText },
+  list: { title: "List files", icon: FolderTree },
+  stat: { title: "Inspect file", icon: Info },
+  grep: { title: "Search files", icon: FileSearch },
+  search: { title: "Search workspace", icon: Search },
+};
+
+function workspaceToolKind(name: string): WorkspaceToolKind | null {
+  const normalized = name.toLowerCase().replace(/-/g, "_");
+  if (normalized === "mastra_workspace_read_file") return "read";
+  if (normalized === "mastra_workspace_list_files") return "list";
+  if (normalized === "mastra_workspace_file_stat") return "stat";
+  if (normalized === "mastra_workspace_grep") return "grep";
+  if (normalized === "mastra_workspace_search") return "search";
+  return null;
+}
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
+}
+
+function stringValue(
+  record: Record<string, unknown>,
+  ...keys: string[]
+): string | null {
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return null;
+}
+
+function workspaceToolDetail(
+  kind: WorkspaceToolKind,
+  input: Record<string, unknown>,
+): string {
+  const path = stringValue(input, "path", "filePath") ?? "/";
+  if (kind === "read" || kind === "list" || kind === "stat") return path;
+  const query = stringValue(input, "query", "pattern") ?? "Searching";
+  const scope = stringValue(input, "path");
+  return scope ? `${query} in ${scope}` : query;
+}
+
+function workspaceToolBadge(
+  kind: WorkspaceToolKind,
+  output: Record<string, unknown>,
+): string | null {
+  if (kind === "read") {
+    const content = stringValue(output, "content", "text");
+    return content ? `${content.length.toLocaleString()} chars` : null;
+  }
+
+  const arrays =
+    kind === "list"
+      ? ["entries", "files"]
+      : kind === "grep"
+        ? ["matches", "results", "hits"]
+        : kind === "search"
+          ? ["results", "hits"]
+          : [];
+  for (const key of arrays) {
+    const value = output[key];
+    if (Array.isArray(value)) {
+      return `${value.length} ${kind === "list" ? "items" : "matches"}`;
+    }
+  }
+  return null;
+}
+
+function toolOutputPreview(output: unknown): string | null {
+  if (typeof output === "string") return output.trim() || null;
+  if (!output || typeof output !== "object") return null;
+  const record = objectValue(output);
+  const content = stringValue(record, "content", "text");
+  if (content) return content;
+  try {
+    return JSON.stringify(output, null, 2);
+  } catch {
+    return null;
+  }
+}
+
+function WorkspaceToolCard({
+  part,
+  kind,
+}: {
+  part: ToolUIPart;
+  kind: WorkspaceToolKind;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const status = toolStatus(part.state);
+  const input = objectValue(part.input);
+  const output = objectValue(part.output);
+  const config = WORKSPACE_TOOL_CONFIG[kind];
+  const Icon = config.icon;
+  const detail = workspaceToolDetail(kind, input);
+  const badge = status === "complete" ? workspaceToolBadge(kind, output) : null;
+  const preview = toolOutputPreview(part.output);
+  const canExpand = status === "complete" && Boolean(preview);
+
+  return (
+    <div
+      className={cn(
+        "group my-0.5 w-full min-w-0 rounded-lg border border-border/50 bg-surface-raised/45 text-xs",
+        "dark:border-white/[0.07] dark:bg-[#1A1A1A]",
+        status === "error" && "border-red-500/30 bg-red-500/5",
+        expanded && canExpand && "rounded-b-none border-b-0",
+      )}
+    >
+      <button
+        type="button"
+        disabled={!canExpand}
+        onClick={() => canExpand && setExpanded((open) => !open)}
+        aria-expanded={canExpand ? expanded : undefined}
+        className={cn(
+          "flex w-full min-w-0 items-center gap-2 px-2.5 py-1.5 text-left",
+          canExpand &&
+            "cursor-pointer hover:bg-surface-raised/55 dark:hover:bg-white/[0.035]",
+          !canExpand && "cursor-default",
+        )}
+      >
+        <span className="inline-flex size-6 shrink-0 items-center justify-center rounded-md border border-border/40 bg-background/45 text-muted-strong dark:border-white/[0.07] dark:bg-white/[0.025]">
+          <Icon className="size-3.5" aria-hidden />
+        </span>
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden">
+          <span className="shrink-0 font-medium text-foreground/90">
+            {config.title}
+          </span>
+          <span className="min-w-0 truncate font-mono text-[11px] text-muted" title={detail}>
+            {detail}
+          </span>
+          {status === "error" && part.errorText ? (
+            <span className="min-w-0 truncate text-[10px] text-red-600 dark:text-red-300">
+              {part.errorText}
+            </span>
+          ) : null}
+        </div>
+        {badge ? (
+          <span className="shrink-0 rounded border border-border/70 bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] font-medium text-muted-strong">
+            {badge}
+          </span>
+        ) : null}
+        {status === "running" ? (
+          <Loader size={14} className="shrink-0" />
+        ) : status === "error" ? (
+          <TriangleAlert className="size-3.5 shrink-0 text-red-500" aria-hidden />
+        ) : (
+          <CircleCheck
+            className="size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400"
+            aria-hidden
+          />
+        )}
+        {canExpand ? (
+          <ChevronDown
+            className={cn(
+              "size-3.5 shrink-0 text-muted transition-transform",
+              expanded && "rotate-180",
+            )}
+            aria-hidden
+          />
+        ) : null}
+      </button>
+      {expanded && preview ? (
+        <pre className="max-h-64 overflow-auto rounded-b-lg border border-t-0 border-border/50 bg-background/60 px-3 py-2 whitespace-pre-wrap wrap-break-word font-mono text-[10px] leading-relaxed text-muted-strong dark:border-white/[0.07] dark:bg-black/20">
+          {preview}
+        </pre>
+      ) : null}
+    </div>
+  );
+}
+
+function genericToolLabel(name: string): string {
+  return (name || "Tool")
+    .replace(/^mastra_workspace_/, "")
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 function ExploreToolCard({ part }: { part: ToolUIPart }) {
   const [expanded, setExpanded] = useState(false);
   const toolName = resolveToolName(part);
@@ -413,10 +611,16 @@ export function ChatToolResultCard({ part }: { part: ToolUIPart }) {
     return <ExploreToolCard part={part} />;
   }
 
+  const workspaceKind = workspaceToolKind(toolName);
+  if (workspaceKind) {
+    return <WorkspaceToolCard part={part} kind={workspaceKind} />;
+  }
+
   if (!isDocsSearchTool(toolName)) {
     return (
-      <div className="rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted">
-        Tool: {toolName || part.type}
+      <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/20 px-3 py-2 text-xs text-muted">
+        <Wrench className="size-3.5 shrink-0" aria-hidden />
+        {genericToolLabel(toolName || part.type)}
       </div>
     );
   }
@@ -600,4 +804,4 @@ function isToolPart(part: { type: string }): part is ToolUIPart {
   return part.type.startsWith("tool-") || part.type === "dynamic-tool";
 }
 
-export { isToolPart };
+export { isToolPart, resolveToolName };

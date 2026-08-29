@@ -8,7 +8,14 @@ import { isCloudHostedSource } from "./rerank-backend";
 import { getLedgeIndexApiBaseUrl } from "@ledgeindex/client";
 
 export type LedgeIndexChatAgent =
-  "docsAgent" | "modelTestAgent" | "exploreAgent";
+  | "docsAgent"
+  | "modelTestAgent"
+  | "exploreAgent"
+  | "localSourceAgent";
+
+export type LocalAgentSelection =
+  | { kind: "sources"; sourceIds: [string, ...string[]] }
+  | { kind: "source-set"; sourceSetId: string };
 
 /** Mastra chatRoute paths (registered on Fastify root, not under /mastra prefix). */
 export function mastraChatUrl(
@@ -28,6 +35,7 @@ export type MastraChatTransportBody = {
     source_hosting?: "local" | "cloud";
     explore_source_slugs?: string[];
     explore_source_mode?: "picker" | "all";
+    local_agent_selection?: LocalAgentSelection;
     rerank_backend?: string;
     retrieval_strictness?: "strict" | "balanced" | "permissive";
     relevance_threshold?: number | null;
@@ -53,6 +61,7 @@ export function mastraChatTransportBody(input: {
   sourceHosting?: "local" | "cloud";
   exploreSourceSlugs?: string[];
   exploreSourceMode?: "picker" | "all";
+  localAgentSelection?: LocalAgentSelection;
   thinkingLevel?: ChatThinkingLevel;
   rerankBackend?: LedgeIndexRerankBackendId;
   retrievalStrictness?: "strict" | "balanced" | "permissive";
@@ -90,6 +99,9 @@ export function mastraChatTransportBody(input: {
         : {}),
       ...(input.exploreSourceMode
         ? { explore_source_mode: input.exploreSourceMode }
+        : {}),
+      ...(input.localAgentSelection
+        ? { local_agent_selection: input.localAgentSelection }
         : {}),
       ...(rerankBackend ? { rerank_backend: rerankBackend } : {}),
       retrieval_strictness: input.retrievalStrictness ?? "strict",

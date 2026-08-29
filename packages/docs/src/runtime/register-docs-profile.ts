@@ -25,6 +25,7 @@ import { billingRoutes } from "./routes/billing.js";
 import { usageRoutes } from "./routes/usage.js";
 import { repoProfileRoutes } from "./routes/repo-profile.js";
 import { widgetRoutes } from "./routes/widget.js";
+import { localAgentWorkspaceRoutes } from "./routes/local-agent-workspace.js";
 
 /**
  * Docs profile: ingest, sources, chat, MCP routes (Mastra mounts at server level).
@@ -53,6 +54,7 @@ export async function registerDocsProfile(fastify: FastifyInstance): Promise<voi
   await fastify.register(billingRoutes);
   await fastify.register(usageRoutes);
   await fastify.register(repoProfileRoutes);
+  await fastify.register(localAgentWorkspaceRoutes);
 }
 
 export async function registerHostedInngest(fastify: FastifyInstance): Promise<void> {

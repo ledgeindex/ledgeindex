@@ -6,6 +6,7 @@ import { dataPath } from "../lib/data-dir.js";
 import { docsAgent } from "./agents/docs-agent.js";
 import { modelTestAgent } from "./agents/model-test-agent.js";
 import { exploreAgent } from "./agents/explore-agent.js";
+import { localSourceAgent } from "./agents/local-source-agent.js";
 import { ingestWebCrawlWorkflow } from "./workflows/ingest-web-crawl/index.js";
 import {
   generateRetrievalGoldenSetWorkflow,
@@ -41,6 +42,7 @@ export function createDocsMastraContribution() {
       docsAgent,
       modelTestAgent,
       exploreAgent,
+      localSourceAgent,
     },
     workflows: {
       ingestWebCrawlWorkflow,
@@ -78,6 +80,11 @@ export function createDocsMastraContribution() {
         ledgeindexChatRoute({
           path: "/chat/exploreAgent",
           agent: "exploreAgent",
+          sendReasoning: true,
+        }),
+        ledgeindexChatRoute({
+          path: "/chat/localSourceAgent",
+          agent: "localSourceAgent",
           sendReasoning: true,
         }),
       ],

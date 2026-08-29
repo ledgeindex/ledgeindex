@@ -32,6 +32,7 @@ export async function healthRoutes(fastify: FastifyInstance) {
       docsAgent: "/chat/docsAgent",
       modelTestAgent: "/chat/modelTestAgent",
       exploreAgent: "/chat/exploreAgent",
+      localSourceAgent: "/chat/localSourceAgent",
     },
     mastra: (() => {
       const mastra = tryGetMastra();

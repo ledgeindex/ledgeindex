@@ -1,4 +1,7 @@
-import { isToolPart } from "@/components/chat/chat-tool-result-card";
+import {
+  isToolPart,
+  resolveToolName,
+} from "@/components/chat/chat-tool-result-card";
 import { readRetrievalFromParts } from "@/lib/retrieval-meta";
 import type { ToolUIPart, UIMessage } from "ai";
 
@@ -26,6 +29,73 @@ function quoteFromText(text: string | undefined): string | undefined {
   const trimmed = text?.replace(/\s+/g, " ").trim();
   if (!trimmed) return undefined;
   return trimmed.length > 220 ? `${trimmed.slice(0, 217)}…` : trimmed;
+}
+
+function workspaceReadContent(output: unknown): string | undefined {
+  if (typeof output === "string") return output;
+  if (!output || typeof output !== "object" || Array.isArray(output)) {
+    return undefined;
+  }
+
+  const record = output as Record<string, unknown>;
+  for (const key of ["content", "text"]) {
+    const value = record[key];
+    if (typeof value === "string") return value;
+  }
+  return workspaceReadContent(record.data);
+}
+
+function frontmatterString(
+  frontmatter: string,
+  key: "title" | "url" | "source",
+): string | undefined {
+  const prefix = `${key}:`;
+  const line = frontmatter
+    .split(/\r?\n/)
+    .find((candidate) => candidate.startsWith(prefix));
+  const raw = line?.slice(prefix.length).trim();
+  if (!raw) return undefined;
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return typeof parsed === "string" && parsed.trim()
+      ? parsed.trim()
+      : undefined;
+  } catch {
+    return raw.replace(/^['"]|['"]$/g, "").trim() || undefined;
+  }
+}
+
+export function citationFromWorkspaceReadOutput(
+  output: unknown,
+): CitationSource | undefined {
+  const content = workspaceReadContent(output);
+  if (!content) return undefined;
+
+  const normalized = content
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*\d+→/, ""))
+    .join("\n");
+  const match = normalized.match(
+    /(?:^|\n)---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/,
+  );
+  if (!match?.[1]) return undefined;
+
+  const url = frontmatterString(match[1], "url");
+  if (!url) return undefined;
+  return {
+    url,
+    title: frontmatterString(match[1], "title") ?? url,
+    catalogName: frontmatterString(match[1], "source"),
+  };
+}
+
+function readWorkspacePageSource(part: ToolUIPart): CitationSource[] {
+  const normalizedName = resolveToolName(part).toLowerCase().replace(/-/g, "_");
+  if (normalizedName !== "mastra_workspace_read_file") return [];
+
+  const source = citationFromWorkspaceReadOutput(part.output);
+  return source ? [source] : [];
 }
 
 function readToolChunkSources(part: ToolUIPart): CitationSource[] {
@@ -73,12 +143,15 @@ function readUrlSources(parts: UIMessage["parts"]): CitationSource[] {
 }
 
 export function collectMessageCitationSources(
-  parts: UIMessage["parts"],
+  parts: UIMessage["parts"]
 ): CitationSource[] {
   const urlSources = readUrlSources(parts);
   const toolSources = parts
     .filter(isToolPart)
-    .flatMap((part) => readToolChunkSources(part as ToolUIPart));
+    .flatMap((part) => [
+      ...readToolChunkSources(part as ToolUIPart),
+      ...readWorkspacePageSource(part as ToolUIPart),
+    ]);
   const retrieval = readRetrievalFromParts(parts);
   const retrievalSources =
     retrieval?.chunks.map((chunk) => ({
@@ -104,7 +177,7 @@ export function collectMessageCitationSources(
 
 export function findCitationSourcesForHref(
   sources: CitationSource[],
-  href: string | undefined,
+  href: string | undefined
 ): CitationSource[] {
   if (!href?.trim()) return [];
   const key = normalizeUrl(href);

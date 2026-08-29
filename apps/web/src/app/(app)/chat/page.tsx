@@ -19,8 +19,18 @@ import {
   PlaygroundSourcePicker,
   type PlaygroundTarget,
 } from "@/components/sources/playground-source-picker";
+import {
+  PlaygroundModeToggle,
+  type PlaygroundMode,
+} from "@/components/chat/playground-mode-toggle";
+import {
+  prepareLocalAgentWorkspace,
+  type PreparedLocalAgentWorkspace,
+} from "@/lib/local-agent-workspace";
+import type { LocalAgentSelection } from "@/lib/mastra-chat";
 
 const PLAYGROUND_TARGET_STORAGE_KEY = "ledgeindex:playground-target";
+const PLAYGROUND_MODE_STORAGE_KEY = "ledgeindex:playground-mode";
 
 function parseStoredTarget(raw: string | null): PlaygroundTarget | null {
   if (!raw) return null;
@@ -45,6 +55,9 @@ function parseStoredTarget(raw: string | null): PlaygroundTarget | null {
       typeof value.id === "string" &&
       value.scope === "personal"
     ) {
+      const agentEligible =
+        value.agentEligible === true ||
+        (value.agentEligible === undefined && value.hosting === "local");
       return {
         kind: "source-set",
         id: value.id,
@@ -52,6 +65,7 @@ function parseStoredTarget(raw: string | null): PlaygroundTarget | null {
         sourceSlugs: [sourceSlugs[0]!, ...sourceSlugs.slice(1)],
         scope: "personal",
         hosting: value.hosting,
+        agentEligible,
       };
     }
 
@@ -68,6 +82,11 @@ function parseStoredTarget(raw: string | null): PlaygroundTarget | null {
       storedIds.length <= 3 &&
       sourceSlugs.length === storedIds.length
     ) {
+      const agentEligible =
+        value.agentEligible === true ||
+        (value.agentEligible === undefined &&
+          value.scope === "personal" &&
+          value.hosting === "local");
       return {
         kind: "sources",
         ids: [storedIds[0]!, ...storedIds.slice(1)],
@@ -75,6 +94,7 @@ function parseStoredTarget(raw: string | null): PlaygroundTarget | null {
         sourceSlugs: [sourceSlugs[0]!, ...sourceSlugs.slice(1)],
         scope: value.scope,
         hosting: value.hosting,
+        agentEligible,
       };
     }
 
@@ -91,6 +111,11 @@ function parseStoredTarget(raw: string | null): PlaygroundTarget | null {
  */
 export default function ExploreChatPage(): React.JSX.Element {
   const [target, setTarget] = useState<PlaygroundTarget | null>(null);
+  const [mode, setMode] = useState<PlaygroundMode>("retrieval");
+  const [preparedWorkspace, setPreparedWorkspace] =
+    useState<PreparedLocalAgentWorkspace | null>(null);
+  const [workspacePreparing, setWorkspacePreparing] = useState(false);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const targetId =
     target?.kind === "source-set"
       ? target.id
@@ -111,11 +136,28 @@ export default function ExploreChatPage(): React.JSX.Element {
     const stored = parseStoredTarget(
       window.localStorage.getItem(PLAYGROUND_TARGET_STORAGE_KEY)
     );
-    if (stored) setTarget(stored);
+    if (stored) {
+      setTarget(stored);
+      if (
+        stored.agentEligible &&
+        window.localStorage.getItem(PLAYGROUND_MODE_STORAGE_KEY) === "agent"
+      ) {
+        setMode("agent");
+      }
+    }
   }, []);
 
   function handleTargetChange(nextTarget: PlaygroundTarget | null) {
     setTarget(nextTarget);
+    setPreparedWorkspace(null);
+    setWorkspaceError(null);
+    if (!nextTarget?.agentEligible && mode === "agent") {
+      setMode("retrieval");
+      window.localStorage.setItem(
+        PLAYGROUND_MODE_STORAGE_KEY,
+        "retrieval"
+      );
+    }
     if (!nextTarget) {
       window.localStorage.removeItem(PLAYGROUND_TARGET_STORAGE_KEY);
       return;
@@ -125,6 +167,58 @@ export default function ExploreChatPage(): React.JSX.Element {
       JSON.stringify(nextTarget)
     );
   }
+
+  function handleModeChange(nextMode: PlaygroundMode) {
+    if (nextMode === "agent" && !target?.agentEligible) return;
+    setMode(nextMode);
+    setWorkspaceError(null);
+    window.localStorage.setItem(PLAYGROUND_MODE_STORAGE_KEY, nextMode);
+  }
+
+  const localAgentSelection: LocalAgentSelection | undefined = target
+    ? target.kind === "source-set"
+      ? { kind: "source-set", sourceSetId: target.id }
+      : { kind: "sources", sourceIds: target.ids }
+    : undefined;
+
+  useEffect(() => {
+    if (
+      mode !== "agent" ||
+      !target?.agentEligible ||
+      !localAgentSelection
+    ) {
+      setWorkspacePreparing(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    setWorkspacePreparing(true);
+    setWorkspaceError(null);
+    setPreparedWorkspace(null);
+
+    void prepareLocalAgentWorkspace(localAgentSelection, controller.signal)
+      .then((prepared) => {
+        if (!controller.signal.aborted) setPreparedWorkspace(prepared);
+      })
+      .catch((error: unknown) => {
+        if (controller.signal.aborted) return;
+        setWorkspaceError(
+          error instanceof Error
+            ? error.message
+            : "Failed to prepare the local source workspace."
+        );
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setWorkspacePreparing(false);
+      });
+
+    return () => controller.abort();
+  }, [
+    mode,
+    target?.agentEligible,
+    targetId,
+    target?.kind,
+  ]);
 
   useEffect(() => {
     setExploreSession(true);
@@ -212,29 +306,69 @@ export default function ExploreChatPage(): React.JSX.Element {
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden">
       <StreamingChatPanel
-        key={`${modelId}-${target?.kind ?? "none"}-${targetId}`}
-        chatId={`explore-chat-${modelId}-${targetId}`}
-        agent="exploreAgent"
+        key={`${mode}-${modelId}-${target?.kind ?? "none"}-${targetId}-${preparedWorkspace?.workspaceKey ?? "cold"}`}
+        chatId={`${mode}-chat-${modelId}-${targetId}`}
+        agent={mode === "agent" ? "localSourceAgent" : "exploreAgent"}
         modelId={modelId}
         rerankBackend={rerankBackend}
         sourceScope={target?.scope}
         sourceHosting={target?.hosting}
         exploreSourceSlugs={target?.sourceSlugs}
         exploreSourceMode={target?.kind === "sources" ? "all" : "picker"}
+        localAgentSelection={
+          mode === "agent" ? localAgentSelection : undefined
+        }
         sourceSelectionRequired
+        composerDisabled={
+          mode === "agent" &&
+          (workspacePreparing ||
+            !preparedWorkspace ||
+            Boolean(workspaceError))
+        }
         sourceSelectionControl={
-          <PlaygroundSourcePicker value={target} onChange={handleTargetChange} />
+          <div className="flex min-w-0 items-center gap-1">
+            <PlaygroundModeToggle
+              value={mode}
+              onChange={handleModeChange}
+              agentEnabled={Boolean(target?.agentEligible)}
+            />
+            <PlaygroundSourcePicker
+              value={target}
+              onChange={handleTargetChange}
+              disabled={workspacePreparing}
+            />
+            {workspaceError ? (
+              <span
+                className="max-w-48 truncate text-xs text-destructive"
+                title={workspaceError}
+              >
+                {workspaceError}
+              </span>
+            ) : null}
+          </div>
         }
         hideRankingControl
         showNewChatButton={!isDesktop}
         showDeepThinkingToggle={modelSupportsThinking(modelId)}
         inputPlaceholder={
-          target ? `Ask about ${target.name}…` : "Select a source to start…"
+          workspacePreparing
+            ? "Preparing local source files…"
+            : workspaceError
+              ? "Agent workspace is unavailable"
+              : target
+                ? `Ask about ${target.name}…`
+                : "Select a source to start…"
         }
         emptyHint={
-          target
-            ? `Ask a question grounded in ${target.name}.`
-            : "Select an existing source or source set before asking a question."
+          workspacePreparing
+            ? "Reconstructing the selected index and building its local search cache."
+            : workspaceError
+              ? workspaceError
+              : target
+                ? mode === "agent"
+                  ? `The agent can search and inspect files reconstructed from ${target.name}.`
+                  : `Ask a question grounded in ${target.name}.`
+                : "Select an existing source or source set before asking a question."
         }
         toolbarEnd={isDesktop ? null : modelSelect}
         // Full-bleed chat, so it sits on the app canvas like every other page
