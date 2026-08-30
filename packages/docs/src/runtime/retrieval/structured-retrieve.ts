@@ -9,6 +9,10 @@ import {
   maybeFilterRetrievedPages,
   type DroppedRetrievedPage,
 } from "./filter-retrieved-pages.js";
+import {
+  catalogRecoveryEnabled,
+  resolveCatalogQueryUrlFilter,
+} from "@ledgeindex/core/query/rank-catalog-pages.js";
 import { ensureCatalogHasPages } from "./page-catalog-rebuild.js";
 import { getMetadataCatalog } from "./metadata-catalog-store.js";
 import { formatCatalogForAgent } from "./search-query-planner.js";
@@ -53,6 +57,13 @@ export async function retrieveWithStructuredRewrite(input: {
     pages: catalogRecord?.pages,
     requestContext: input.requestContext,
   });
+  const catalogUrlFilter = catalogRecoveryEnabled()
+    ? resolveCatalogQueryUrlFilter(
+        input.question,
+        rewrite.catalogQueries,
+        catalogRecord?.pages ?? [],
+      )
+    : null;
 
   let relaxedPassUsed = false;
   let weakEvidenceUsed = false;
@@ -64,6 +75,7 @@ export async function retrieveWithStructuredRewrite(input: {
     sourceId: input.sourceId,
     filter: input.filter,
     catalogQueries: rewrite.catalogQueries,
+    catalogUrlFilter: catalogUrlFilter ?? undefined,
     relevanceThreshold: settings.relevanceThreshold,
     allowWeakEvidence: false,
     expandPages: input.expandPages !== false,
@@ -80,6 +92,7 @@ export async function retrieveWithStructuredRewrite(input: {
       sourceId: input.sourceId,
       filter: input.filter,
       catalogQueries: rewrite.catalogQueries,
+      catalogUrlFilter: catalogUrlFilter ?? undefined,
       relevanceThreshold: settings.relaxedThreshold,
       expandPages: input.expandPages !== false,
     });
@@ -94,6 +107,7 @@ export async function retrieveWithStructuredRewrite(input: {
       sourceId: input.sourceId,
       filter: input.filter,
       catalogQueries: rewrite.catalogQueries,
+      catalogUrlFilter: catalogUrlFilter ?? undefined,
       relevanceThreshold: settings.relevanceThreshold,
       allowWeakEvidence: true,
       expandPages: input.expandPages !== false,

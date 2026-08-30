@@ -138,7 +138,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
         {showAppHeader ? (
           <header
             className={cn(
-              "relative z-10 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-card-solid/90 px-3 pt-[env(safe-area-inset-top)] backdrop-blur-sm sm:gap-3",
+              "relative z-10 flex h-12 shrink-0 items-center gap-1.5 border-b border-border bg-card-solid/90 px-2 pt-[env(safe-area-inset-top)] backdrop-blur-sm xl:gap-3 xl:px-3",
               headerUsesDragRegion &&
                 "select-none [-webkit-app-region:drag]",
               desktop && isOpen && "select-none [-webkit-app-region:no-drag]",
@@ -149,7 +149,7 @@ function AppShellInner({ children }: { children: React.ReactNode }) {
           >
             <div
               className={cn(
-                "z-10 inline-flex min-w-0 shrink-0 items-center gap-2 sm:gap-3",
+                "z-10 inline-flex min-w-0 shrink-0 items-center gap-1.5 xl:gap-3",
                 desktop && "[-webkit-app-region:no-drag]",
               )}
               onDoubleClick={(event) => event.stopPropagation()}

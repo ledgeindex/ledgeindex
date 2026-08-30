@@ -11,7 +11,7 @@ export function AppHeaderWebCrawlControls() {
     <>
       {/* Empty space inherits header drag so the window can still be moved. */}
       <div
-        className="min-h-full min-w-[1.5rem] flex-1 self-stretch"
+        className="min-h-full min-w-2 flex-1 self-stretch xl:min-w-6"
         aria-hidden
       />
       <div
@@ -25,7 +25,7 @@ export function AppHeaderWebCrawlControls() {
         {controls}
       </div>
       <div
-        className="min-h-full min-w-[1.5rem] flex-1 self-stretch"
+        className="min-h-full min-w-2 flex-1 self-stretch xl:min-w-6"
         aria-hidden
       />
     </>

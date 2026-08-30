@@ -8,6 +8,17 @@ export type CatalogUrlFilterMatch = {
   title: string;
 };
 
+/**
+ * Injecting a catalog page's chunks spends part of the fixed reranker candidate
+ * budget on one page, so it can evict a candidate the main fusion found. Keep it
+ * switchable to measure that trade rather than assuming it.
+ */
+export function catalogRecoveryEnabled(): boolean {
+  const raw = process.env.LEDGEINDEX_CATALOG_RECOVERY?.trim().toLowerCase();
+  if (!raw) return true;
+  return raw !== "0" && raw !== "false" && raw !== "off";
+}
+
 const QUERY_STOPWORDS = new Set([
   "what",
   "whats",
@@ -37,47 +48,6 @@ const QUERY_STOPWORDS = new Set([
   "did",
 ]);
 
-/** Question tokens that should also search getting-started / install catalog titles. */
-const GETTING_STARTED_TRIGGERS = new Set([
-  "setup",
-  "basic",
-  "basics",
-  "beginner",
-  "beginners",
-  "intro",
-  "introduction",
-  "onboard",
-  "onboarding",
-  "install",
-  "installation",
-  "quickstart",
-  "getting",
-]);
-
-const GETTING_STARTED_TITLE_RE =
-  /\b(get started|getting started|quick\s*start|quickstart|start here)\b/i;
-
-const TOKEN_ALIASES: Record<string, string[]> = {
-  setup: [
-    "setup",
-    "start",
-    "started",
-    "getting",
-    "quickstart",
-    "install",
-    "installation",
-    "intro",
-  ],
-  basic: ["basic", "basics", "intro", "introduction", "getting"],
-  basics: ["basics", "basic", "intro", "getting"],
-  intro: ["intro", "introduction", "overview", "getting", "started"],
-  introduction: ["introduction", "intro", "overview", "getting"],
-  install: ["install", "installation", "setup", "quickstart"],
-  installation: ["installation", "install", "setup"],
-  quickstart: ["quickstart", "start", "started", "setup", "getting"],
-  getting: ["getting", "started", "setup", "start"],
-};
-
 function tokenize(text: string): string[] {
   return text
     .toLowerCase()
@@ -88,10 +58,6 @@ function tokenize(text: string): string[] {
 
 function contentTokens(question: string): string[] {
   return tokenize(question).filter((token) => !QUERY_STOPWORDS.has(token));
-}
-
-function aliasesFor(token: string): string[] {
-  return TOKEN_ALIASES[token] ?? [token];
 }
 
 function scorePageForQuestion(
@@ -176,34 +142,20 @@ function scoreCatalogTitleForQuery(
   if (titleTokens.length === 0) return 0;
   const titleSet = new Set(titleTokens);
 
-  const expand = new Set<string>();
-  for (const token of tokens) {
-    for (const alias of aliasesFor(token)) expand.add(alias);
-  }
+  const querySet = new Set(tokens);
 
   let contentHits = 0;
   for (const token of tokens) {
-    if (aliasesFor(token).some((alias) => titleSet.has(alias))) {
-      contentHits += 1;
-    }
+    if (titleSet.has(token)) contentHits += 1;
   }
   const contentScore = contentHits / tokens.length;
 
   let titleHits = 0;
   for (const titleToken of titleTokens) {
-    if (expand.has(titleToken)) titleHits += 1;
+    if (querySet.has(titleToken)) titleHits += 1;
   }
   const titleScore = titleHits / titleTokens.length;
-  let score = 0.55 * contentScore + 0.45 * titleScore;
-
-  const wantsGettingStarted = tokens.some((token) =>
-    GETTING_STARTED_TRIGGERS.has(token),
-  );
-  if (wantsGettingStarted && GETTING_STARTED_TITLE_RE.test(title)) {
-    score = Math.max(score, 0.88);
-  }
-
-  return score;
+  return 0.55 * contentScore + 0.45 * titleScore;
 }
 
 /**
@@ -277,21 +229,59 @@ export function mergeRewriteWithCatalogPhrases(input: {
   const seeds =
     input.topicScope === "multi" && rewriteQueries.length > 0
       ? rewriteQueries
-      : [input.question];
+      : [input.question, ...rewriteQueries];
   const seen = new Set(
     [...rewriteQueries, input.question].map((query) => query.trim().toLowerCase()),
   );
   const catalogQueries: string[] = [];
   const extras: string[] = [];
+  if (input.topicScope !== "multi") {
+    const best = pages
+      .map((page, index) => {
+        const originalScore = scoreCatalogTitleForQuery(input.question, page);
+        const rewriteScore = Math.max(
+          0,
+          ...rewriteQueries.map((query) =>
+            scoreCatalogTitleForQuery(query, page),
+          ),
+        );
+        return {
+          title: page.title.trim(),
+          score: 0.45 * originalScore + 0.55 * rewriteScore,
+          maxScore: Math.max(originalScore, rewriteScore),
+          index,
+        };
+      })
+      .filter((candidate) => candidate.title && candidate.maxScore >= 0.42)
+      .sort(
+        (left, right) =>
+          right.score - left.score ||
+          left.title.length - right.title.length ||
+          left.index - right.index,
+      )[0];
+    if (!best) {
+      return { queries: rewriteQueries, catalogQueries };
+    }
+    catalogQueries.push(best.title);
+    if (!seen.has(best.title.toLowerCase())) {
+      extras.push(best.title);
+    }
+    return {
+      queries: [...rewriteQueries, ...extras],
+      catalogQueries,
+    };
+  }
+
   for (const seed of seeds) {
     const [phrase] = pickCatalogQueryPhrases(seed, pages, { max: 1 });
     if (!phrase) continue;
     const key = phrase.toLowerCase();
     if (catalogQueries.some((query) => query.toLowerCase() === key)) continue;
     catalogQueries.push(phrase);
-    if (seen.has(key)) continue;
-    seen.add(key);
-    extras.push(phrase);
+    if (!seen.has(key)) {
+      seen.add(key);
+      extras.push(phrase);
+    }
   }
   return {
     queries: [...rewriteQueries, ...extras],

@@ -222,6 +222,29 @@ export function ensurePerQueryWinners(
   return [...merged.slice(0, keep), ...missing];
 }
 
+/**
+ * Add a recovered catalog page's best chunks without displacing fusion's own
+ * candidates. RRF-merging the two pools instead makes them rivals for a fixed
+ * budget, so recovering one page silently drops another.
+ */
+export function appendCatalogCandidates(
+  base: FusedQueryResult[],
+  catalog: FusedQueryResult[],
+  limit: number,
+): FusedQueryResult[] {
+  if (limit <= 0 || catalog.length === 0) return base;
+  const seen = new Set(base.map((result) => String(result.id ?? "")));
+  const added: FusedQueryResult[] = [];
+  for (const result of catalog) {
+    if (added.length >= limit) break;
+    const id = String(result.id ?? "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    added.push(result);
+  }
+  return added.length === 0 ? base : [...base, ...added];
+}
+
 /** Dual-path merge: RRF across Path A and Path B (LlamaIndex fusion pattern). */
 export function mergeFusedCandidatePools(
   a: FusedQueryResult[],

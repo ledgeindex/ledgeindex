@@ -99,7 +99,7 @@ export function SourceRefreshJobsButton({
           className={cn("size-3.5", runningCount > 0 && "animate-spin")}
           aria-hidden
         />
-        <span className="hidden font-mono text-[0.625rem] uppercase tracking-wide sm:inline">
+        <span className="hidden font-mono text-[0.625rem] uppercase tracking-wide xl:inline">
           {runningCount > 0 ? "Updating" : readyCount > 0 ? "Apply" : "Updates"}
         </span>
         {badge > 0 ? (

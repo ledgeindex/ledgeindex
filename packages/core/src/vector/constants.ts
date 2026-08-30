@@ -76,6 +76,16 @@ export const PAGE_EXPANSION_WEAK_MAX_CHUNKS = 3;
 /** Min catalog page score to scope Q2 vector search to a single URL. */
 export const CATALOG_URL_FILTER_THRESHOLD = 0.7;
 
+/**
+ * Catalog chunks appended to the reranker pool on top of the fusion candidates.
+ *
+ * Fusing the catalog page in as a second RRF pool made it compete for the fixed
+ * candidate budget, which cost roughly one page of evidence per query without
+ * improving recall. Appending keeps the recovery while leaving what fusion found
+ * intact; the cross-encoder still decides whether the page survives.
+ */
+export const CATALOG_INJECTION_LIMIT = 4;
+
 /** Companion keyword table alongside LEDGEINDEX_CHUNKS_INDEX. */
 export const LEXICAL_TABLE = "ledgeindex_chunk_lexical";
 

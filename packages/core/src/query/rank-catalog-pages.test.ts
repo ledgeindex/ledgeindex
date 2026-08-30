@@ -23,24 +23,18 @@ const mastraLikePages: MetadataCatalogPage[] = [
 ];
 
 describe("pickCatalogQueryPhrases", () => {
-  it("adds Get started for a basic setup question", () => {
+  it("does not hardcode basic setup as Get started", () => {
     const phrases = pickCatalogQueryPhrases(
       "what is the basic setup",
       mastraLikePages,
     );
-    assert.ok(
-      phrases.some((phrase) => /get started/i.test(phrase)),
-      `expected Get started, got ${JSON.stringify(phrases)}`,
-    );
+    assert.deepEqual(phrases, []);
   });
 
-  it("puts Get started in the visible catalog for a basic setup question", () => {
-    const ranked = rankPagesForQuestion(
-      "what is the basic setup",
-      mastraLikePages,
-    );
+  it("ranks pages using direct title and path overlap", () => {
+    const ranked = rankPagesForQuestion("agent overview", mastraLikePages);
 
-    assert.equal(ranked[0]?.title, "Get started");
+    assert.equal(ranked[0]?.title, "Agents");
   });
 
   it("does not force Get started for unrelated questions", () => {
@@ -70,16 +64,32 @@ describe("pickCatalogQueryPhrases", () => {
 });
 
 describe("mergeRewriteWithCatalogPhrases", () => {
-  it("adds one catalog title for single-topic rewrites", () => {
+  it("uses semantic rewrite vocabulary to recover a catalog page", () => {
     const merged = mergeRewriteWithCatalogPhrases({
       question: "what is the basic setup",
+      rewriteQueries: [
+        "How do I perform the initial configuration and installation?",
+        "How do I get started with initial installation and configuration?",
+        "What are the core steps for a basic project setup?",
+      ],
+      pages: mastraLikePages,
+      topicScope: "single",
+    });
+
+    assert.deepEqual(merged.catalogQueries, ["Get started"]);
+    assert.ok(merged.queries.includes("Get started"));
+  });
+
+  it("adds one catalog title for single-topic rewrites", () => {
+    const merged = mergeRewriteWithCatalogPhrases({
+      question: "how do I configure the server",
       rewriteQueries: ["Configuration", "Client SDK"],
       pages: mastraLikePages,
       topicScope: "single",
     });
     assert.deepEqual(merged.queries.slice(0, 2), ["Configuration", "Client SDK"]);
     assert.equal(merged.catalogQueries.length, 1);
-    assert.ok(/get started/i.test(merged.catalogQueries[0] ?? ""));
+    assert.ok(/configuration/i.test(merged.catalogQueries[0] ?? ""));
   });
 
   it("adds one catalog title per multi-topic rewrite query", () => {

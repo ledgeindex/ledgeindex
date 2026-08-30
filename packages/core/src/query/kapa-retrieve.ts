@@ -15,10 +15,12 @@ import {
   LEXICAL_TOP_K,
   WEAK_EVIDENCE_MIN_SCORE,
   WEAK_EVIDENCE_TOP_K,
+  CATALOG_INJECTION_LIMIT,
 } from "../vector/constants.js";
 import { embedQuery } from "../vector/embedding.js";
 import { ensureChunksIndex, getVectorStore } from "../vector/store.js";
 import {
+  appendCatalogCandidates,
   fuseDenseAndLexical,
   fuseRankedListsByRrf,
   mergeFusedCandidatePoolsMany,
@@ -26,11 +28,12 @@ import {
   type FusedQueryResult,
 } from "./hybrid-fuse.js";
 import { applyLastMileRank, lastMileRankEnabled } from "./last-mile-rank.js";
-import { searchLexical } from "./lexical-store.js";
 import {
-  buildRerankQuery,
-  mergeFusionQueries,
-} from "./query-intent.js";
+  pageEvidenceAggregationEnabled,
+  rankChunksByPageEvidence,
+} from "./page-evidence-rank.js";
+import { searchLexical } from "./lexical-store.js";
+import { buildRerankQuery, mergeFusionQueries } from "./query-intent.js";
 import {
   effectiveRerankBackend,
   executeKapaRerank,
@@ -82,7 +85,7 @@ function urlMatchesPathPrefix(pageUrl: string, pathStartUrl: string): boolean {
 
 function applyUrlPrefixFilter<T extends { url: string }>(
   chunks: T[],
-  urlPrefix: string | undefined
+  urlPrefix: string | undefined,
 ): T[] {
   if (!urlPrefix?.trim()) return chunks;
   return chunks.filter((chunk) => urlMatchesPathPrefix(chunk.url, urlPrefix));
@@ -125,7 +128,9 @@ export function rescueCatalogAlignedHits(input: {
   catalogQueries: string[];
   minScore: number;
 }): KapaRetrievedChunk[] {
-  const phrases = input.catalogQueries.map((query) => query.trim()).filter(Boolean);
+  const phrases = input.catalogQueries
+    .map((query) => query.trim())
+    .filter(Boolean);
   if (phrases.length === 0) return input.directHits;
 
   const alreadyHasCatalogPage = input.directHits.some((chunk) =>
@@ -218,7 +223,7 @@ export type KapaRetrieveResult = {
 function toRetrievedChunk(
   result: QueryResult,
   score: number,
-  details?: RerankResult["details"]
+  details?: RerankResult["details"],
 ): KapaRetrievedChunk {
   const metadata = (result.metadata ?? {}) as Record<string, unknown>;
   const headingPath = Array.isArray(metadata.headingPath)
@@ -348,7 +353,7 @@ function dedupeChunks(chunks: KapaRetrievedChunk[]): KapaRetrievedChunk[] {
  */
 function capDirectHitsPerPage(
   chunks: KapaRetrievedChunk[],
-  maxPerPage = MAX_DIRECT_HITS_PER_PAGE
+  maxPerPage = MAX_DIRECT_HITS_PER_PAGE,
 ): KapaRetrievedChunk[] {
   const countByPage = new Map<string, number>();
   const kept: KapaRetrievedChunk[] = [];
@@ -364,28 +369,32 @@ function capDirectHitsPerPage(
   return kept;
 }
 
+function applyPageEvidenceRanking<T extends KapaRetrievedChunk>(
+  chunks: T[],
+): T[] {
+  return pageEvidenceAggregationEnabled()
+    ? rankChunksByPageEvidence(chunks).chunks
+    : chunks;
+}
+
 /**
- * Group chunks by page (pages ordered by their best score) and sort each
- * page's chunks in reading order so the generator sees coherent context.
+ * Group chunks by page evidence and sort each page's chunks in reading order
+ * so the generator sees coherent context.
  */
 function orderChunksForContext(
-  chunks: KapaRetrievedChunk[]
+  chunks: KapaRetrievedChunk[],
 ): KapaRetrievedChunk[] {
+  const rankedChunks = applyPageEvidenceRanking(chunks);
   const pages = new Map<string, KapaRetrievedChunk[]>();
-  for (const chunk of chunks) {
+  for (const chunk of rankedChunks) {
     const key = chunk.url || chunkDedupeKey(chunk);
     const list = pages.get(key);
     if (list) list.push(chunk);
     else pages.set(key, [chunk]);
   }
 
-  const rankedPages = [...pages.values()].sort(
-    (a, b) =>
-      Math.max(...b.map((c) => c.score)) - Math.max(...a.map((c) => c.score))
-  );
-
-  return rankedPages.flatMap((pageChunks) =>
-    [...pageChunks].sort((a, b) => a.chunkIndex - b.chunkIndex)
+  return [...pages.values()].flatMap((pageChunks) =>
+    [...pageChunks].sort((a, b) => a.chunkIndex - b.chunkIndex),
   );
 }
 
@@ -497,17 +506,21 @@ async function expandTopPages(input: {
               hitIndexes.some(
                 (hitIndex) =>
                   Math.abs(chunk.chunkIndex - hitIndex) <=
-                  PAGE_EXPANSION_WEAK_NEIGHBOUR_RADIUS
-              )
+                  PAGE_EXPANSION_WEAK_NEIGHBOUR_RADIUS,
+              ),
             )
             .slice(0, PAGE_EXPANSION_WEAK_MAX_CHUNKS);
 
-          logVerbose("Page expansion (weak anchor, neighbours)", "KapaRetrieve", {
-            url,
-            anchorScore,
-            hitIndexes,
-            siblingCount: neighbours.length,
-          });
+          logVerbose(
+            "Page expansion (weak anchor, neighbours)",
+            "KapaRetrieve",
+            {
+              url,
+              anchorScore,
+              hitIndexes,
+              siblingCount: neighbours.length,
+            },
+          );
           return neighbours;
         }
 
@@ -557,7 +570,7 @@ async function expandTopPages(input: {
         });
         return [] as KapaRetrievedChunk[];
       }
-    })
+    }),
   );
 
   const known = new Set(input.pruned.map((chunk) => chunkDedupeKey(chunk)));
@@ -644,7 +657,7 @@ function extractExpansionTerms(query: string): string[] {
 
 function chunkMatchesExpansionTerms(
   chunk: KapaRetrievedChunk,
-  terms: string[]
+  terms: string[],
 ): boolean {
   if (terms.length === 0) return false;
   const haystack = [
@@ -661,7 +674,7 @@ function chunkMatchesExpansionTerms(
 }
 
 function mergePrunedChunks(
-  byQuery: KapaRetrieveManyResult["byQuery"]
+  byQuery: KapaRetrieveManyResult["byQuery"],
 ): KapaRetrievedChunk[] {
   const lists = byQuery.map((entry) => entry.pruned);
   const total = lists.reduce((sum, list) => sum + list.length, 0);
@@ -679,7 +692,7 @@ function mergePrunedChunks(
 
 /** Drop chunks already returned by an earlier query in the same multi-search call. */
 function dedupeAcrossQueries(
-  byQuery: KapaRetrieveManyResult["byQuery"]
+  byQuery: KapaRetrieveManyResult["byQuery"],
 ): KapaRetrieveManyResult["byQuery"] {
   const seen = new Set<string>();
 
@@ -761,12 +774,6 @@ export async function kapaRetrieveMany(input: {
 
   const fusionRetrieve = async (filterOverride?: KapaRetrieveFilter) => {
     const filter = filterOverride ?? input.filter;
-    const fused = await fuseHybridCandidates({
-      fusionQueries,
-      sourceId: input.sourceId,
-      filter,
-      candidateCount,
-    });
     const catalogMatch = !filterOverride ? input.catalogUrlFilter : undefined;
     const catalogQuery =
       input.catalogQueries?.find(
@@ -776,25 +783,40 @@ export async function kapaRetrieveMany(input: {
       ) ??
       catalogMatch?.title?.trim() ??
       fusionQueries[0];
-    const catalogFused = catalogMatch?.url
-      ? await fuseHybridCandidates({
-          fusionQueries: [catalogQuery],
-          sourceId: input.sourceId,
-          filter: {
-            ...filter,
-            url: catalogMatch.url,
-          },
-          candidateCount,
-        })
-      : null;
-    const candidatePools = catalogFused
-      ? [fused.results, catalogFused.results]
-      : [fused.results];
-    const initialResults = ensurePerQueryWinners(
-      candidatePools,
-      mergeFusedCandidatePoolsMany(candidatePools, candidateCount),
+    // The catalog leg is a separate URL-filtered search over the same index, so
+    // it shares no state with the main fusion. Awaiting them in sequence added
+    // the catalog embed + vector round trip to every request for nothing.
+    const [fused, catalogFused] = await Promise.all([
+      fuseHybridCandidates({
+        fusionQueries,
+        sourceId: input.sourceId,
+        filter,
+        candidateCount,
+      }),
+      catalogMatch?.url
+        ? fuseHybridCandidates({
+            fusionQueries: [catalogQuery],
+            sourceId: input.sourceId,
+            filter: {
+              ...filter,
+              url: catalogMatch.url,
+            },
+            candidateCount,
+          })
+        : null,
+    ]);
+    const fusionResults = ensurePerQueryWinners(
+      [fused.results],
+      mergeFusedCandidatePoolsMany([fused.results], candidateCount),
       candidateCount,
     );
+    const initialResults = catalogFused
+      ? appendCatalogCandidates(
+          fusionResults,
+          catalogFused.results,
+          CATALOG_INJECTION_LIMIT,
+        )
+      : fusionResults;
     return kapaRetrieve({
       query: fusionQueries[0],
       rerankQuery,
@@ -1051,7 +1073,10 @@ async function fuseHybridCandidates(input: {
   return {
     results,
     fused: {
-      denseCount: hybrids.reduce((sum, hybrid) => sum + hybrid.fused.denseCount, 0),
+      denseCount: hybrids.reduce(
+        (sum, hybrid) => sum + hybrid.fused.denseCount,
+        0,
+      ),
       lexicalCount: hybrids.reduce(
         (sum, hybrid) => sum + hybrid.fused.lexicalCount,
         0,
@@ -1187,14 +1212,16 @@ export async function kapaRetrieve(input: {
     lastMileRankEnabled() ? applyLastMileRank(list, intentRerank) : list;
 
   let directHits = capDirectHitsPerPage(
-    lastMile(
-      applyUrlPrefixFilter(
-        dedupeChunks(
-          pruned.map((entry) =>
-            toRetrievedChunk(entry.result, entry.score, entry.details),
+    applyPageEvidenceRanking(
+      lastMile(
+        applyUrlPrefixFilter(
+          dedupeChunks(
+            pruned.map((entry) =>
+              toRetrievedChunk(entry.result, entry.score, entry.details),
+            ),
           ),
+          input.filter?.urlPrefix,
         ),
-        input.filter?.urlPrefix,
       ),
     ),
   );
@@ -1204,13 +1231,17 @@ export async function kapaRetrieve(input: {
     directHits.length === 0 &&
     input.filter?.urlPrefix?.trim()
   ) {
-    logVerbose("Kapa retrieve: urlPrefix removed all threshold hits", "KapaRetrieve", {
-      sourceId: input.sourceId,
-      urlPrefix: input.filter.urlPrefix,
-      prunedCount: pruned.length,
-      topScore: pruned[0]?.score,
-      threshold,
-    });
+    logVerbose(
+      "Kapa retrieve: urlPrefix removed all threshold hits",
+      "KapaRetrieve",
+      {
+        sourceId: input.sourceId,
+        urlPrefix: input.filter.urlPrefix,
+        prunedCount: pruned.length,
+        topScore: pruned[0]?.score,
+        threshold,
+      },
+    );
   }
 
   const escalation = input.escalationRerankQuery?.trim();
@@ -1230,14 +1261,16 @@ export async function kapaRetrieve(input: {
     escalatedRerankUsed = true;
     pruned = reranked.filter((entry) => entry.score >= threshold);
     directHits = capDirectHitsPerPage(
-      lastMile(
-        applyUrlPrefixFilter(
-          dedupeChunks(
-            pruned.map((entry) =>
-              toRetrievedChunk(entry.result, entry.score, entry.details),
+      applyPageEvidenceRanking(
+        lastMile(
+          applyUrlPrefixFilter(
+            dedupeChunks(
+              pruned.map((entry) =>
+                toRetrievedChunk(entry.result, entry.score, entry.details),
+              ),
             ),
+            input.filter?.urlPrefix,
           ),
-          input.filter?.urlPrefix,
         ),
       ),
     );
@@ -1251,12 +1284,14 @@ export async function kapaRetrieve(input: {
 
   const rerankMs = Math.round(performance.now() - rerankStarted);
 
-  const chunks = lastMile(
-    applyUrlPrefixFilter(
-      reranked.map((entry) =>
-        toRetrievedChunk(entry.result, entry.score, entry.details),
+  const chunks = applyPageEvidenceRanking(
+    lastMile(
+      applyUrlPrefixFilter(
+        reranked.map((entry) =>
+          toRetrievedChunk(entry.result, entry.score, entry.details),
+        ),
+        input.filter?.urlPrefix,
       ),
-      input.filter?.urlPrefix,
     ),
   );
 
@@ -1276,12 +1311,14 @@ export async function kapaRetrieve(input: {
 
     if (weakEntries.length > 0) {
       effectiveDirectHits = capDirectHitsPerPage(
-        lastMile(
-          applyUrlPrefixFilter(
-            weakEntries.map((entry) =>
-              toRetrievedChunk(entry.result, entry.score, entry.details),
+        applyPageEvidenceRanking(
+          lastMile(
+            applyUrlPrefixFilter(
+              weakEntries.map((entry) =>
+                toRetrievedChunk(entry.result, entry.score, entry.details),
+              ),
+              input.filter?.urlPrefix,
             ),
-            input.filter?.urlPrefix,
           ),
         ),
       );
@@ -1305,11 +1342,33 @@ export async function kapaRetrieve(input: {
     catalogQueries: input.catalogQueries ?? [],
     minScore: Math.max(0.35, threshold - 0.15),
   });
-  if (new Set(effectiveDirectHits.map((chunk) => chunk.url)).size > beforeRescuePages) {
+  if (
+    new Set(effectiveDirectHits.map((chunk) => chunk.url)).size >
+    beforeRescuePages
+  ) {
     logVerbose("Kapa retrieve: catalog-aligned page rescued", "KapaRetrieve", {
       sourceId: input.sourceId,
       catalogQueries: input.catalogQueries,
       pages: [...new Set(effectiveDirectHits.map((chunk) => chunk.title))],
+    });
+  }
+
+  const pageEvidence = pageEvidenceAggregationEnabled()
+    ? rankChunksByPageEvidence(effectiveDirectHits)
+    : null;
+  if (pageEvidence) {
+    effectiveDirectHits = pageEvidence.chunks;
+    logVerbose("Kapa retrieve: page evidence aggregation", "KapaRetrieve", {
+      sourceId: input.sourceId,
+      pageCount: pageEvidence.pages.length,
+      anchorUrl: pageEvidence.anchor?.url ?? null,
+      anchorScore: pageEvidence.anchor?.score ?? null,
+      runnerUpScore: pageEvidence.pages[1]?.score ?? null,
+      margin:
+        pageEvidence.pages.length > 1
+          ? (pageEvidence.pages[0]?.score ?? 0) -
+            (pageEvidence.pages[1]?.score ?? 0)
+          : null,
     });
   }
 
@@ -1319,7 +1378,8 @@ export async function kapaRetrieve(input: {
     (max, chunk) => Math.max(max, chunk.score),
     0,
   );
-  const strictAnchor = !weakEvidenceUsed && anchorTopScore >= RELEVANCE_THRESHOLD;
+  const strictAnchor =
+    !weakEvidenceUsed && anchorTopScore >= RELEVANCE_THRESHOLD;
   const prunedChunks = expandPages
     ? applyUrlPrefixFilter(
         await expandTopPages({

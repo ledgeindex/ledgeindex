@@ -695,7 +695,9 @@ export function WebCrawlSetup() {
   >(null);
   const headerNavAbortRef = useRef<AbortController | null>(null);
   const headerNavScanKeyRef = useRef<string | null>(null);
-  const runHeaderNavDiscoveryRef = useRef<(() => Promise<void>) | null>(null);
+  const runHeaderNavDiscoveryRef = useRef<
+    ((urlInput?: string) => Promise<void>) | null
+  >(null);
   const isDesktopShell = Boolean(getLedgeIndexDesktop());
   const stagehandRuntimeManageable = canManageStagehandRuntimeOnApi();
   const headerNavDiscoveryApiBase = resolveHeaderNavDiscoveryApiBase();
@@ -1045,17 +1047,18 @@ export function WebCrawlSetup() {
     };
   }, [stagehandRuntimeManageable, headerNavStatus, stagehandRuntimeInstalling, headerNavApiOptions]);
 
-  const runHeaderNavDiscovery = useCallback(async () => {
+  const runHeaderNavDiscovery = useCallback(async (urlInput?: string) => {
     if (headerNavBrowserReady !== true) {
       return;
     }
 
-    const url = normalizeStartUrl(primaryStartUrl.trim());
+    const url = normalizeStartUrl((urlInput ?? primaryStartUrl).trim());
     if (!url) {
       setHeaderNavStatus("idle");
       return;
     }
 
+    headerNavScanKeyRef.current = `${url}|${headerNavBrowserMode}`;
     headerNavAbortRef.current?.abort();
     const controller = new AbortController();
     headerNavAbortRef.current = controller;
@@ -1181,10 +1184,10 @@ export function WebCrawlSetup() {
 
     const scanKey = `${url}|${headerNavBrowserMode}`;
     if (headerNavScanKeyRef.current === scanKey) return;
-    headerNavScanKeyRef.current = scanKey;
 
     const timer = window.setTimeout(() => {
-      void runHeaderNavDiscoveryRef.current?.();
+      headerNavScanKeyRef.current = scanKey;
+      void runHeaderNavDiscoveryRef.current?.(url);
     }, 500);
 
     return () => {
@@ -1336,6 +1339,27 @@ export function WebCrawlSetup() {
       setPreflightState("error");
     }
   }, [primaryStartUrl, sitemapUrlsText]);
+
+  const checkSite = useCallback(
+    (urlInput?: string) => {
+      const url = normalizeStartUrl((urlInput ?? primaryStartUrl).trim());
+      void runPreflight(urlInput);
+
+      if (!discoverHeaderNav || !url || !isValidStartUrl(url)) return;
+      headerNavScanKeyRef.current = null;
+      if (headerNavBrowserReady !== true) return;
+
+      headerNavScanKeyRef.current = `${url}|${headerNavBrowserMode}`;
+      void runHeaderNavDiscoveryRef.current?.(url);
+    },
+    [
+      discoverHeaderNav,
+      headerNavBrowserMode,
+      headerNavBrowserReady,
+      primaryStartUrl,
+      runPreflight,
+    ],
+  );
 
   useEffect(() => {
     if (isReplaceRecrawl || isPathScopedMode) return;
@@ -3486,7 +3510,7 @@ export function WebCrawlSetup() {
             onToggleNavPath={toggleHeaderNavPath}
             onOpenSitemapSelect={() => setSitemapModalOpen(true)}
             onOpenRobotsTxt={() => setRobotsModalOpen(true)}
-            onCheckSite={runPreflight}
+            onCheckSite={checkSite}
             busy={busy}
             crawlCardPhase={crawlCardPhase}
             pagesDiscovered={
@@ -4809,12 +4833,6 @@ function StartUrlCard({
     }
   }, [showSplitLayout]);
 
-  useEffect(() => {
-    if (showSitePreview) {
-      setMobileSplitTab("preview");
-    }
-  }, [showSitePreview]);
-
   function handleUrlPaste(event: React.ClipboardEvent<HTMLInputElement>) {
     const pasted = event.clipboardData.getData("text").trim();
     if (!pasted) return;
@@ -5825,7 +5843,7 @@ function ConfigPill({
         aria-label={`${label} settings`}
         title={typeof summary === "string" ? summary : label}
         className={cn(
-          "inline-flex max-w-full shrink-0 items-center gap-1 rounded-lg border border-transparent px-2 py-1.5 text-left transition-[background,border-color,box-shadow,color] sm:gap-1.5 sm:px-2.5",
+          "inline-flex max-w-full shrink-0 items-center gap-1 rounded-lg border border-transparent px-2 py-1.5 text-left transition-[background,border-color,box-shadow,color] xl:gap-1.5 xl:px-2.5",
           disabled && "pointer-events-none cursor-not-allowed opacity-50",
           emphasized &&
             !open &&
@@ -5838,17 +5856,17 @@ function ConfigPill({
         )}
       >
         {icon ? (
-          <span className="shrink-0 text-muted/80 sm:hidden" aria-hidden>
+          <span className="shrink-0 text-muted/80 xl:hidden" aria-hidden>
             {icon}
           </span>
         ) : null}
-        <span className="hidden shrink-0 text-[0.6875rem] font-medium text-muted sm:inline">
+        <span className="hidden shrink-0 text-[0.6875rem] font-medium text-muted xl:inline">
           {label}
         </span>
-        <span className="hidden min-w-0 max-w-[9rem] truncate text-[0.6875rem] font-medium text-foreground sm:inline">
+        <span className="hidden min-w-0 max-w-[9rem] truncate text-[0.6875rem] font-medium text-foreground xl:inline">
           {summary}
         </span>
-        <span className="min-w-0 max-w-[4.5rem] truncate text-[0.6875rem] font-medium text-foreground sm:hidden">
+        <span className="min-w-0 max-w-[4.5rem] truncate text-[0.6875rem] font-medium text-foreground xl:hidden">
           {compactSummary ?? summary}
         </span>
         <ChevronDownIcon
