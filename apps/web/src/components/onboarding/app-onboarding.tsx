@@ -145,9 +145,14 @@ function AppOnboardingFlow({
       // Hard nav: soft router.push can be dropped when the overlay unmounts
       // (especially in Electron), so both CTAs looked like they went nowhere
       // useful / to the same leftover dashboard screen.
-      window.location.assign(href);
+      const destination = desktop
+        ? window.location.protocol === "file:"
+          ? `#${href}`
+          : `${window.location.origin}/#${href}`
+        : href;
+      window.location.assign(destination);
     },
-    [uid],
+    [desktop, uid],
   );
 
   return (

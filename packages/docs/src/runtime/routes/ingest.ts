@@ -6,6 +6,8 @@ import {
   CRAWL_REVIEW_STEP_ID,
   PARSE_REVIEW_STEP_ID,
   ENRICH_STEP_ID,
+  discoveredUrlSchema,
+  skippedUrlSchema,
 } from "../mastra/workflows/ingest-web-crawl/schemas.js";
 import { webCrawlSourceConfigSchema, MAX_CRAWL_PAGES } from "../schemas/source-config.js";
 import {
@@ -18,6 +20,13 @@ import { getRequestUserRole, getSourceForUser, getSourceForWrite, requireUser } 
 
 const startBodySchema = z.object({
   config: webCrawlSourceConfigSchema.optional(),
+  discoveryResult: z
+    .object({
+      urls: z.array(discoveredUrlSchema).min(1).max(MAX_CRAWL_PAGES),
+      skipped: z.array(skippedUrlSchema).default([]),
+      httpStatusFiltered: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
 });
 
 const crawlResumeSchema = z.object({
@@ -125,6 +134,7 @@ export async function ingestRoutes(fastify: FastifyInstance) {
         sourceId: id,
         projectId: source.projectId,
         config,
+        discoveryResult: body.data.discoveryResult,
       });
       return { snapshot };
     } catch (error) {

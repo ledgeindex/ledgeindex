@@ -363,15 +363,23 @@ export async function discoverUrls(
   }
 
   let sitemapFound = false;
+  let sitemapUrls: string[] = [];
   if (config.enableSitemap) {
-    const sitemapUrls = await discoverSitemapUrls(
+    sitemapUrls = await discoverSitemapUrls(
       config.startUrls,
       config.sitemapUrls,
       config.userAgent,
     );
     sitemapFound = sitemapUrls.length > 0;
-    for (const url of sitemapUrls) {
-      recordUrl(url);
+
+    // A regular crawl must prioritize links discovered from the start URLs.
+    // Recording a large sitemap here can fill maxPages before the crawler
+    // handles its first request, effectively turning sitemap discovery into
+    // sitemap-only mode.
+    if (config.sitemapOnly) {
+      for (const url of sitemapUrls) {
+        recordUrl(url);
+      }
     }
   }
 
@@ -567,6 +575,14 @@ export async function discoverUrls(
       skipped,
       httpStatusFiltered: 0,
     };
+  }
+
+  // In regular mode, sitemap URLs supplement link discovery instead of
+  // replacing it. Any remaining maxPages capacity is filled after crawling.
+  if (config.enableSitemap && !config.sitemapOnly) {
+    for (const url of sitemapUrls) {
+      recordUrl(url);
+    }
   }
 
   // Drop URLs that failed during link-following (kept in the list until now

@@ -1,6 +1,6 @@
 {
   "name": "@ledgeindex/desktop",
-  "version": "0.2.29",
+  "version": "0.2.30",
   "private": true,
   "description": "LedgeIndex desktop (Electron) — standalone Vite UI; sidecar = @ledgeindex/desktop-server",
   "main": "./out/main/index.js",
@@ -16,6 +16,7 @@
     "dev": "electron-vite dev",
     "build": "npm run build -w @ledgeindex/client && electron-vite build",
     "pack:desktop-server": "node ../../scripts/pack-desktop-server.mjs",
+    "prepare-icon": "node scripts/prepare-desktop-icon.mjs",
     "postinstall": "electron-builder install-app-deps",
     "build:unpack": "npm run pack:desktop-server && npm run build && electron-builder --dir",
     "build:win": "npm run pack:desktop-server && npm run build && electron-builder --win",
@@ -52,11 +53,13 @@
     "firebase": "^12.17.1",
     "lucide-react": "^1.30.0",
     "prettier": "^3.7.4",
+    "sharp": "^0.34.5",
     "react": "^19.2.1",
     "react-dom": "^19.2.1",
     "react-router-dom": "^7.18.2",
     "tailwind-merge": "^3.6.0",
     "tailwindcss": "^4.3.3",
+    "to-ico": "^1.1.5",
     "typescript": "^5.9.3",
     "vite": "^7.2.6"
   }

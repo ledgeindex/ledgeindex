@@ -37,6 +37,18 @@ export const ingestInputSchema = z.object({
   sourceId: z.string().min(1),
   projectId: z.string().min(1),
   config: webCrawlSourceConfigSchema,
+  /**
+   * Optional discovery handoff used when moving a reviewed crawl between
+   * storage/scope backends. The target backend still fetches and parses every
+   * selected page itself.
+   */
+  discoveryResult: z
+    .object({
+      urls: z.array(discoveredUrlSchema),
+      skipped: z.array(skippedUrlSchema).default([]),
+      httpStatusFiltered: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
 });
 
 export const ingestOutputSchema = z.object({

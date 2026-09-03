@@ -24,7 +24,7 @@ function WebCrawlPageContent() {
     );
   }
 
-  return <WebCrawlSetup key={scope} />;
+  return <WebCrawlSetup />;
 }
 
 export default function WebCrawlSourcePage() {

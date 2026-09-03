@@ -1,16 +1,23 @@
 #!/usr/bin/env node
 /**
- * LedgeIndex desktop release — no GitHub UI needed.
+ * LedgeIndex desktop release — bump version, push, Sync auto-tags public.
  *
  * Usage (from ledgeindex/):
- *   npm run release:desktop -- --bump          # auto patch: 0.1.0 → 0.1.1
+ *   npm run release:desktop -- --bump          # auto patch + write .release-desktop
  *   npm run release:desktop -- --bump minor    # 0.1.0 → 0.2.0
- *   npm run release:desktop -- --release       # tag current version on public
- *   npm run release:desktop -- 0.2.0 --release # set exact version + tag
+ *   npm run release:desktop -- 0.2.0           # set exact version + marker
+ *   npm run release:desktop -- --release       # manual fallback tag on public
+ *   npm run release:desktop -- 0.2.0 --release # manual fallback
+ *
+ * Normal flow:
+ *   1. npm run release:desktop -- --bump
+ *   2. git add apps/desktop/package.json package-lock.json .release-desktop
+ *   3. git commit -m "chore: release desktop vX.Y.Z" && git push origin main
+ *   4. Sync → public mirror → auto-tag desktop-vX.Y.Z → Desktop release CI
  *
  * Bumps refresh ledgeindex/package-lock.json (@ledgeindex/desktop workspace entry).
  * Loads PAT from env or monorepo-root .env key PAT_LEDDGEINDEX / PAT_LEDGEINDEX
- * (classic PAT scopes: repo + workflow).
+ * (classic PAT scopes: repo + workflow) — only needed for --release fallback.
  */
 import { execSync } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
@@ -21,6 +28,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ledgeRoot = resolve(__dirname, "..");
 const monoRoot = resolve(ledgeRoot, "..");
 const pkgPath = resolve(ledgeRoot, "apps/desktop/package.json");
+const releaseMarkerPath = resolve(ledgeRoot, ".release-desktop");
 const PUBLIC_REPO = "ledgeindex/ledgeindex";
 
 const TOKEN_FILES = [
@@ -105,6 +113,11 @@ function refreshLockfile() {
     "npm install --package-lock-only --no-audit --no-fund -w @ledgeindex/desktop",
     { cwd: ledgeRoot, stdio: "inherit" },
   );
+}
+
+function writeReleaseMarker(version) {
+  writeFileSync(releaseMarkerPath, `${version}\n`);
+  console.log(`Release marker: ledgeindex/.release-desktop (${version})`);
 }
 
 function loadTokenFromFile(filePath) {
@@ -294,13 +307,17 @@ if (!versionArg && !wantsBump && !doRelease) {
   console.log(`Current desktop version: ${pkg.version}`);
   console.log(`
 Flow:
-  1. npm run release:desktop -- 0.1.1          # set version (+ lockfile)
-  2. Commit package.json + package-lock.json + push private main → wait for Sync
-  3. npm run release:desktop -- 0.1.1 --release  # tag that version on public
+  1. npm run release:desktop -- --bump
+  2. git add apps/desktop/package.json package-lock.json .release-desktop
+  3. git commit -m "chore: release desktop vX.Y.Z" && git push origin main
+  4. Sync auto-tags desktop-vX.Y.Z on public → Desktop release CI
 
-Or use VS Code tasks (prompts for version):
+Fallback (if auto-tag fails):
+  npm run release:desktop -- ${pkg.version} --release
+
+VS Code tasks:
   - LedgeIndex Desktop: bump version
-  - LedgeIndex Desktop: tag public release
+  - LedgeIndex Desktop: tag release (fallback)
 `);
   process.exit(0);
 }
@@ -317,12 +334,20 @@ if (versionArg) {
 
 if (versionChanged) {
   refreshLockfile();
+  writeReleaseMarker(version);
 }
 
 if (!doRelease) {
-  console.log(
-    `Version set to ${version}. Commit package.json + package-lock.json, push, wait for Sync, then run with --release.`,
-  );
+  console.log(`
+Version set to ${version}.
+
+Next:
+  git add apps/desktop/package.json package-lock.json .release-desktop
+  git commit -m "chore: release desktop v${version}"
+  git push origin main
+
+Sync will mirror to public, tag desktop-v${version}, and start Desktop release CI.
+`);
   process.exit(0);
 }
 
@@ -333,6 +358,6 @@ if (!token) {
 }
 
 console.log(`Using token from: ${source}`);
-console.log(`Releasing desktop ${version} → tag desktop-v${version}`);
+console.log(`Manual fallback: tagging desktop ${version} → desktop-v${version}`);
 await createPublicTag(version, token);
 console.log("\nDone. Watch Desktop release CI for Windows + macOS installers.");

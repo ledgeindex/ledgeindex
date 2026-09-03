@@ -1919,7 +1919,14 @@ export async function runParsePreview(
 
 export async function startIngestWorkflow(
   sourceId: string,
-  input?: { config?: WebCrawlConfig },
+  input?: {
+    config?: WebCrawlConfig;
+    discoveryResult?: {
+      urls: Array<{ url: string; title?: string }>;
+      skipped: Array<{ url: string; reason: string }>;
+      httpStatusFiltered?: number;
+    };
+  },
   signal?: AbortSignal,
 ) {
   return api<{ snapshot: IngestPipelineSnapshot }>(

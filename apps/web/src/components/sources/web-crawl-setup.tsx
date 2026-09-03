@@ -511,8 +511,10 @@ export function WebCrawlSetup() {
   const initialPatternsAreRegex =
     searchParams.get("patternsAreRegex") === "1" ||
     searchParams.get("patternsAreRegex") === "true";
-  const sourceScope: KnowledgeSetScope =
+  const initialSourceScope: KnowledgeSetScope =
     searchParams.get("scope") === "global" ? "global" : "personal";
+  const [sourceScope, setSourceScope] =
+    useState<KnowledgeSetScope>(initialSourceScope);
   const [sourceHosting, setSourceHosting] = useState<SourceHosting>("local");
 
   useEffect(() => {
@@ -571,13 +573,27 @@ export function WebCrawlSetup() {
       !isRefreshSelect &&
       !isPathScopedMode,
   );
+  const skipNextScopeRestoreRef = useRef(false);
+
+  function detachReviewedCrawlFromBackend() {
+    if (!crawlRun?.result?.urls?.length) return;
+    clearCrawlPreviewStorage(sourceScope);
+    setSourceId(null);
+    setIngestRunId(null);
+    setIngestSnapshot(null);
+    setSaved(false);
+    setAgentGuideSourceId(null);
+  }
 
   function handleScopeChange(next: KnowledgeSetScope) {
-    if (toolbarLocked) return;
+    if (storageSelectionLocked) return;
     if (next === sourceScope) return;
     // Public catalog publish is admin-only.
     if (next === "global" && !isAdmin) return;
 
+    detachReviewedCrawlFromBackend();
+    skipNextScopeRestoreRef.current = true;
+    setSourceScope(next);
     syncDesktopApiBaseForScope(next);
 
     const params = new URLSearchParams(searchParams.toString());
@@ -588,11 +604,25 @@ export function WebCrawlSetup() {
     }
 
     const query = params.toString();
-    router.replace(query ? `/sources/web-crawl?${query}` : "/sources/web-crawl");
+    const route = query
+      ? `/sources/web-crawl?${query}`
+      : "/sources/web-crawl";
+    const browserUrl = window.location.hash.startsWith("#/")
+      ? `${window.location.pathname}${window.location.search}#${route}`
+      : route;
+    window.history.replaceState(window.history.state, "", browserUrl);
+  }
+
+  function handleHostingChange(next: SourceHosting) {
+    if (next === sourceHosting || storageSelectionLocked) return;
+    detachReviewedCrawlFromBackend();
+    setSourceHosting(next);
+    syncApiBaseForHosting({ scope: sourceScope, hosting: next });
   }
 
   useEffect(() => {
     if (isAdmin || sourceScope !== "global") return;
+    setSourceScope("personal");
     const params = new URLSearchParams(searchParams.toString());
     params.delete("scope");
     const query = params.toString();
@@ -978,12 +1008,16 @@ export function WebCrawlSetup() {
     filterPipelinePhase === "http" ||
     filterPipelinePhase === "auto-exclude";
   const toolbarLocked = Boolean(busy);
-  /** Storage/hosting must not change mid-crawl — source is created on one API. */
+  const canRetargetReviewedCrawl =
+    !isPathScopedMode &&
+    !isReplaceRecrawl &&
+    !saved &&
+    Boolean(crawlRun?.result?.urls?.length);
+  /** Never retarget an active crawl or a fixed existing-source operation. */
   const storageSelectionLocked =
-    Boolean(sourceId) ||
     toolbarLocked ||
     crawlCardPhase !== "idle" ||
-    Boolean(ingestRunId);
+    ((Boolean(sourceId) || Boolean(ingestRunId)) && !canRetargetReviewedCrawl);
   const didInitialPreflight = useRef(false);
 
   const toggleHeaderNavPath = useCallback((url: string) => {
@@ -1552,6 +1586,10 @@ export function WebCrawlSetup() {
     let cancelled = false;
 
     async function restoreCrawlPreview() {
+      if (skipNextScopeRestoreRef.current) {
+        skipNextScopeRestoreRef.current = false;
+        return;
+      }
       try {
         const raw = readCrawlPreviewStorage(sourceScope);
         if (!raw) return;
@@ -2664,9 +2702,28 @@ export function WebCrawlSetup() {
         sourceMetadata,
       });
 
-      if (ingestRunId) {
+      let activeRunId = ingestRunId;
+      let activeSnapshot = ingestSnapshot;
+
+      if (
+        !activeRunId &&
+        crawlRun?.result?.urls?.length
+      ) {
+        const { snapshot: transferredSnapshot } = await startIngestWorkflow(id, {
+          config,
+          discoveryResult: {
+            urls: crawlRun.result.urls,
+            skipped: crawlRun.result.skipped ?? [],
+          },
+        });
+        await applyIngestSnapshot(transferredSnapshot, id);
+        activeRunId = transferredSnapshot.runId;
+        activeSnapshot = transferredSnapshot;
+      }
+
+      if (activeRunId) {
         try {
-          let suspendedStep = ingestSnapshot?.suspendedStep;
+          let suspendedStep = activeSnapshot?.suspendedStep;
 
           if (suspendedStep === "crawl-review-step") {
             if (selectedPreviewUrls.length === 0) {
@@ -2676,7 +2733,7 @@ export function WebCrawlSetup() {
 
             const { snapshot: extractSnapshot } = await resumeIngestWorkflow(
               id,
-              ingestRunId,
+              activeRunId,
               {
                 step: "crawl-review-step",
                 resumeData: {
@@ -2696,7 +2753,7 @@ export function WebCrawlSetup() {
           if (suspendedStep === "parse-review-step") {
             const { snapshot: enrichSnapshot } = await resumeIngestWorkflow(
               id,
-              ingestRunId,
+              activeRunId,
               {
                 step: "parse-review-step",
                 resumeData: { confirmed: true, enrichExamples },
@@ -2713,7 +2770,7 @@ export function WebCrawlSetup() {
           if (suspendedStep === "enrich-step") {
             const { snapshot: indexSnapshot } = await resumeIngestWorkflow(
               id,
-              ingestRunId,
+              activeRunId,
               {
                 step: "enrich-step",
                 resumeData: { confirmed: true },
@@ -3415,7 +3472,7 @@ export function WebCrawlSetup() {
                     </p>
                     <SourceHostingToggle
                       value={sourceHosting}
-                      onChange={setSourceHosting}
+                      onChange={handleHostingChange}
                       disabled={toolbarLocked || storageSelectionLocked}
                       size="default"
                     />
@@ -3448,7 +3505,7 @@ export function WebCrawlSetup() {
                   }
                   summary={sourceScope === "global" ? "Public" : "Just me"}
                   description="Who can see this source."
-                  disabled={toolbarLocked}
+                  disabled={storageSelectionLocked}
                 >
                   <div className={cn(configPanelInsetClass, "space-y-3")}>
                     <p className="text-xs leading-5 text-muted">
@@ -3458,7 +3515,7 @@ export function WebCrawlSetup() {
                     <KnowledgeSetScopeToggle
                       value={sourceScope}
                       onChange={handleScopeChange}
-                      disabled={toolbarLocked}
+                      disabled={storageSelectionLocked}
                       size="default"
                     />
                   </div>
@@ -5179,7 +5236,7 @@ function StartUrlCard({
               label={
                 discoverySignals?.sitemap.found &&
                 discoverySignals.sitemap.pageCount != null
-                  ? `Sitemap · ${discoverySignals.sitemap.pageCount}`
+                  ? `Sitemap available · ${discoverySignals.sitemap.pageCount}`
                   : "Sitemap"
               }
               found={discoverySignals?.sitemap.found ?? null}

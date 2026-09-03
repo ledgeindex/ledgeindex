@@ -46,9 +46,11 @@ export const crawlReviewStep = createStep({
         sourceId: inputData.sourceId,
       });
 
-      const result = await discoverUrls(inputData.config, {
-        sourceId: inputData.sourceId,
-      });
+      const result =
+        inputData.discoveryResult ??
+        (await discoverUrls(inputData.config, {
+          sourceId: inputData.sourceId,
+        }));
       await setState({
         ...(state as object),
         crawlResult: result,

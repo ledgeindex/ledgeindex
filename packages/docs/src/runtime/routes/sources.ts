@@ -39,7 +39,6 @@ import {
   requireAdmin,
   requireUser,
 } from "../lib/resource-access.js";
-import { isApiAuthRequired } from "../lib/firebase-admin.js";
 import {
   allocateSourceSlug,
   slugOwnerKeyForSource,
@@ -211,10 +210,6 @@ export async function sourceRoutes(fastify: FastifyInstance) {
   fastify.put("/api/sources/reorder", async (request, reply) => {
     const userId = await requireUser(request, reply);
     if (!userId) return;
-
-    if (isApiAuthRequired() && !(await requireAdmin(request, reply))) {
-      return;
-    }
 
     const body = z
       .object({
@@ -660,15 +655,6 @@ export async function sourceRoutes(fastify: FastifyInstance) {
       body.data.categories !== undefined
         ? normalizeSourceCategories(body.data.categories)
         : undefined;
-
-    if (
-      (normalizedCategories !== undefined ||
-        body.data.displayOrder !== undefined) &&
-      isApiAuthRequired() &&
-      !(await requireAdmin(request, reply))
-    ) {
-      return;
-    }
 
     const familyId = existing.sourceFamilyId ?? existing.id;
     const familySources = await getStore().listSourcesByFamilyId(familyId);

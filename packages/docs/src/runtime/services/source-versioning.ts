@@ -16,6 +16,14 @@ export type SourceDuplicateMatch = {
   suggestedVersionLabel: string;
 };
 
+export function isIndexedSourceVersion(source: Source): boolean {
+  return (
+    Boolean(source.indexedAt) ||
+    (source.indexStats?.pageCount ?? 0) > 0 ||
+    (source.indexStats?.chunkCount ?? 0) > 0
+  );
+}
+
 export async function findSourceDuplicates(input: {
   startUrl: string;
   scope: SourceScope;
@@ -32,15 +40,19 @@ export async function findSourceDuplicates(input: {
     input.scope,
     slugOwnerKey,
   );
-  if (matches.length === 0) return null;
+  const indexedMatches = matches.filter(isIndexedSourceVersion);
+  if (indexedMatches.length === 0) return null;
 
   const familyId =
-    matches[0]?.sourceFamilyId ?? matches[0]?.id ?? null;
+    indexedMatches[0]?.sourceFamilyId ?? indexedMatches[0]?.id ?? null;
   const familySources = familyId
     ? (
         await getStore().listSourcesByFamilyId(familyId)
-      ).filter((source) => source.scope === input.scope)
-    : matches;
+      ).filter(
+        (source) =>
+          source.scope === input.scope && isIndexedSourceVersion(source),
+      )
+    : indexedMatches;
 
   const sorted = [...familySources].sort(
     (a, b) => (b.versionNumber ?? 1) - (a.versionNumber ?? 1),
@@ -88,7 +100,9 @@ export function resolveVersionFieldsForCreate(input: {
   versionLabel: string;
 } {
   const canonicalUrl = normalizeCanonicalUrl(input.startUrl);
-  const familySources = input.familySources ?? [];
+  const familySources = (input.familySources ?? []).filter(
+    isIndexedSourceVersion,
+  );
 
   if (input.versionMode === "replace" && input.replaceSource) {
     return {

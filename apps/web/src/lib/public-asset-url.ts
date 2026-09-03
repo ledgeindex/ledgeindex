@@ -17,7 +17,9 @@ export function publicAssetUrl(path: string): string {
   if (typeof window !== "undefined") {
     const w = window as Window & { ledgeindexDesktop?: { isDesktop?: boolean } };
     if (w.ledgeindexDesktop?.isDesktop) {
-      return `./${normalized}${query}`;
+      return window.location.protocol === "file:"
+        ? `./${normalized}${query}`
+        : `/${normalized}${query}`;
     }
   }
 

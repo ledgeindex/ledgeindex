@@ -363,7 +363,7 @@ function DashboardContent() {
   const canAdminManage = isAdmin;
   const canUseSourceActions = scope === "personal" || isAdmin;
   const canReorderList =
-    canAdminManage &&
+    canUseSourceActions &&
     viewMode === "list" &&
     !searchQuery.trim() &&
     selectedCategory === null &&
@@ -611,9 +611,9 @@ function DashboardContent() {
                             canUseSourceActions ? handleDeleteSource : undefined
                           }
                           deleting={deletingId === source.id}
-                          canEditSlug={canAdminManage}
-                          canEditName={canAdminManage}
-                          canEditCategories={canAdminManage}
+                          canEditSlug={canUseSourceActions}
+                          canEditName={canUseSourceActions}
+                          canEditCategories={canUseSourceActions}
                           canReorder={canReorderList}
                           showActionsMenu={canUseSourceActions}
                           onSlugUpdated={handleSlugUpdated}
@@ -667,7 +667,7 @@ function DashboardContent() {
                             canUseSourceActions ? handleDeleteSource : undefined
                           }
                           deleting={deletingId === source.id}
-                          canEditCategories={canAdminManage}
+                          canEditCategories={canUseSourceActions}
                           showContextMenu={canUseSourceActions}
                           onCategoriesUpdated={handleCategoriesUpdated}
                           onNameUpdated={handleNameUpdated}
@@ -702,7 +702,7 @@ function DashboardContent() {
                             canUseSourceActions ? handleDeleteSource : undefined
                           }
                           deleting={deletingId === source.id}
-                          canEditCategories={canAdminManage}
+                          canEditCategories={canUseSourceActions}
                           showContextMenu={canUseSourceActions}
                           onCategoriesUpdated={handleCategoriesUpdated}
                           onNameUpdated={handleNameUpdated}
