@@ -2,10 +2,7 @@ import { askAcrossSources } from "./ask-across.js";
 import { askQuestion } from "./ask.js";
 import { runWebCrawl } from "./crawl.js";
 import { deleteSource } from "./delete-source.js";
-import {
-  exportCorpus,
-  exportCorpusToDirectory,
-} from "./export-corpus.js";
+import { exportCorpus, exportCorpusToDirectory } from "./export-corpus.js";
 import { indexRepository } from "./index-repo.js";
 import { profileWithResolvedOptions } from "./profile.js";
 import { profileIndexedSourceWithResolvedOptions } from "./profile-indexed-source.js";
@@ -17,7 +14,7 @@ import { listSourceSets, saveSet } from "./source-sets.js";
 import type { LedgeIndex, LedgeIndexOptions } from "./types.js";
 
 export async function createLedgeIndex(
-  options: LedgeIndexOptions = {},
+  options: LedgeIndexOptions = {}
 ): Promise<LedgeIndex> {
   const resolved = resolveOptions(options);
   await initRuntime(resolved);
@@ -33,26 +30,33 @@ export async function createLedgeIndex(
     indexRepo: (indexOptions) => indexRepository(indexOptions),
     ask: (sourceIdOrSlug, question, askOptions) =>
       askQuestion(sourceIdOrSlug, question, askOptions),
-    askAcross: (question, askOptions) =>
-      askAcrossSources(question, askOptions),
+    askAcross: (question, askOptions) => askAcrossSources(question, askOptions),
     listSources: async () => {
       const sources = await listSources();
       return sources.map((source) => ({
         id: source.id,
         name: source.name,
         slug: source.slug,
+        versionNumber: source.versionNumber,
+        versionLabel: source.versionLabel,
+        versions: source.versions.map((version) => ({
+          id: version.id,
+          versionNumber: version.versionNumber,
+          versionLabel: version.versionLabel,
+        })),
       }));
     },
     listSourceSets: () => listSourceSets(),
     saveSourceSet: (setOptions) => saveSet(setOptions),
-    resolveSource: resolveSourceRef,
+    resolveSource: (token, resolveOptions) =>
+      resolveSourceRef(token, resolveOptions),
     profile: (url, profileOptions) =>
       profileWithResolvedOptions(url, profileOptions ?? {}, getActiveOptions()),
     profileIndexedSource: (sourceIdOrSlug, profileOptions) =>
       profileIndexedSourceWithResolvedOptions(
         sourceIdOrSlug,
         profileOptions ?? {},
-        getActiveOptions(),
+        getActiveOptions()
       ),
     checkForUpdates: (options) => checkForUpdates(options),
     applyUpdates: (options) => applyUpdates(options),
@@ -60,10 +64,6 @@ export async function createLedgeIndex(
     exportCorpus: (sourceIdOrSlug, exportOptions) =>
       exportCorpus(sourceIdOrSlug, exportOptions),
     exportCorpusToDirectory: (sourceIdOrSlug, outputDirectory, exportOptions) =>
-      exportCorpusToDirectory(
-        sourceIdOrSlug,
-        outputDirectory,
-        exportOptions,
-      ),
+      exportCorpusToDirectory(sourceIdOrSlug, outputDirectory, exportOptions),
   };
 }

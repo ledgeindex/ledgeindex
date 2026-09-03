@@ -10,6 +10,7 @@ import { SourceRefreshDialog } from "@/components/sources/source-refresh-dialog"
 import { SourceAddStartUrlDialog } from "@/components/sources/source-add-start-url-dialog";
 import { SourceUpdateStartUrlDialog } from "@/components/sources/source-update-start-url-dialog";
 import { SourceSiteProfileDialog } from "@/components/sources/source-site-profile-dialog";
+import { SourceVersionsDialog } from "@/components/sources/source-versions-dialog";
 import {
   SourceRenameDialog,
   type SourceRenameField,
@@ -19,7 +20,10 @@ import {
   mergeSourceCategories,
   splitSourceCategories,
 } from "@/lib/source-category-presets";
-import { updateSourceCategories, refreshSourceBranding } from "@/lib/ledgeindex-api";
+import {
+  updateSourceCategories,
+  refreshSourceBranding,
+} from "@/lib/ledgeindex-api";
 import { cn } from "@/lib/utils";
 import type { SourceSummary } from "@/lib/ledgeindex-api";
 
@@ -80,11 +84,12 @@ export function SourceActionsMenu({
   const [updateStartUrlOpen, setUpdateStartUrlOpen] = useState(false);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const [profileMode, setProfileMode] = useState<"configure" | "view">(
-    "configure",
+    "configure"
   );
   const [renameField, setRenameField] = useState<SourceRenameField | null>(
-    null,
+    null
   );
   const [shelfSubmenuOpen, setShelfSubmenuOpen] = useState(false);
   const [savingShelf, setSavingShelf] = useState(false);
@@ -118,6 +123,7 @@ export function SourceActionsMenu({
     return (
       88 +
       32 +
+      (canEditCategories ? 32 : 0) +
       (source.chunkCount > 0 && canEditCategories ? 64 : 0) +
       (canEditCategories ? 32 + 64 + 32 + 32 + 32 : 0) +
       (onDelete ? 32 : 0)
@@ -131,7 +137,7 @@ export function SourceActionsMenu({
     if (contextPoint) {
       const left = Math.min(
         Math.max(12, contextPoint.x),
-        window.innerWidth - width - 12,
+        window.innerWidth - width - 12
       );
       const belowTop = contextPoint.y + 4;
       const aboveTop = contextPoint.y - menuHeight - 4;
@@ -141,7 +147,7 @@ export function SourceActionsMenu({
           : Math.min(belowTop, window.innerHeight - menuHeight - 12);
       setMenuRect({ top, left, width });
       setSubmenuSide(
-        left + width + SUBMENU_WIDTH + 8 > window.innerWidth ? "left" : "right",
+        left + width + SUBMENU_WIDTH + 8 > window.innerWidth ? "left" : "right"
       );
       return;
     }
@@ -167,7 +173,7 @@ export function SourceActionsMenu({
       width,
     });
     setSubmenuSide(
-      left + width + SUBMENU_WIDTH + 8 > window.innerWidth ? "left" : "right",
+      left + width + SUBMENU_WIDTH + 8 > window.innerWidth ? "left" : "right"
     );
   }, [align, contextPoint, estimateMenuHeight]);
 
@@ -234,7 +240,7 @@ export function SourceActionsMenu({
     try {
       const { source: updated } = await refreshSourceBranding(
         source.id,
-        source.startUrl,
+        source.startUrl
       );
       onBrandingUpdated?.({
         ogImageUrl: updated.ogImageUrl ?? null,
@@ -290,6 +296,19 @@ export function SourceActionsMenu({
             >
               {source.hasSiteProfile ? "View profile" : "Add profile"}
             </button>
+            {canEditCategories ? (
+              <button
+                type="button"
+                role="menuitem"
+                onClick={() => {
+                  closeMenu();
+                  setVersionsOpen(true);
+                }}
+                className="flex w-full items-center px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-surface-raised"
+              >
+                Manage versions
+              </button>
+            ) : null}
             {canEditCategories && source.chunkCount > 0 ? (
               <button
                 type="button"
@@ -392,11 +411,14 @@ export function SourceActionsMenu({
                   onClick={() => setShelfSubmenuOpen((open) => !open)}
                   className={cn(
                     "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-medium text-foreground transition-colors hover:bg-surface-raised disabled:opacity-50",
-                    shelfSubmenuOpen && "bg-surface-raised",
+                    shelfSubmenuOpen && "bg-surface-raised"
                   )}
                 >
                   <span>{savingShelf ? "Saving…" : "Set shelf"}</span>
-                  <ChevronRight className="size-3.5 shrink-0 text-muted" aria-hidden />
+                  <ChevronRight
+                    className="size-3.5 shrink-0 text-muted"
+                    aria-hidden
+                  />
                 </button>
 
                 {shelfSubmenuOpen ? (
@@ -407,7 +429,7 @@ export function SourceActionsMenu({
                       "absolute top-0 z-[1] rounded-lg border border-border bg-card-solid py-1 shadow-card",
                       submenuSide === "right"
                         ? "left-full ml-1"
-                        : "right-full mr-1",
+                        : "right-full mr-1"
                     )}
                   >
                     {SOURCE_KIND_PRESETS.map((preset) => {
@@ -424,12 +446,14 @@ export function SourceActionsMenu({
                             "flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-xs font-medium transition-colors hover:bg-surface-raised disabled:opacity-50",
                             active
                               ? "bg-foreground/5 text-foreground"
-                              : "text-foreground",
+                              : "text-foreground"
                           )}
                         >
                           <span>{preset.label}</span>
                           {active ? (
-                            <span className="text-[0.625rem] text-muted">✓</span>
+                            <span className="text-[0.625rem] text-muted">
+                              ✓
+                            </span>
                           ) : null}
                         </button>
                       );
@@ -483,7 +507,7 @@ export function SourceActionsMenu({
               </button>
             ) : null}
           </div>,
-          document.body,
+          document.body
         )
       : null;
 
@@ -507,7 +531,7 @@ export function SourceActionsMenu({
           aria-label={`More actions for ${source.name}`}
           className={cn(
             "inline-flex size-8 items-center justify-center rounded-lg border border-border bg-surface-raised text-muted transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50",
-            className,
+            className
           )}
         >
           <MoreMenuIcon />
@@ -532,6 +556,15 @@ export function SourceActionsMenu({
         initialMode={profileMode}
         onSaved={onSiteProfileUpdated}
       />
+
+      {canEditCategories ? (
+        <SourceVersionsDialog
+          source={source}
+          open={versionsOpen}
+          onOpenChange={setVersionsOpen}
+          onSaved={onRefreshApplied}
+        />
+      ) : null}
 
       {canEditCategories ? (
         <SourceRefreshDialog

@@ -154,6 +154,13 @@ declare module "@ledgeindex/docs/runtime/db/types.js" {
     name: string;
     slug: string;
     sourceType: string;
+    versionNumber: number;
+    versionLabel: string;
+    versions: Array<{
+      id: string;
+      versionNumber: number;
+      versionLabel: string;
+    }>;
   };
   export type SourceSetSummary = {
     id: string;

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Plus } from "lucide-react";
+import { Plus, ScanSearch } from "lucide-react";
 import { DashboardViewToggle } from "@/components/sources/dashboard-view-toggle";
 import { KnowledgeSetScopeToggle } from "@/components/sources/knowledge-set-scope-toggle";
 import { useDashboardToolbar } from "@/contexts/dashboard-toolbar-context";
@@ -72,6 +72,32 @@ export function AppHeaderDashboardControls() {
         className="shrink-0 [&_button]:px-2 [&_button]:py-1 [&_button]:text-xs sm:[&_button]:px-3 sm:[&_button]:py-1.5 sm:[&_button]:text-sm"
       />
       <DashboardViewToggle value={viewMode} onChange={setViewMode} />
+      {user && scope === "personal" ? (
+        atSourceLimit ? (
+          <button
+            type="button"
+            onClick={() =>
+              showPlanLimit(
+                `Free plan allows ${sourceLimits?.maxSources ?? 3} personal sources.`,
+              )
+            }
+            className="inline-flex h-8 shrink-0 cursor-not-allowed items-center gap-1.5 rounded-lg border border-border bg-muted/40 px-2.5 text-xs font-medium text-muted-foreground sm:h-9 sm:px-3 sm:text-sm"
+          >
+            <ScanSearch className="size-3.5 sm:size-4" aria-hidden />
+            <span className="hidden sm:inline">Add profile</span>
+            <span className="sm:hidden">Profile</span>
+          </button>
+        ) : (
+          <Link
+            href="/dashboard?addProfile=1"
+            className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-border bg-card-solid px-2.5 text-xs font-medium text-foreground shadow-card transition-colors hover:bg-surface-raised sm:h-9 sm:px-3 sm:text-sm"
+          >
+            <ScanSearch className="size-3.5 sm:size-4" aria-hidden />
+            <span className="hidden sm:inline">Add profile</span>
+            <span className="sm:hidden">Profile</span>
+          </Link>
+        )
+      ) : null}
       {user && scopeAllowsCreate ? (
         atSourceLimit ? (
           <button

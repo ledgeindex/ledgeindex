@@ -34,7 +34,7 @@ export type RoutedAskSourceMode = "picker" | "all";
 export type RoutedAskOptions = {
   /** Source set id or slug — the ahead-of-time list the picker chooses within. */
   sourceSet?: string;
-  /** Inline slug allowlist, for callers that pin sources per call. */
+  /** Inline source id/slug allowlist, for callers that pin sources per call. */
   sources?: string[];
   /**
    * `picker` (default) — LLM picks one or more sources from the allowlist.
@@ -58,11 +58,11 @@ export type RoutedAskOptions = {
  */
 export async function askRouted(
   question: string,
-  options: RoutedAskOptions = {},
+  options: RoutedAskOptions = {}
 ): Promise<RoutedAskResult> {
   if (!hasLlmKey() && !options.model) {
     throw new Error(
-      "Routed ask needs a chat model to pick sources and answer. Set GOOGLE_GENERATIVE_AI_API_KEY, OPENAI_API_KEY, or LM_STUDIO_BASE_URL, or ask a single source with ask().",
+      "Routed ask needs a chat model to pick sources and answer. Set GOOGLE_GENERATIVE_AI_API_KEY, OPENAI_API_KEY, or LM_STUDIO_BASE_URL, or ask a single source with ask()."
     );
   }
 
@@ -71,7 +71,7 @@ export async function askRouted(
     requestContext.set("source_set_id", options.sourceSet);
   }
   if (options.sources && options.sources.length > 0) {
-    requestContext.set("explore_source_slugs", options.sources);
+    requestContext.set("explore_source_refs", options.sources);
   }
   if (options.sourceMode === "all") {
     requestContext.set("explore_source_mode", "all");
@@ -104,19 +104,19 @@ export async function askRouted(
   const meta = readRetrievalMeta(requestContext);
   const chunks = toAskHits(meta?.chunks ?? []);
   const insufficient = meta?.insufficient ?? chunks.length === 0;
-  const pickedSources: RoutedAskPickedSource[] = (meta?.pickedSources ?? []).map(
-    (source) => ({
-      id: source.id,
-      slug: source.slug,
-      name: source.name,
-      kind: source.kind === "code" ? "code" : "docs",
-    }),
-  );
+  const pickedSources: RoutedAskPickedSource[] = (
+    meta?.pickedSources ?? []
+  ).map((source) => ({
+    id: source.id,
+    slug: source.slug,
+    name: source.name,
+    kind: source.kind === "code" ? "code" : "docs",
+  }));
 
   logVerbose("Routed ask finished", "RoutedAsk", {
     question,
     sourceSet: options.sourceSet ?? null,
-    pinnedSlugs: options.sources ?? null,
+    pinnedSources: options.sources ?? null,
     sourceMode: options.sourceMode ?? "picker",
     picked: pickedSources.map((source) => `${source.slug}:${source.kind}`),
     chunkCount: chunks.length,

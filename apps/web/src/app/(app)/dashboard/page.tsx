@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   DndContext,
   DragOverlay,
@@ -28,6 +28,7 @@ import {
 import { Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { LedgeIndexPageLoader } from "@/components/ledgeindex-page-loader";
+import { AddProfileSourceDialog } from "@/components/sources/add-profile-source-dialog";
 import { SourceBannerCard } from "@/components/sources/source-banner-card";
 import { SourceCategoryFilterBar } from "@/components/sources/source-category-filter";
 import {
@@ -122,10 +123,13 @@ function sourceMatchesQuery(source: SourceSummary, query: string): boolean {
 function DashboardContent() {
   const { user, loading: authLoading, isAdmin, planLimitsEnabled, profile } = useAuth();
   const { openUpgradeModal } = usePlanBilling();
+  const router = useRouter();
   const searchParams = useSearchParams();
-  const indexedParam = searchParams.get("indexed");
-  const { flashId: indexedFlashId } = useIndexedFlash();
   const { scope, viewMode, ready: toolbarReady } = useDashboardToolbar();
+  const indexedParam = searchParams.get("indexed");
+  const addProfileOpen =
+    scope === "personal" && searchParams.get("addProfile") === "1";
+  const { flashId: indexedFlashId } = useIndexedFlash();
   const [sources, setSources] = useState<SourceSummary[]>([]);
   const [sourceLimits, setSourceLimits] = useState<AccountSourceLimits | null>(
     null,
@@ -475,7 +479,8 @@ function DashboardContent() {
   }
 
   return (
-    <div
+    <>
+      <div
       className={cn(
         "mx-auto w-full flex-1 px-4 py-6 sm:px-6 sm:py-8",
         viewMode === "list" ? "max-w-3xl" : "max-w-6xl",
@@ -720,7 +725,18 @@ function DashboardContent() {
           )}
         </div>
       )}
-    </div>
+      </div>
+      <AddProfileSourceDialog
+        open={addProfileOpen}
+        onOpenChange={(open) => {
+          if (!open) router.replace("/dashboard", { scroll: false });
+        }}
+        onCreated={() => {
+          handleRefreshApplied();
+          router.replace("/dashboard", { scroll: false });
+        }}
+      />
+    </>
   );
 }
 

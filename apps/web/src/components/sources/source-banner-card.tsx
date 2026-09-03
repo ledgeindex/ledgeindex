@@ -114,6 +114,7 @@ export function SourceBannerCard({
     [activeSource],
   );
   const canChat = activeSource.chunkCount > 0;
+  const canOpen = canChat || activeSource.hasSiteProfile;
   const chatHref = `/sources/${activeSource.id}/chat`;
 
   function handleDelete() {
@@ -126,9 +127,12 @@ export function SourceBannerCard({
     void onDelete(activeSource.id);
   }
 
-  function openChat() {
-    if (!canChat) return;
-    router.push(chatHref);
+  function openSource() {
+    if (canChat) {
+      router.push(chatHref);
+      return;
+    }
+    if (activeSource.hasSiteProfile) setProfileOpen(true);
   }
 
   return (
@@ -139,7 +143,9 @@ export function SourceBannerCard({
             ? showContextMenu
               ? `${activeSource.name} — open chat · right-click for admin actions`
               : `${activeSource.name} — open chat`
-            : `${activeSource.name} — indexing incomplete`
+            : activeSource.hasSiteProfile
+              ? `${activeSource.name} — view profile`
+              : `${activeSource.name} — indexing incomplete`
         }
         className={cn(
           "group relative flex h-[4.25rem] min-w-0 cursor-pointer overflow-hidden rounded-lg border bg-card-solid shadow-card transition-[border-color,box-shadow,transform] duration-200",
@@ -149,13 +155,13 @@ export function SourceBannerCard({
             ? "border-emerald-500/40 ring-1 ring-emerald-500/20"
             : "border-border",
           deleting && "pointer-events-none opacity-60",
-          !canChat && "cursor-not-allowed opacity-70",
+          !canOpen && "cursor-not-allowed opacity-70",
         )}
-        onClick={openChat}
+        onClick={openSource}
         onKeyDown={(event) => {
           if (event.key === "Enter" || event.key === " ") {
             event.preventDefault();
-            openChat();
+            openSource();
           }
         }}
         onContextMenu={(event) => {
@@ -165,8 +171,8 @@ export function SourceBannerCard({
           setContextPoint({ x: event.clientX, y: event.clientY });
         }}
         role="link"
-        tabIndex={canChat ? 0 : -1}
-        aria-disabled={!canChat}
+        tabIndex={canOpen ? 0 : -1}
+        aria-disabled={!canOpen}
       >
         <div className="relative h-full w-[4.75rem] shrink-0 overflow-hidden border-r border-border/70 bg-black sm:w-[5.5rem]">
           {activeSource.ogImageUrl && !ogFailed ? (

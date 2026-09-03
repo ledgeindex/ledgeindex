@@ -89,7 +89,9 @@ export function resolveRemoteApiBaseUrl(): string | null {
     typeof process !== "undefined"
       ? process.env.NEXT_PUBLIC_KNOWLEDGEINDEX_REMOTE_API_URL
       : undefined,
-    typeof process !== "undefined" ? process.env.LEDGEINDEX_REMOTE_API_URL : undefined,
+    typeof process !== "undefined"
+      ? process.env.LEDGEINDEX_REMOTE_API_URL
+      : undefined,
   ];
 
   for (const candidate of candidates) {
@@ -129,7 +131,9 @@ export type SourceRoutingHint = {
 };
 
 /** Cloud personal + public catalog rows live on the hosted API when dev uses :3010. */
-export function shouldRouteSourceToRemoteApi(source: SourceRoutingHint): boolean {
+export function shouldRouteSourceToRemoteApi(
+  source: SourceRoutingHint
+): boolean {
   const remoteBase = resolveRemoteApiBaseUrl();
   const activeBase = getLedgeIndexApiBaseUrl();
   if (
@@ -146,7 +150,7 @@ export function shouldRouteSourceToRemoteApi(source: SourceRoutingHint): boolean
 /** Whether catalog chunk inspection should be shown for this source. */
 export function canInspectPageChunks(
   source: SourceRoutingHint,
-  options: { isAdmin: boolean },
+  options: { isAdmin: boolean }
 ): boolean {
   if (source.scope === "global" || source.hosting === "cloud") {
     return options.isAdmin;
@@ -160,7 +164,7 @@ export function canInspectLocalPageChunks(source: SourceRoutingHint): boolean {
 }
 
 function apiBaseOptionsForSource(
-  source?: SourceRoutingHint,
+  source?: SourceRoutingHint
 ): { baseUrl: string } | undefined {
   if (!source || !shouldRouteSourceToRemoteApi(source)) return undefined;
   const remoteBase = resolveRemoteApiBaseUrl();
@@ -379,11 +383,7 @@ export type IndexSizeEstimate = {
 };
 
 export type PipelineNodeStatus =
-  | "pending"
-  | "running"
-  | "done"
-  | "suspended"
-  | "error";
+  "pending" | "running" | "done" | "suspended" | "error";
 
 export type IngestPipelineNode = {
   id: "crawl" | "filter" | "extract" | "embed" | "store" | "profile";
@@ -439,7 +439,7 @@ const apiRequestLoopGuard = new RequestLoopGuard();
 
 function requestFingerprint(
   input: string | URL | Request,
-  init?: RequestInit,
+  init?: RequestInit
 ): string {
   const method = (
     init?.method ??
@@ -464,7 +464,7 @@ function requestFingerprint(
 
 async function fetchWithLoopProtection(
   input: string | URL | Request,
-  init?: RequestInit,
+  init?: RequestInit
 ): Promise<Response> {
   const fingerprint = requestFingerprint(input, init);
   try {
@@ -473,7 +473,7 @@ async function fetchWithLoopProtection(
     if (error instanceof RequestLoopBlockedError) {
       throw new KnowledgeIndexApiError(
         `${error.message} Retry in ${Math.ceil(error.retryAfterMs / 1_000)} seconds.`,
-        429,
+        429
       );
     }
     throw error;
@@ -524,8 +524,9 @@ function formatApiErrorPayload(error: unknown, data?: unknown): string {
 
   const parts = [
     ...(flattened.formErrors ?? []),
-    ...Object.entries(flattened.fieldErrors ?? {}).flatMap(([field, messages]) =>
-      (messages ?? []).map((message) => `${field}: ${message}`),
+    ...Object.entries(flattened.fieldErrors ?? {}).flatMap(
+      ([field, messages]) =>
+        (messages ?? []).map((message) => `${field}: ${message}`)
     ),
   ];
 
@@ -535,8 +536,8 @@ function formatApiErrorPayload(error: unknown, data?: unknown): string {
 /** @deprecated Use KnowledgeIndexApiError */
 export const LedgeIndexApiError = KnowledgeIndexApiError;
 
-let authTokenGetter: ((forceRefresh?: boolean) => Promise<string | null>) | null =
-  null;
+let authTokenGetter:
+  ((forceRefresh?: boolean) => Promise<string | null>) | null = null;
 
 let configuredApiKey: string | null = null;
 
@@ -552,7 +553,7 @@ export function resolveLedgeIndexApiKey(): string | null {
 }
 
 export function setApiAuthTokenGetter(
-  getter: ((forceRefresh?: boolean) => Promise<string | null>) | null,
+  getter: ((forceRefresh?: boolean) => Promise<string | null>) | null
 ) {
   authTokenGetter = getter;
 }
@@ -561,7 +562,7 @@ export function setApiAuthTokenGetter(
 let beforeLocalApiFetch: (() => Promise<void>) | null = null;
 
 export function setLedgeIndexBeforeLocalApiFetch(
-  fn: (() => Promise<void>) | null,
+  fn: (() => Promise<void>) | null
 ): void {
   beforeLocalApiFetch = fn;
 }
@@ -580,7 +581,7 @@ async function resolveAuthToken(forceRefresh = false): Promise<string | null> {
 }
 
 async function resolveAuthorizationHeader(
-  forceRefresh = false,
+  forceRefresh = false
 ): Promise<string | null> {
   const firebaseToken = await resolveAuthToken(forceRefresh);
   if (firebaseToken) return `Bearer ${firebaseToken}`;
@@ -598,7 +599,7 @@ async function resolveAuthorizationHeader(
 /** Fetch wrapper that attaches Firebase auth (for AI SDK streaming chat). */
 export async function authenticatedFetch(
   input: string | URL | Request,
-  init?: RequestInit,
+  init?: RequestInit
 ): Promise<Response> {
   const requestUrl =
     typeof input === "string"
@@ -647,7 +648,7 @@ async function fetchWithAuth(
     retried?: boolean;
     /** Override active API base (e.g. hosted API while UI talks to local). */
     baseUrl?: string;
-  },
+  }
 ): Promise<{ response: Response; data: unknown }> {
   const base = (options?.baseUrl ?? getApiBase()).replace(/\/$/, "");
   await prepareLocalApiIfNeeded(base);
@@ -660,7 +661,7 @@ async function fetchWithAuth(
 
   if (!headers.has("Authorization")) {
     const authorization = await resolveAuthorizationHeader(
-      options?.retried ?? false,
+      options?.retried ?? false
     );
     if (authorization) {
       headers.set("Authorization", authorization);
@@ -677,7 +678,7 @@ async function fetchWithAuth(
     if (error instanceof KnowledgeIndexApiError) throw error;
     throw new KnowledgeIndexApiError(
       `Cannot reach LedgeIndex API at ${base}. Is the LedgeIndex server running?`,
-      0,
+      0
     );
   }
 
@@ -688,7 +689,10 @@ async function fetchWithAuth(
       data = JSON.parse(text);
     } catch {
       if (!response.ok) {
-        throw new KnowledgeIndexApiError(text || "Request failed", response.status);
+        throw new KnowledgeIndexApiError(
+          text || "Request failed",
+          response.status
+        );
       }
     }
   }
@@ -710,7 +714,7 @@ async function requestApi<T>(
     notFoundAsNull?: boolean;
     retried?: boolean;
     baseUrl?: string;
-  },
+  }
 ): Promise<T | null> {
   const { response, data } = await fetchWithAuth(path, init, options);
 
@@ -729,7 +733,7 @@ async function requestApi<T>(
 async function api<T>(
   path: string,
   init?: RequestInit,
-  options?: { baseUrl?: string },
+  options?: { baseUrl?: string }
 ): Promise<T> {
   const result = await requestApi<T>(path, init, options);
   if (result === null) {
@@ -741,7 +745,7 @@ async function api<T>(
 async function tryApi<T>(
   path: string,
   init?: RequestInit,
-  options?: { baseUrl?: string },
+  options?: { baseUrl?: string }
 ): Promise<T | null> {
   return requestApi<T>(path, init, { ...options, notFoundAsNull: true });
 }
@@ -849,7 +853,7 @@ export type HeaderNavApiOptions = {
 
 export async function getStagehandRuntimeStatus(
   signal?: AbortSignal,
-  options?: HeaderNavApiOptions,
+  options?: HeaderNavApiOptions
 ) {
   return api<StagehandRuntimeStatus>(
     "/api/discover-header-nav/runtime",
@@ -857,13 +861,13 @@ export async function getStagehandRuntimeStatus(
       method: "GET",
       signal,
     },
-    options?.baseUrl ? { baseUrl: options.baseUrl } : undefined,
+    options?.baseUrl ? { baseUrl: options.baseUrl } : undefined
   );
 }
 
 export async function installStagehandRuntime(
   signal?: AbortSignal,
-  options?: HeaderNavApiOptions,
+  options?: HeaderNavApiOptions
 ) {
   return api<StagehandRuntimeStatus>(
     "/api/discover-header-nav/runtime/install",
@@ -871,7 +875,7 @@ export async function installStagehandRuntime(
       method: "POST",
       signal,
     },
-    options?.baseUrl ? { baseUrl: options.baseUrl } : undefined,
+    options?.baseUrl ? { baseUrl: options.baseUrl } : undefined
   );
 }
 
@@ -880,7 +884,7 @@ export async function discoverHeaderNavPaths(
   signal?: AbortSignal,
   provider?: HeaderNavProviderId,
   browserRuntime?: HeaderNavBrowserRuntime,
-  options?: HeaderNavApiOptions,
+  options?: HeaderNavApiOptions
 ) {
   return api<HeaderNavDiscoveryResult>(
     "/api/discover-header-nav",
@@ -893,14 +897,14 @@ export async function discoverHeaderNavPaths(
       }),
       signal,
     },
-    options?.baseUrl ? { baseUrl: options.baseUrl } : undefined,
+    options?.baseUrl ? { baseUrl: options.baseUrl } : undefined
   );
 }
 
 export async function preflightSite(
   url: string,
   signal?: AbortSignal,
-  sitemapUrls?: string[],
+  sitemapUrls?: string[]
 ) {
   return api<{ preflight: PreflightResult }>("/api/preflight", {
     method: "POST",
@@ -1021,7 +1025,9 @@ export async function proposeCrawlFilterRemovals(input: {
     selectedIndexes: filter.selectedIndexes,
     summary: filter.summary,
     modelId: filter.modelId,
-    ...(filter.truncated ? { truncated: true, totalUrls: filter.totalUrls } : {}),
+    ...(filter.truncated
+      ? { truncated: true, totalUrls: filter.totalUrls }
+      : {}),
   };
 }
 
@@ -1107,7 +1113,7 @@ export async function checkSourceDuplicates(input: {
     params.set("versionLabel", input.versionLabel);
   }
   return api<{ duplicate: SourceDuplicateMatch | null }>(
-    `/api/sources/duplicates?${params.toString()}`,
+    `/api/sources/duplicates?${params.toString()}`
   );
 }
 
@@ -1133,14 +1139,14 @@ function isRemoteFallbackableSourceError(err: unknown): boolean {
   if (!(err instanceof KnowledgeIndexApiError)) return false;
   if (err.status === 404 || err.status === 503) return true;
   return /5432|postgres|ECONNREFUSED|Cloud Postgres|CLOUD_POSTGRES/i.test(
-    err.message,
+    err.message
   );
 }
 
 async function apiWithRemoteSourceFallback<T>(
   path: string,
   init?: RequestInit,
-  routing?: SourceRoutingHint,
+  routing?: SourceRoutingHint
 ): Promise<T> {
   const remoteOpts = apiBaseOptionsForSource(routing);
   if (remoteOpts) {
@@ -1164,14 +1170,11 @@ async function apiWithRemoteSourceFallback<T>(
   }
 }
 
-export async function getSource(
-  id: string,
-  routing?: SourceRoutingHint,
-) {
+export async function getSource(id: string, routing?: SourceRoutingHint) {
   return apiWithRemoteSourceFallback<{ source: Source }>(
     `/api/sources/${id}`,
     undefined,
-    routing,
+    routing
   );
 }
 
@@ -1184,10 +1187,11 @@ export async function updateSource(
     ogImageUrl?: string | null;
     faviconUrl?: string | null;
     sourceMetadata?: SourceMetadata | null;
+    versionLabel?: string;
     categories?: string[];
     displayOrder?: number | null;
   },
-  routing?: SourceRoutingHint,
+  routing?: SourceRoutingHint
 ) {
   return api<{ source: SourceSummary }>(
     `/api/sources/${id}`,
@@ -1195,12 +1199,12 @@ export async function updateSource(
       method: "PUT",
       body: JSON.stringify(input),
     },
-    apiBaseOptionsForSource(routing),
+    apiBaseOptionsForSource(routing)
   );
 }
 
 export async function reorderSources(
-  items: Array<{ id: string; displayOrder: number }>,
+  items: Array<{ id: string; displayOrder: number }>
 ) {
   return api<{ updated: number }>(`/api/sources/reorder`, {
     method: "PUT",
@@ -1230,20 +1234,20 @@ export async function refreshSourceBranding(id: string, startUrl: string) {
 
 export async function updateSourceDocsIdentity(
   id: string,
-  docsIdentity: DocsIdentity,
+  docsIdentity: DocsIdentity
 ) {
   return api<{ source: Source; docsIdentity: DocsIdentity }>(
     `/api/sources/${id}/docs-identity`,
     {
       method: "PUT",
       body: JSON.stringify(docsIdentity),
-    },
+    }
   );
 }
 
 export async function updateSourceSiteProfile(
   id: string,
-  siteProfile: SiteProfile,
+  siteProfile: SiteProfile
 ) {
   const MAX_LENS_SOURCE_URLS = 80;
   const sanitized: SiteProfile = {
@@ -1259,7 +1263,7 @@ export async function updateSourceSiteProfile(
                 ? { pickSummary: entry.pickSummary.trim().slice(0, 4000) }
                 : {}),
             },
-          ]),
+          ])
         )
       : undefined,
   };
@@ -1270,14 +1274,11 @@ export async function updateSourceSiteProfile(
       {
         method: "PUT",
         body: JSON.stringify(sanitized),
-      },
+      }
     );
   } catch (err) {
     // Older API builds may not have the dedicated route yet — merge via updateSource.
-    if (
-      !(err instanceof KnowledgeIndexApiError) ||
-      err.status !== 404
-    ) {
+    if (!(err instanceof KnowledgeIndexApiError) || err.status !== 404) {
       throw err;
     }
 
@@ -1312,32 +1313,24 @@ export async function updateSourceSiteProfile(
 
 export async function startSourceAgentGuideRun(
   id: string,
-  options?: { hint?: string },
+  options?: { hint?: string }
 ) {
-  return api<{ run: ProfileSiteRun }>(
-    `/api/sources/${id}/agent-guide-runs`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        ...(options?.hint?.trim()
-          ? { hint: options.hint.trim() }
-          : {}),
-      }),
-    },
-  );
+  return api<{ run: ProfileSiteRun }>(`/api/sources/${id}/agent-guide-runs`, {
+    method: "POST",
+    body: JSON.stringify({
+      ...(options?.hint?.trim() ? { hint: options.hint.trim() } : {}),
+    }),
+  });
 }
 
 export async function deleteSourceSiteProfile(id: string) {
   try {
     return await api<{ source: Source; deleted: boolean }>(
       `/api/sources/${id}/site-profile`,
-      { method: "DELETE" },
+      { method: "DELETE" }
     );
   } catch (err) {
-    if (
-      !(err instanceof KnowledgeIndexApiError) ||
-      err.status !== 404
-    ) {
+    if (!(err instanceof KnowledgeIndexApiError) || err.status !== 404) {
       throw err;
     }
 
@@ -1362,20 +1355,17 @@ export async function deleteSourceSiteProfile(id: string) {
   }
 }
 
-export async function deleteSource(
-  id: string,
-  routing?: SourceRoutingHint,
-) {
+export async function deleteSource(id: string, routing?: SourceRoutingHint) {
   return api<{ deleted: boolean; sourceId: string }>(
     `/api/sources/${id}`,
     { method: "DELETE" },
-    apiBaseOptionsForSource(routing),
+    apiBaseOptionsForSource(routing)
   );
 }
 
 export async function getAccountSourceLimits(scope: SourceScope = "personal") {
   return api<{ limits: AccountSourceLimits }>(
-    `/api/sources/limits?scope=${encodeURIComponent(scope)}`,
+    `/api/sources/limits?scope=${encodeURIComponent(scope)}`
   );
 }
 
@@ -1393,7 +1383,7 @@ export type AccountSourceLimits = {
 
 function mergeSourceSummaries(
   base: SourceSummary[],
-  additions: SourceSummary[],
+  additions: SourceSummary[]
 ): SourceSummary[] {
   const byId = new Map<string, SourceSummary>();
   for (const source of base) byId.set(source.id, source);
@@ -1425,19 +1415,14 @@ export async function listSources(scope?: SourceScope | "all") {
       err instanceof KnowledgeIndexApiError &&
       (err.status === 503 ||
         /postgres|5432|cloud.?sql|CLOUD_POSTGRES|Public sources need|Public catalog/i.test(
-          err.message,
+          err.message
         ));
-    const degradable =
-      canMergeRemote && scope !== "personal" && postgresLike;
+    const degradable = canMergeRemote && scope !== "personal" && postgresLike;
     if (!degradable) {
-      if (
-        scope === "global" &&
-        postgresLike &&
-        !canMergeRemote
-      ) {
+      if (scope === "global" && postgresLike && !canMergeRemote) {
         throw new KnowledgeIndexApiError(
           "Public catalog is not on your local API. Add NEXT_PUBLIC_LEDGEINDEX_REMOTE_API_URL=https://api.ledgeindex.com to apps/web/.env.local and restart the web dev server (npm run dev:ledgeindex).",
-          err instanceof KnowledgeIndexApiError ? err.status : 503,
+          err instanceof KnowledgeIndexApiError ? err.status : 503
         );
       }
       throw err;
@@ -1457,12 +1442,12 @@ export async function listSources(scope?: SourceScope | "all") {
       const remote = await api<{ sources: SourceSummary[] }>(
         "/api/sources?scope=personal",
         undefined,
-        { baseUrl: remoteBase },
+        { baseUrl: remoteBase }
       );
       const cloudPersonal = remote.sources.filter(
         (source) =>
           (source.scope ?? "personal") !== "global" &&
-          (source.hosting === "cloud" || source.hosting == null),
+          (source.hosting === "cloud" || source.hosting == null)
       );
       merged = mergeSourceSummaries(merged, cloudPersonal);
     } catch {
@@ -1475,10 +1460,10 @@ export async function listSources(scope?: SourceScope | "all") {
       const remote = await api<{ sources: SourceSummary[] }>(
         "/api/sources?scope=global",
         undefined,
-        { baseUrl: remoteBase },
+        { baseUrl: remoteBase }
       );
       const globalSources = remote.sources.filter(
-        (source) => (source.scope ?? "personal") === "global",
+        (source) => (source.scope ?? "personal") === "global"
       );
       merged = mergeSourceSummaries(merged, globalSources);
     } catch (err) {
@@ -1489,7 +1474,7 @@ export async function listSources(scope?: SourceScope | "all") {
       ) {
         throw new KnowledgeIndexApiError(
           "Sign in to load the public catalog from the hosted API.",
-          401,
+          401
         );
       }
       if (
@@ -1499,7 +1484,7 @@ export async function listSources(scope?: SourceScope | "all") {
       ) {
         throw new KnowledgeIndexApiError(
           `Could not load public catalog from ${remoteBase}: ${err.message}`,
-          err.status,
+          err.status
         );
       }
       // Hosted API unreachable — keep local list.
@@ -1514,18 +1499,18 @@ export async function listSourceCategories(scope?: SourceScope | "all") {
   const query =
     scope && scope !== "all" ? `?scope=${encodeURIComponent(scope)}` : "";
   return api<{ categories: SourceCategoryOption[] }>(
-    `/api/source-categories${query}`,
+    `/api/source-categories${query}`
   );
 }
 
 export async function getSourceSummary(
   id: string,
-  routing?: SourceRoutingHint,
+  routing?: SourceRoutingHint
 ) {
   return apiWithRemoteSourceFallback<{ summary: SourceSummary }>(
     `/api/sources/${id}/summary`,
     undefined,
-    routing,
+    routing
   );
 }
 
@@ -1606,7 +1591,7 @@ export type MetadataCatalog = {
 
 export async function getMetadataCatalog(
   sourceId: string,
-  routing?: SourceRoutingHint,
+  routing?: SourceRoutingHint
 ) {
   return apiWithRemoteSourceFallback<{
     sourceId: string;
@@ -1718,7 +1703,7 @@ export type SourceCorpusExportOptions = {
 export async function exportSourceCorpus(
   sourceId: string,
   options: SourceCorpusExportOptions = {},
-  routing?: SourceRoutingHint,
+  routing?: SourceRoutingHint
 ): Promise<SourceCorpusExport> {
   const params = new URLSearchParams({
     content: String(options.includeContent ?? true),
@@ -1727,7 +1712,7 @@ export async function exportSourceCorpus(
   return apiWithRemoteSourceFallback<SourceCorpusExport>(
     `/api/sources/${sourceId}/corpus-export?${params.toString()}`,
     undefined,
-    routing,
+    routing
   );
 }
 
@@ -1735,7 +1720,7 @@ export async function exportSourceCorpus(
 export async function getPageChunks(
   sourceId: string,
   url: string,
-  routing?: SourceRoutingHint,
+  routing?: SourceRoutingHint
 ) {
   const params = new URLSearchParams({ url });
   const path = `/api/sources/${sourceId}/page-chunks?${params.toString()}`;
@@ -1743,7 +1728,7 @@ export async function getPageChunks(
     return apiWithRemoteSourceFallback<PageChunksResult>(
       path,
       undefined,
-      routing,
+      routing
     );
   }
   return api<PageChunksResult>(path);
@@ -1782,7 +1767,7 @@ export type PageExamplesResult = {
 export async function getPageExamples(sourceId: string, url: string) {
   const params = new URLSearchParams({ url });
   return api<PageExamplesResult>(
-    `/api/sources/${sourceId}/page-examples?${params.toString()}`,
+    `/api/sources/${sourceId}/page-examples?${params.toString()}`
   );
 }
 
@@ -1796,7 +1781,7 @@ export async function askSource(
     retrievalStrictness?: "strict" | "balanced" | "permissive";
     relevanceThreshold?: number | null;
     includeWeakEvidence?: boolean;
-  },
+  }
 ) {
   return api<SourceAskResult>(`/api/sources/${sourceId}/ask`, {
     method: "POST",
@@ -1881,7 +1866,7 @@ export async function findExamples(
     language?: string;
     topK?: number;
     rerankBackend?: DocsAskRerankBackend;
-  },
+  }
 ) {
   return api<FindExamplesResult>(`/api/sources/${sourceId}/find-examples`, {
     method: "POST",
@@ -1906,14 +1891,14 @@ export async function runParsePreview(
     urls: string[];
     contentSelectors?: string[];
     excludeSelectors?: string[];
-  },
+  }
 ) {
   return api<{ pages: ParsePreviewPage[] }>(
     `/api/sources/${sourceId}/parse-preview`,
     {
       method: "POST",
       body: JSON.stringify(input),
-    },
+    }
   );
 }
 
@@ -1927,7 +1912,7 @@ export async function startIngestWorkflow(
       httpStatusFiltered?: number;
     };
   },
-  signal?: AbortSignal,
+  signal?: AbortSignal
 ) {
   return api<{ snapshot: IngestPipelineSnapshot }>(
     `/api/sources/${sourceId}/ingest/start`,
@@ -1935,7 +1920,7 @@ export async function startIngestWorkflow(
       method: "POST",
       body: JSON.stringify(input ?? {}),
       signal,
-    },
+    }
   );
 }
 
@@ -1961,12 +1946,12 @@ export type CrawlProgress = {
 
 export async function getCrawlProgress(
   sourceId: string,
-  options?: { baseUrl?: string },
+  options?: { baseUrl?: string }
 ) {
   return api<CrawlProgress>(
     `/api/sources/${sourceId}/crawl-progress`,
     undefined,
-    options,
+    options
   );
 }
 
@@ -2010,29 +1995,29 @@ export async function resumeIngestWorkflow(
               urls: string[];
               enrichContextTokenLimit?: number;
             };
-      },
+      }
 ) {
   return api<{ snapshot: IngestPipelineSnapshot }>(
     `/api/sources/${sourceId}/ingest/${runId}/resume`,
     {
       method: "POST",
       body: JSON.stringify(input),
-    },
+    }
   );
 }
 
 export async function getIngestWorkflowStatus(sourceId: string, runId: string) {
   return api<{ snapshot: IngestPipelineSnapshot }>(
-    `/api/sources/${sourceId}/ingest/${runId}`,
+    `/api/sources/${sourceId}/ingest/${runId}`
   );
 }
 
 export async function tryGetIngestWorkflowStatus(
   sourceId: string,
-  runId: string,
+  runId: string
 ): Promise<IngestPipelineSnapshot | null> {
   const result = await tryApi<{ snapshot: IngestPipelineSnapshot }>(
-    `/api/sources/${sourceId}/ingest/${runId}`,
+    `/api/sources/${sourceId}/ingest/${runId}`
   );
   return result?.snapshot ?? null;
 }
@@ -2096,7 +2081,7 @@ export type RefreshRunSnapshot = {
 export async function startSourceRefreshCheck(
   sourceId: string,
   mode: RefreshMode = "discover",
-  options?: { baseUrl?: string },
+  options?: { baseUrl?: string }
 ) {
   return api<{ snapshot: RefreshRunSnapshot }>(
     `/api/sources/${sourceId}/refresh/start`,
@@ -2104,51 +2089,51 @@ export async function startSourceRefreshCheck(
       method: "POST",
       body: JSON.stringify({ mode }),
     },
-    options,
+    options
   );
 }
 
 export async function getSourceRefreshStatus(
   sourceId: string,
-  options?: { baseUrl?: string },
+  options?: { baseUrl?: string }
 ) {
   return api<{ snapshot: RefreshRunSnapshot | null }>(
     `/api/sources/${sourceId}/refresh/status`,
     undefined,
-    options,
+    options
   );
 }
 
 export async function cancelSourceRefresh(
   sourceId: string,
-  options?: { baseUrl?: string },
+  options?: { baseUrl?: string }
 ) {
   return api<{ cancelled: boolean }>(
     `/api/sources/${sourceId}/refresh/cancel`,
     { method: "POST" },
-    options,
+    options
   );
 }
 
 export async function applySourceRefresh(
   sourceId: string,
-  options?: { baseUrl?: string },
+  options?: { baseUrl?: string }
 ) {
   return api<{ snapshot: RefreshRunSnapshot }>(
     `/api/sources/${sourceId}/refresh/apply`,
     { method: "POST" },
-    options,
+    options
   );
 }
 
 export async function dismissSourceRefresh(
   sourceId: string,
-  options?: { baseUrl?: string },
+  options?: { baseUrl?: string }
 ) {
   return api<{ dismissed: boolean }>(
     `/api/sources/${sourceId}/refresh/dismiss`,
     { method: "POST" },
-    options,
+    options
   );
 }
 
@@ -2165,7 +2150,7 @@ export async function listSourceRefreshRuns(options?: { baseUrl?: string }) {
   return api<{ runs: SourceRefreshRunSummary[] }>(
     "/api/refresh/runs",
     undefined,
-    options,
+    options
   );
 }
 
@@ -2177,7 +2162,7 @@ export async function indexPreviewPages(
     markdown: string;
     language?: string;
     contentType?: string;
-  }>,
+  }>
 ) {
   return api<{
     indexed: boolean;
@@ -2197,14 +2182,14 @@ export async function estimateIndexSize(
     selectedUrlCount?: number;
     contentSelectors?: string[];
     excludeSelectors?: string[];
-  },
+  }
 ) {
   return api<{ estimate: IndexSizeEstimate }>(
     `/api/sources/${sourceId}/index-estimate`,
     {
       method: "POST",
       body: JSON.stringify(input),
-    },
+    }
   );
 }
 
@@ -2227,7 +2212,7 @@ export async function ensurePlaygroundApiKey() {
   }>(
     "/api/auth/api-keys/ensure-playground",
     { method: "POST" },
-    cloudAccountApiOptions(),
+    cloudAccountApiOptions()
   );
 }
 
@@ -2274,7 +2259,7 @@ export async function getBillingConfig() {
   return api<BillingConfigResponse>(
     "/api/billing/config",
     undefined,
-    cloudAccountApiOptions(),
+    cloudAccountApiOptions()
   );
 }
 
@@ -2308,7 +2293,7 @@ export async function createApiKey() {
       method: "POST",
       body: JSON.stringify({}),
     },
-    cloudAccountApiOptions(),
+    cloudAccountApiOptions()
   );
 }
 
@@ -2316,7 +2301,7 @@ export async function deleteApiKey(keyId: string) {
   return api<{ success: boolean; message?: string }>(
     `/api/auth/api-keys/${keyId}`,
     { method: "DELETE" },
-    cloudAccountApiOptions(),
+    cloudAccountApiOptions()
   );
 }
 
@@ -2384,7 +2369,7 @@ export async function updateSourceSet(
     slug?: string;
     description?: string | null;
     sourceIds?: string[];
-  },
+  }
 ) {
   return api<{ sourceSet: SourceSetSummary }>(`/api/source-sets/${idOrSlug}`, {
     method: "PUT",
@@ -2395,7 +2380,7 @@ export async function updateSourceSet(
 export async function deleteSourceSet(idOrSlug: string) {
   return api<{ deleted: boolean; sourceSetId: string }>(
     `/api/source-sets/${idOrSlug}`,
-    { method: "DELETE" },
+    { method: "DELETE" }
   );
 }
 

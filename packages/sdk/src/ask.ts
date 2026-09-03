@@ -7,13 +7,15 @@ import type { LedgeIndexAskOptions } from "./types.js";
 export async function askQuestion(
   sourceIdOrSlug: string,
   question: string,
-  options: LedgeIndexAskOptions = {},
+  options: LedgeIndexAskOptions = {}
 ) {
   const resolved = getActiveOptions();
   if (options.mode !== "retrieve-only") {
     assertChatModelAvailable(resolved, "ask");
   }
-  const { sourceId } = await resolveSourceRef(sourceIdOrSlug);
+  const { sourceId } = await resolveSourceRef(sourceIdOrSlug, {
+    version: options.version,
+  });
   /**
    * Only forward a backend somebody actually chose. Passing a computed default
    * counts as an explicit request downstream, which blocks the code-source

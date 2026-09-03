@@ -1,6 +1,6 @@
 {
   "name": "ledgeindex",
-  "version": "0.1.21",
+  "version": "0.1.22",
   "description": "LedgeIndex CLI — crawl docs and ask questions from the terminal",
   "type": "module",
   "license": "LicenseRef-LedgeIndex-Sustainable-Use-1.0",
@@ -29,7 +29,7 @@
     "clean": "node -e \"fs.rmSync('dist',{recursive:true,force:true})\""
   },
   "dependencies": {
-    "@ledgeindex/sdk": "^0.1.21"
+    "@ledgeindex/sdk": "^0.1.22"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

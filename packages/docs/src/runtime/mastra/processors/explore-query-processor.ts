@@ -3,7 +3,10 @@ import type { MastraDBMessage } from "@mastra/core/agent";
 import { Agent } from "@mastra/core/agent";
 import { z } from "zod";
 import type { KapaRetrievedChunk } from "../../retrieval/kapa-retrieve.js";
-import { isDirectHit, kapaRetrieveMany } from "../../retrieval/kapa-retrieve.js";
+import {
+  isDirectHit,
+  kapaRetrieveMany,
+} from "../../retrieval/kapa-retrieve.js";
 import {
   LEDGEINDEX_RETRIEVAL_META_KEY,
   toRetrievalMetaChunk,
@@ -153,14 +156,16 @@ function readSourceSetRef(
 }
 
 /**
- * Inline allowlist of slugs, for callers that pin sources per call instead of
- * saving a set (SDK/CLI). Accepts an array or a comma-separated string.
+ * Inline allowlist of source ids or slugs for callers that pin sources per
+ * call instead of saving a set (SDK/CLI). The legacy slug key remains readable.
  */
-function readSourceSlugs(
+function readSourceRefs(
   requestContext: ProcessInputArgs["requestContext"]
 ): string[] {
   if (typeof requestContext?.get !== "function") return [];
-  const raw = requestContext.get("explore_source_slugs");
+  const raw =
+    requestContext.get("explore_source_refs") ??
+    requestContext.get("explore_source_slugs");
   const values = Array.isArray(raw)
     ? raw
     : typeof raw === "string"
@@ -433,8 +438,8 @@ async function loadExploreSources(input: {
   userId: string;
   /** Set id or slug. When given, the picker only sees this set's members. */
   sourceSetRef: string;
-  /** Inline slug allowlist, applied on top of any set scope. */
-  sourceSlugs: string[];
+  /** Inline source id/slug allowlist, applied on top of any set scope. */
+  sourceRefs: string[];
 }): Promise<{
   sources: ExploreSource[];
   platformError?: string;
@@ -447,10 +452,12 @@ async function loadExploreSources(input: {
   ]);
   let sources = [...personal, ...platform.sources];
 
-  if (input.sourceSlugs.length > 0) {
-    const allowed = new Set(input.sourceSlugs);
-    sources = sources.filter((source) =>
-      allowed.has(source.slug.toLowerCase())
+  if (input.sourceRefs.length > 0) {
+    const allowed = new Set(input.sourceRefs);
+    sources = sources.filter(
+      (source) =>
+        allowed.has(source.id.toLowerCase()) ||
+        allowed.has(source.slug.toLowerCase())
     );
   }
 
@@ -605,7 +612,7 @@ async function retrieveSourceHits(input: {
       input.authToken,
       input.source.id,
       evidenceQuestion,
-      rerankBackend ? { rerankBackend } : undefined,
+      rerankBackend ? { rerankBackend } : undefined
     );
     if (!remote.ok) {
       logWarn(remote.message, "ExploreQuery", {
@@ -633,7 +640,7 @@ async function retrieveSourceHits(input: {
         ? Boolean(remote.result.insufficient)
         : hits.length === 0;
     const chunks = hits.map((hit, index) =>
-      hitToChunk(hit, input.source.name, index),
+      hitToChunk(hit, input.source.name, index)
     );
     return {
       chunks,
@@ -654,7 +661,7 @@ async function retrieveSourceHits(input: {
     const catalogUrlFilter = resolveCatalogQueryUrlFilter(
       evidenceQuestion,
       input.rewrite.catalogQueries,
-      input.catalogPages,
+      input.catalogPages
     );
     let retrieval = await kapaRetrieveMany({
       queries,
@@ -897,13 +904,13 @@ export class ExploreQueryProcessor implements Processor {
     const authToken = readAuthToken(requestContext);
     const userId = readUserId(requestContext);
     const sourceSetRef = readSourceSetRef(requestContext);
-    const sourceSlugs = readSourceSlugs(requestContext);
+    const sourceRefs = readSourceRefs(requestContext);
     const history = buildHistory(messages);
     const loaded = await loadExploreSources({
       authToken,
       userId,
       sourceSetRef,
-      sourceSlugs,
+      sourceRefs,
     });
     const catalogText = formatCatalog(loaded.sources);
 
@@ -936,7 +943,7 @@ Tell the user they need to sign in to explore remote global sources, or index a 
 
     const sourceMode = readSourceMode(requestContext);
     const forceRetrieve =
-      sourceMode === "all" || sourceSlugs.length > 0 || Boolean(sourceSetRef);
+      sourceMode === "all" || sourceRefs.length > 0 || Boolean(sourceSetRef);
 
     const routed = forceRetrieve
       ? {
@@ -1134,12 +1141,12 @@ ${catalogText}${platformNote}`
     const cascadePassUsed = perSource.some((entry) => entry.cascadePassUsed);
     const catalogQueries = [
       ...new Set(
-        perSource.flatMap((entry) => entry.rewrite.catalogQueries ?? []),
+        perSource.flatMap((entry) => entry.rewrite.catalogQueries ?? [])
       ),
     ];
     const evidenceQuestion = resolveEvidenceQuestion(
       question,
-      perSource.map((entry) => entry.rewrite.rerankQuery),
+      perSource.map((entry) => entry.rewrite.rerankQuery)
     );
     const filtered = await maybeFilterRetrievedPages({
       question: evidenceQuestion,

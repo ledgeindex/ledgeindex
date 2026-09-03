@@ -54,9 +54,18 @@ export type SourceSummary = {
   id: string;
   name: string;
   slug: string;
+  versionNumber: number;
+  versionLabel: string;
+  versions: Array<{
+    id: string;
+    versionNumber: number;
+    versionLabel: string;
+  }>;
 };
 
 export type LedgeIndexAskOptions = {
+  /** Target one version in the source family by its version label. */
+  version?: string;
   rerankBackend?: RerankBackend;
   provider?: ChatProvider;
   /** `retrieve-only` skips the agent — hits only, no chat key required. */
@@ -71,9 +80,18 @@ export type LedgeIndexAskOptions = {
 
 export type LedgeIndexAskAcrossSourceMode = "picker" | "all";
 
+export type LedgeIndexSourceTarget =
+  | string
+  | {
+      /** Source id, slug, or name. */
+      source: string;
+      /** Version label within that source family. */
+      version: string;
+    };
+
 export type LedgeIndexAskAcrossOptions = {
-  /** Slugs (or ids) the picker may choose from — e.g. a repo and its docs. */
-  sources?: string[];
+  /** Source targets the picker may use. Strings retain the previous id/slug behavior. */
+  sources?: LedgeIndexSourceTarget[];
   /** Saved source set to choose within, instead of listing slugs per call. */
   sourceSet?: string;
   /**
@@ -190,11 +208,13 @@ export type LedgeIndex = {
   readonly dataDir: string;
   readonly localUserId: string;
   crawl(options: LedgeIndexCrawlOptions): Promise<RunWebCrawlResult>;
-  indexRepo(options: LedgeIndexIndexRepoOptions): Promise<LedgeIndexIndexRepoResult>;
+  indexRepo(
+    options: LedgeIndexIndexRepoOptions
+  ): Promise<LedgeIndexIndexRepoResult>;
   ask(
     sourceIdOrSlug: string,
     question: string,
-    options?: LedgeIndexAskOptions,
+    options?: LedgeIndexAskOptions
   ): Promise<SourceAskResult>;
   /**
    * Ask across sources and let a picker choose which to read — a repo, its
@@ -202,48 +222,55 @@ export type LedgeIndex = {
    */
   askAcross(
     question: string,
-    options?: LedgeIndexAskAcrossOptions,
+    options?: LedgeIndexAskAcrossOptions
   ): Promise<RoutedAskResult>;
   listSources(): Promise<SourceSummary[]>;
   /** Sets pin which sources a routed ask may choose from. */
   listSourceSets(): Promise<LedgeIndexSourceSet[]>;
   /** Create or update a set by slug. */
   saveSourceSet(
-    options: LedgeIndexSaveSourceSetOptions,
+    options: LedgeIndexSaveSourceSetOptions
   ): Promise<LedgeIndexSourceSet>;
   resolveSource(
     token: string,
-  ): Promise<{ sourceId: string; name: string; slug: string }>;
+    options?: { version?: string }
+  ): Promise<{
+    sourceId: string;
+    name: string;
+    slug: string;
+    versionNumber: number;
+    versionLabel: string;
+  }>;
   /** Site research profile — requires a chat model key. Does not use the index store. */
   profile(
     url: string,
-    options?: LedgeIndexProfileOptions,
+    options?: LedgeIndexProfileOptions
   ): Promise<CompanyProfileResult>;
   /** Profile an indexed source from stored page content without crawling it again. */
   profileIndexedSource(
     sourceIdOrSlug: string,
-    options?: ProfileIndexedSourceOptions,
+    options?: ProfileIndexedSourceOptions
   ): Promise<CompanyProfileResult>;
   /** Compare indexed pages to live content — new, updated, and removed pages. */
   checkForUpdates(
-    options: CheckForUpdatesOptions,
+    options: CheckForUpdatesOptions
   ): Promise<CheckForUpdatesResult>;
   /** Re-index after {@link checkForUpdates}. */
   applyUpdates(options: ApplyUpdatesOptions): Promise<ApplyUpdatesResult>;
   /** Remove a source and all its vectors, lexical rows, and catalog data. */
   deleteSource(
-    sourceIdOrSlug: string,
+    sourceIdOrSlug: string
   ): Promise<{ deleted: boolean; sourceId: string }>;
   /** Export the exact indexed corpus as a versioned JSON structure. */
   exportCorpus(
     sourceIdOrSlug: string,
-    options?: SourceCorpusExportOptions,
+    options?: SourceCorpusExportOptions
   ): Promise<SourceCorpusExport>;
   /** Export one Markdown file per indexed page plus manifest.json. */
   exportCorpusToDirectory(
     sourceIdOrSlug: string,
     outputDirectory: string,
-    options?: SourceCorpusExportOptions,
+    options?: SourceCorpusExportOptions
   ): Promise<WrittenSourceCorpus>;
 };
 

@@ -66,7 +66,7 @@ const parsePreviewBodySchema = z.object({
 function isCloudPostgresUnavailableError(error: unknown): boolean {
   const message = error instanceof Error ? error.message : String(error);
   return /ECONNREFUSED|5432|postgres|Cloud Postgres|CLOUD_POSTGRES/i.test(
-    message,
+    message
   );
 }
 
@@ -101,7 +101,10 @@ export async function sourceRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: query.error.flatten() });
     }
 
-    if (query.data.scope === "global" && !(await requireAdmin(request, reply))) {
+    if (
+      query.data.scope === "global" &&
+      !(await requireAdmin(request, reply))
+    ) {
       return;
     }
 
@@ -127,11 +130,17 @@ export async function sourceRoutes(fastify: FastifyInstance) {
       return reply.status(400).send({ error: query.error.flatten() });
     }
 
-    if (query.data.scope === "global" && !(await requireAdmin(request, reply))) {
+    if (
+      query.data.scope === "global" &&
+      !(await requireAdmin(request, reply))
+    ) {
       return;
     }
 
-    const limits = await getAccountSourceLimitsForUser(userId, query.data.scope);
+    const limits = await getAccountSourceLimitsForUser(
+      userId,
+      query.data.scope
+    );
     return { limits };
   });
 
@@ -218,7 +227,7 @@ export async function sourceRoutes(fastify: FastifyInstance) {
             z.object({
               id: z.string().min(1),
               displayOrder: z.number().int().min(0).max(100_000),
-            }),
+            })
           )
           .min(1)
           .max(500),
@@ -268,132 +277,142 @@ export async function sourceRoutes(fastify: FastifyInstance) {
     }
 
     try {
-    const scope: SourceScope = body.data.scope;
-    let projectId = body.data.projectId;
+      const scope: SourceScope = body.data.scope;
+      let projectId = body.data.projectId;
 
-    let ownerUserId: string | null = userId;
-    if (scope === "global") {
-      if (!(await requireAdmin(request, reply))) return;
-      const platformProject = await getStore().getOrCreatePlatformProject();
-      projectId = platformProject.id;
-      ownerUserId = null;
-    } else {
-      if (!projectId) {
-        return reply.status(400).send({ error: "projectId is required" });
+      let ownerUserId: string | null = userId;
+      if (scope === "global") {
+        if (!(await requireAdmin(request, reply))) return;
+        const platformProject = await getStore().getOrCreatePlatformProject();
+        projectId = platformProject.id;
+        ownerUserId = null;
+      } else {
+        if (!projectId) {
+          return reply.status(400).send({ error: "projectId is required" });
+        }
+        const project = await getProjectForUser(projectId, userId);
+        if (!project) {
+          return reply.status(404).send({ error: "Project not found" });
+        }
       }
-      const project = await getProjectForUser(projectId, userId);
-      if (!project) {
-        return reply.status(404).send({ error: "Project not found" });
+
+      const slugOwnerKey = slugOwnerKeyForSource(scope, ownerUserId);
+      const startUrl = body.data.config.startUrls[0] ?? "";
+      const canonicalUrl = normalizeCanonicalUrl(startUrl);
+      const familySources = canonicalUrl
+        ? await getStore().listSourcesByCanonicalUrl(
+            canonicalUrl,
+            scope,
+            slugOwnerKey
+          )
+        : [];
+
+      if (body.data.versionMode === "replace" && body.data.replaceSourceId) {
+        const existing = await getSourceForWrite(
+          body.data.replaceSourceId,
+          userId,
+          await getRequestUserRole(request)
+        );
+        if (!existing) {
+          return reply
+            .status(404)
+            .send({ error: "Source to replace not found" });
+        }
+
+        const versionFields = resolveVersionFieldsForCreate({
+          startUrl,
+          detectedVersion: body.data.sourceMetadata?.version,
+          userVersionLabel: body.data.versionLabel,
+          versionMode: "replace",
+          replaceSource: existing,
+          familySources,
+        });
+
+        const mergedMetadata = body.data.sourceMetadata
+          ? {
+              ...body.data.sourceMetadata,
+              version: versionFields.versionLabel,
+              versionSource: "user" as const,
+            }
+          : existing.sourceMetadata;
+
+        const updated = await getStore().updateSource(existing.id, {
+          name: body.data.name,
+          config: body.data.config,
+          sourceMetadata: mergedMetadata,
+          canonicalUrl: versionFields.canonicalUrl,
+          versionLabel: versionFields.versionLabel,
+        });
+
+        return reply.status(200).send({ source: updated, replaced: true });
       }
-    }
 
-    const slugOwnerKey = slugOwnerKeyForSource(scope, ownerUserId);
-    const startUrl = body.data.config.startUrls[0] ?? "";
-    const canonicalUrl = normalizeCanonicalUrl(startUrl);
-    const familySources = canonicalUrl
-      ? await getStore().listSourcesByCanonicalUrl(canonicalUrl, scope, slugOwnerKey)
-      : [];
-
-    if (body.data.versionMode === "replace" && body.data.replaceSourceId) {
-      const existing = await getSourceForWrite(body.data.replaceSourceId, userId, await getRequestUserRole(request));
-      if (!existing) {
-        return reply.status(404).send({ error: "Source to replace not found" });
+      const isNewSourceFamily = familySources.length === 0;
+      if (isNewSourceFamily) {
+        try {
+          await assertCanCreateSource(userId, scope);
+        } catch (error) {
+          if (error instanceof SourceLimitError) {
+            return reply.status(403).send({
+              error: "Source limit reached",
+              message: error.message,
+              scope: error.scope,
+              current: error.current,
+              limit: error.limit,
+            });
+          }
+          throw error;
+        }
       }
 
       const versionFields = resolveVersionFieldsForCreate({
         startUrl,
         detectedVersion: body.data.sourceMetadata?.version,
         userVersionLabel: body.data.versionLabel,
-        versionMode: "replace",
-        replaceSource: existing,
+        versionMode: "new",
         familySources,
       });
 
-      const mergedMetadata = body.data.sourceMetadata
+      const slug = await allocateSourceSlug({
+        name: body.data.name,
+        scope,
+        ownerUserId,
+        preferredSlug: body.data.slug,
+      });
+
+      const sourceMetadata = body.data.sourceMetadata
         ? {
             ...body.data.sourceMetadata,
             version: versionFields.versionLabel,
             versionSource: "user" as const,
           }
-        : existing.sourceMetadata;
+        : null;
 
-      const updated = await getStore().updateSource(existing.id, {
+      const source = await getStore().createSource({
+        projectId: projectId!,
         name: body.data.name,
+        slug,
+        slugOwnerKey,
+        scope,
+        hosting: normalizeCreateHosting({
+          scope,
+          hosting: body.data.hosting,
+        }),
         config: body.data.config,
-        sourceMetadata: mergedMetadata,
+        sourceMetadata,
         canonicalUrl: versionFields.canonicalUrl,
+        sourceFamilyId: versionFields.sourceFamilyId ?? undefined,
+        versionNumber: versionFields.versionNumber,
         versionLabel: versionFields.versionLabel,
       });
 
-      return reply.status(200).send({ source: updated, replaced: true });
-    }
-
-    const isNewSourceFamily = familySources.length === 0;
-    if (isNewSourceFamily) {
-      try {
-        await assertCanCreateSource(userId, scope);
-      } catch (error) {
-        if (error instanceof SourceLimitError) {
-          return reply.status(403).send({
-            error: "Source limit reached",
-            message: error.message,
-            scope: error.scope,
-            current: error.current,
-            limit: error.limit,
-          });
-        }
-        throw error;
+      if (!versionFields.sourceFamilyId) {
+        await getStore().updateSource(source.id, {
+          sourceFamilyId: source.id,
+        });
       }
-    }
 
-    const versionFields = resolveVersionFieldsForCreate({
-      startUrl,
-      detectedVersion: body.data.sourceMetadata?.version,
-      userVersionLabel: body.data.versionLabel,
-      versionMode: "new",
-      familySources,
-    });
-
-    const slug = await allocateSourceSlug({
-      name: body.data.name,
-      scope,
-      ownerUserId,
-      preferredSlug: body.data.slug,
-    });
-
-    const sourceMetadata = body.data.sourceMetadata
-      ? {
-          ...body.data.sourceMetadata,
-          version: versionFields.versionLabel,
-          versionSource: "user" as const,
-        }
-      : null;
-
-    const source = await getStore().createSource({
-      projectId: projectId!,
-      name: body.data.name,
-      slug,
-      slugOwnerKey,
-      scope,
-      hosting: normalizeCreateHosting({
-        scope,
-        hosting: body.data.hosting,
-      }),
-      config: body.data.config,
-      sourceMetadata,
-      canonicalUrl: versionFields.canonicalUrl,
-      sourceFamilyId: versionFields.sourceFamilyId ?? undefined,
-      versionNumber: versionFields.versionNumber,
-      versionLabel: versionFields.versionLabel,
-    });
-
-    if (!versionFields.sourceFamilyId) {
-      await getStore().updateSource(source.id, {
-        sourceFamilyId: source.id,
-      });
-    }
-
-    return reply.status(201).send({ source });
+      return reply.status(201).send({ source });
     } catch (error) {
       const message =
         error instanceof Error ? error.message : "Failed to create source";
@@ -504,7 +523,8 @@ export async function sourceRoutes(fastify: FastifyInstance) {
         return prev?.docsIdentity;
       }
       return {
-        overallSummary: lens.overallSummary?.trim() || prev?.docsIdentity?.overallSummary,
+        overallSummary:
+          lens.overallSummary?.trim() || prev?.docsIdentity?.overallSummary,
         kind: lens.kind ?? prev?.docsIdentity?.kind,
         language: lens.language ?? prev?.docsIdentity?.language,
         paths: prev?.docsIdentity?.paths ?? [],
@@ -627,8 +647,15 @@ export async function sourceRoutes(fastify: FastifyInstance) {
         ogImageUrl: z.string().url().nullable().optional(),
         faviconUrl: z.string().url().nullable().optional(),
         sourceMetadata: sourceMetadataSchema.nullable().optional(),
+        versionLabel: z.string().trim().min(1).max(120).optional(),
         categories: z.array(z.string().min(1).max(48)).max(12).optional(),
-        displayOrder: z.number().int().min(0).max(100_000).nullable().optional(),
+        displayOrder: z
+          .number()
+          .int()
+          .min(0)
+          .max(100_000)
+          .nullable()
+          .optional(),
       })
       .safeParse(request.body);
 
@@ -658,17 +685,26 @@ export async function sourceRoutes(fastify: FastifyInstance) {
 
     const familyId = existing.sourceFamilyId ?? existing.id;
     const familySources = await getStore().listSourcesByFamilyId(familyId);
+    if (body.data.versionLabel !== undefined) {
+      const duplicate = familySources.find(
+        (candidate) =>
+          candidate.id !== existing.id &&
+          candidate.versionLabel?.toLowerCase() ===
+            body.data.versionLabel?.toLowerCase()
+      );
+      if (duplicate) {
+        return reply.status(409).send({
+          error: `Version label "${body.data.versionLabel}" already exists in this source.`,
+        });
+      }
+    }
     // Always include the current source. Older rows may have null source_family_id,
     // so the family query can return [] even though `existing` was found.
     const familyWide =
-      normalizedCategories !== undefined || body.data.displayOrder !== undefined;
+      normalizedCategories !== undefined ||
+      body.data.displayOrder !== undefined;
     const targetIds = familyWide
-      ? [
-          ...new Set([
-            id,
-            ...familySources.map((entry) => entry.id),
-          ]),
-        ]
+      ? [...new Set([id, ...familySources.map((entry) => entry.id)])]
       : [id];
 
     let source = null;
@@ -804,7 +840,7 @@ export async function sourceRoutes(fastify: FastifyInstance) {
           url,
           contentSelectors,
           excludeSelectors,
-          source.config.userAgent,
+          source.config.userAgent
         );
         const markdown = parsed.markdown.trim();
         pages.push({

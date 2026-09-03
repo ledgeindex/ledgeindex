@@ -3,10 +3,7 @@ export { runWebCrawl, defaultWebCrawlConfig } from "./crawl.js";
 export { askQuestion } from "./ask.js";
 export { askAcrossSources } from "./ask-across.js";
 export { indexRepository } from "./index-repo.js";
-export {
-  exportCorpus,
-  exportCorpusToDirectory,
-} from "./export-corpus.js";
+export { exportCorpus, exportCorpusToDirectory } from "./export-corpus.js";
 export { listSourceSets, saveSet as saveSourceSet } from "./source-sets.js";
 export { checkForUpdates, applyUpdates } from "./refresh.js";
 export {
@@ -37,6 +34,7 @@ export type {
   LedgeIndexAskAcrossOptions,
   LedgeIndexAskAcrossSourceMode,
   LedgeIndexAskOptions,
+  LedgeIndexSourceTarget,
   LedgeIndexCrawlConfigOverrides,
   LedgeIndexCrawlOptions,
   LedgeIndexIndexRepoOptions,

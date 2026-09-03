@@ -12,8 +12,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.check.json"
   },
   "dependencies": {
-    "@ledgeindex/ag": "^0.1.21",
-    "@ledgeindex/server": "^0.1.21"
+    "@ledgeindex/ag": "^0.1.22",
+    "@ledgeindex/server": "^0.1.22"
   },
   "devDependencies": {
     "@types/node": "^22.10.0",

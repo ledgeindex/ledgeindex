@@ -1,5 +1,8 @@
 import type { WebCrawlSourceConfig } from "@ledgeindex/core/schemas/source-config.js";
-import type { SourceMetadata, SourceScope } from "@ledgeindex/docs/runtime/db/types.js";
+import type {
+  SourceMetadata,
+  SourceScope,
+} from "@ledgeindex/docs/runtime/db/types.js";
 import { getStore } from "@ledgeindex/docs/runtime/db/index.js";
 import { normalizeCreateHosting } from "@ledgeindex/docs/runtime/db/types.js";
 import { normalizeCanonicalUrl } from "@ledgeindex/docs/runtime/lib/canonical-url.js";
@@ -28,20 +31,59 @@ export async function listSources() {
 
 export async function resolveSourceRef(
   token: string,
-): Promise<{ sourceId: string; name: string; slug: string }> {
+  options: { version?: string } = {}
+): Promise<{
+  sourceId: string;
+  name: string;
+  slug: string;
+  versionNumber: number;
+  versionLabel: string;
+}> {
   const sources = await listSources();
   const needle = token.toLowerCase();
-  const match =
+  const familyMatch =
     sources.find((source) => source.slug.toLowerCase() === needle) ??
     sources.find((source) => source.name.toLowerCase() === needle) ??
     sources.find((source) => source.name.toLowerCase().includes(needle)) ??
     sources.find((source) => source.id === token);
 
-  if (!match) {
+  if (!familyMatch) {
     throw new Error(`No source matching "${token}". Use source id or slug.`);
   }
 
-  return { sourceId: match.id, name: match.name, slug: match.slug };
+  const requestedVersion = options.version?.trim();
+  if (!requestedVersion) {
+    return {
+      sourceId: familyMatch.id,
+      name: familyMatch.name,
+      slug: familyMatch.slug,
+      versionNumber: familyMatch.versionNumber,
+      versionLabel: familyMatch.versionLabel,
+    };
+  }
+
+  const versionNeedle = requestedVersion.toLowerCase();
+  const version = familyMatch.versions.find(
+    (candidate) => candidate.versionLabel.toLowerCase() === versionNeedle
+  );
+  if (!version) {
+    const available = familyMatch.versions
+      .map((candidate) => candidate.versionLabel)
+      .join(", ");
+    throw new Error(
+      `Source "${familyMatch.slug}" has no version "${requestedVersion}". Available versions: ${available || "none"}.`
+    );
+  }
+
+  const selectedSource =
+    sources.find((source) => source.id === version.id) ?? familyMatch;
+  return {
+    sourceId: version.id,
+    name: selectedSource.name,
+    slug: selectedSource.slug,
+    versionNumber: version.versionNumber,
+    versionLabel: version.versionLabel,
+  };
 }
 
 export async function createWebCrawlSource(input: {
@@ -69,7 +111,11 @@ export async function createWebCrawlSource(input: {
   const startUrl = input.config.startUrls[0] ?? "";
   const canonicalUrl = normalizeCanonicalUrl(startUrl);
   const familySources = canonicalUrl
-    ? await getStore().listSourcesByCanonicalUrl(canonicalUrl, scope, slugOwnerKey)
+    ? await getStore().listSourcesByCanonicalUrl(
+        canonicalUrl,
+        scope,
+        slugOwnerKey
+      )
     : [];
 
   const isNewSourceFamily = familySources.length === 0;
@@ -131,7 +177,7 @@ export async function updateWebCrawlSource(
     ogImageUrl?: string | null;
     faviconUrl?: string | null;
     sourceMetadata?: SourceMetadata | null;
-  },
+  }
 ) {
   const updated = await getStore().updateSource(sourceId, input);
   if (!updated) {
