@@ -5,14 +5,15 @@ import { join } from 'node:path'
 let tray: Tray | null = null
 
 function resolveTrayIcon(): Electron.NativeImage {
-  // Packaged: extraResources copies resources/icon.png → process.resourcesPath/icon.png
+  const iconFile = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+  // Packaged: extraResources copies both desktop icon formats to process.resourcesPath.
   // Dev / asar-unpacked: fall back to app-relative and __dirname-relative paths.
   const candidates = [
-    join(process.resourcesPath, 'icon.png'),
-    join(process.resourcesPath, 'app.asar.unpacked', 'resources', 'icon.png'),
-    join(app.getAppPath(), 'resources', 'icon.png'),
-    join(__dirname, '../../resources/icon.png'),
-    join(__dirname, '../resources/icon.png')
+    join(process.resourcesPath, iconFile),
+    join(process.resourcesPath, 'app.asar.unpacked', 'resources', iconFile),
+    join(app.getAppPath(), 'resources', iconFile),
+    join(__dirname, '../../resources', iconFile),
+    join(__dirname, '../resources', iconFile)
   ]
 
   for (const path of candidates) {

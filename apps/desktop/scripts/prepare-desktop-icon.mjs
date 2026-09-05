@@ -13,13 +13,26 @@ import toIco from 'to-ico'
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const resourcesDir = path.join(__dirname, '..', 'resources')
 
-async function resizePng(inputPath, size) {
-  return sharp(inputPath)
-    .resize(size, size, { fit: 'cover' })
+/** @returns {Promise<Buffer>} */
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
+async function resizePng(source, size) {
+  const zoomedSize = Math.round(size * 1.25)
+  const cropOffset = Math.floor((zoomedSize - size) / 2)
+
+  return sharp(source)
+    .resize(zoomedSize, zoomedSize, {
+      fit: 'cover',
+      kernel: sharp.kernel.lanczos3,
+      position: 'centre'
+    })
+    .extract({ left: cropOffset, top: cropOffset, width: size, height: size })
+    .sharpen({ sigma: size <= 64 ? 0.6 : 0.35 })
     .png()
     .toBuffer()
 }
 
+/** @returns {Promise<void>} */
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 async function main() {
   const inputPath = process.argv[2]
   if (!inputPath) {
@@ -30,7 +43,9 @@ async function main() {
   const pngPath = path.join(resourcesDir, 'icon.png')
   const icoPath = path.join(resourcesDir, 'icon.ico')
 
-  await copyFile(inputPath, pngPath)
+  if (path.resolve(inputPath) !== path.resolve(pngPath)) {
+    await copyFile(inputPath, pngPath)
+  }
 
   const icoSizes = [16, 24, 32, 48, 64, 128, 256]
   const icoBuffers = await Promise.all(icoSizes.map((size) => resizePng(inputPath, size)))

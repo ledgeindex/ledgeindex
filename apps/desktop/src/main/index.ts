@@ -2,6 +2,7 @@ import './gpu-sandbox-fix'
 import { app, shell, BrowserWindow, ipcMain } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
+import windowsIcon from '../../resources/icon.ico?asset'
 import icon from '../../resources/icon.png?asset'
 import {
   attachDevToolsKeyboardShortcuts,
@@ -61,7 +62,7 @@ function createWindow(): void {
     frame: false,
     autoHideMenuBar: true,
     backgroundColor: '#F7F5F2',
-    icon,
+    icon: process.platform === 'win32' ? windowsIcon : icon,
     webPreferences: {
       preload: preloadPath,
       sandbox: false,
